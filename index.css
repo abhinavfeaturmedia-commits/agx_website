@@ -1,0 +1,308 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @media (min-width: 1024px) {
+    html {
+      font-size: 90%;
+    }
+  }
+
+  :root {
+    --background: 222 47% 4%;
+    --foreground: 0 0% 100%;
+    --muted-foreground: 240 4% 66%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 4%;
+    --secondary: 0 0% 10%;
+    --muted: 0 0% 10%;
+    --accent: 73 100% 50%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --font-display: 'Outfit', sans-serif;
+    --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font-body), sans-serif;
+    background-color: #07090e;
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer utilities {
+  .cursor-none {
+    cursor: none;
+  }
+}
+
+/* Shravya Tours Inspired Typography Strategy for Admin CRM */
+@layer components {
+  .crm-theme {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  .crm-theme h1,
+  .crm-theme h2,
+  .crm-theme h3,
+  .crm-theme h4,
+  .crm-theme h5,
+  .crm-theme h6,
+  .crm-theme .crm-heading,
+  .crm-theme .font-display {
+    font-family: 'Outfit', sans-serif !important;
+    letter-spacing: -0.025em;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  .crm-theme .crm-kpi-value {
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  .crm-theme .crm-badge {
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .crm-theme .crm-body,
+  .crm-theme p,
+  .crm-theme span,
+  .crm-theme table,
+  .crm-theme input,
+  .crm-theme select,
+  .crm-theme textarea,
+  .crm-theme button {
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .crm-theme .crm-serif {
+    font-family: 'Cormorant Garamond', serif !important;
+  }
+}
+
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.15) 20%,
+    rgba(255,255,255,0) 40%, rgba(255,255,255,0) 60%,
+    rgba(255,255,255,0.15) 80%, rgba(255,255,255,0.45) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+@keyframes fade-rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-rise { animation: fade-rise 0.8s ease-out both; }
+.animate-fade-rise-delay { animation: fade-rise 0.8s ease-out 0.2s both; }
+.animate-fade-rise-delay-2 { animation: fade-rise 0.8s ease-out 0.4s both; }
+
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-marquee {
+  animation: marquee 20s linear infinite;
+}
+
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  background: transparent;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  width: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  margin-top: -10px;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+/* UI/UX Design Engineering Utilities */
+.tabular-nums {
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-press {
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), opacity 120ms ease;
+  user-select: none;
+}
+
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+.card-tactile {
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.card-tactile:hover {
+  transform: translateY(-2px);
+}
+
+.card-tactile:active {
+  transform: scale(0.99);
+}
+
+/* Double-Bezel Architecture (Doppelrand) - Dark Marketing Website Default */
+.double-bezel-outer {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 4px;
+  border-radius: 1.5rem;
+  transition: all 250ms ease;
+}
+
+.double-bezel-outer:hover {
+  border-color: rgba(204, 255, 0, 0.35);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.double-bezel-inner {
+  background: #0b0e14;
+  border-radius: calc(1.5rem - 4px);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Double-Bezel Architecture - Scoped for Light Admin CRM Theme */
+.crm-theme .double-bezel-outer {
+  background: #ffffff;
+  border: 1px solid rgba(229, 231, 235, 0.85);
+  padding: 4px;
+  border-radius: 1.5rem;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04);
+  transition: all 200ms ease;
+}
+
+.crm-theme .double-bezel-outer:hover:not([class*="border-[#CCFF00]"]) {
+  border-color: rgba(209, 213, 219, 1);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.07);
+}
+
+.crm-theme .double-bezel-outer[class*="border-[#CCFF00]"] {
+  border-color: rgba(204, 255, 0, 0.7) !important;
+}
+
+.crm-theme .double-bezel-inner {
+  background: #ffffff;
+  border: 1px solid rgba(243, 244, 246, 0.9);
+  border-radius: calc(1.5rem - 4px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+/* Dark cards within CRM (e.g. AGX OS Automation card) */
+.crm-theme .double-bezel-inner.text-white,
+.crm-theme .double-bezel-inner[class*="from-[#0E131F]"],
+.crm-theme .double-bezel-inner[class*="from-slate-900"],
+.crm-theme .double-bezel-inner[class*="from-gray-900"] {
+  background: linear-gradient(to bottom right, #0E131F, #080B12) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), 0 8px 32px rgba(0, 0, 0, 0.35) !important;
+  color: #ffffff !important;
+}
+
+/* Tinted cards within CRM */
+.crm-theme .double-bezel-inner[class*="bg-emerald-"] {
+  background-color: rgba(236, 253, 245, 0.7) !important;
+}
+.crm-theme .double-bezel-inner[class*="bg-amber-"] {
+  background-color: rgba(254, 243, 199, 0.7) !important;
+}
+.crm-theme .double-bezel-inner[class*="from-white"] {
+  background: linear-gradient(to bottom right, #ffffff, rgba(249, 250, 251, 0.7)) !important;
+}
+
+/* Button-in-Button Trailing Icon Architecture */
+.btn-nested-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Floating Glass Island */
+.glass-island {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(229, 231, 235, 0.85);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04);
+}
+
+/* Kanban Drag & Drop Target Slot */
+.kanban-drop-slot {
+  border: 2px dashed rgba(204, 255, 0, 0.8);
+  background: rgba(204, 255, 0, 0.05);
+  border-radius: 1rem;
+  transition: all 180ms ease;
+}
+
+/* Custom Sleek Scrollbar */
+.crm-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.crm-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.crm-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.35);
+  border-radius: 9999px;
+}
+.crm-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.6);
+}
+
+/* Crisp high-contrast meter track for light mode */
+.progress-track {
+  background-color: #E2E8F0;
+  border: 1px solid #CBD5E1;
+}
+
+.progress-bar-vibrant {
+  background: linear-gradient(90deg, #10B981 0%, #059669 100%);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.35);
+}
+
