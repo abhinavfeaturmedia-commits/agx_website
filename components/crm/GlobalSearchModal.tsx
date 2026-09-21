@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, X, Users, Briefcase, CheckSquare, IndianRupee, Key, FileText, ArrowRight, UserCheck, Shield } from 'lucide-react';
-import { Lead, Client, Project, Task, Invoice, CredentialVaultItem, Agreement, DocumentItem, UserProfile } from '../../types/crm';
+import { Search, X, Users, Briefcase, CheckSquare, IndianRupee, Key, FileText, ArrowRight, UserCheck, Shield, Globe, AlertTriangle } from 'lucide-react';
+import { Lead, Client, Project, Task, Invoice, CredentialVaultItem, Agreement, DocumentItem, UserProfile, Partner, ProjectIssue } from '../../types/crm';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -15,6 +15,8 @@ interface GlobalSearchModalProps {
   agreements?: Agreement[];
   documents?: DocumentItem[];
   teamMembers?: UserProfile[];
+  partners?: Partner[];
+  issues?: ProjectIssue[];
   currentUser?: UserProfile;
   onNavigate: (route: string, entityId?: string) => void;
 }
@@ -31,6 +33,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   agreements = [],
   documents = [],
   teamMembers = [],
+  partners = [],
+  issues = [],
   currentUser,
   onNavigate
 }) => {
@@ -62,13 +66,15 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   const filteredClients = q ? clients.filter(c => c.company.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || (c.industry && c.industry.toLowerCase().includes(q))).slice(0, 3) : [];
   const filteredProjects = q ? projects.filter(p => p.name.toLowerCase().includes(q) || p.clientName.toLowerCase().includes(q) || p.serviceType.toLowerCase().includes(q)).slice(0, 3) : [];
   const filteredTasks = q ? tasks.filter(t => t.title.toLowerCase().includes(q) || (t.projectName && t.projectName.toLowerCase().includes(q))).slice(0, 3) : [];
+  const filteredIssues = q ? issues.filter(iss => iss.ticketNumber.toLowerCase().includes(q) || iss.title.toLowerCase().includes(q) || iss.reporterName.toLowerCase().includes(q) || iss.projectName.toLowerCase().includes(q)).slice(0, 3) : [];
+  const filteredPartners = q ? partners.filter(p => p.name.toLowerCase().includes(q) || p.referralCode.toLowerCase().includes(q) || (p.company && p.company.toLowerCase().includes(q))).slice(0, 3) : [];
   const filteredInvoices = (q && canAccessFinance) ? invoices.filter(i => i.invoiceNumber.toLowerCase().includes(q) || i.clientName.toLowerCase().includes(q)).slice(0, 3) : [];
   const filteredCredentials = (q && canAccessVault) ? credentials.filter(c => c.platformName.toLowerCase().includes(q) || (c.clientName && c.clientName.toLowerCase().includes(q))).slice(0, 3) : [];
   const filteredAgreements = (q && canAccessFinance) ? agreements.filter(a => a.name.toLowerCase().includes(q) || a.clientName.toLowerCase().includes(q) || a.agreementType.toLowerCase().includes(q)).slice(0, 3) : [];
   const filteredDocuments = q ? documents.filter(d => d.title.toLowerCase().includes(q) || (d.clientName && d.clientName.toLowerCase().includes(q)) || d.docType.toLowerCase().includes(q)).slice(0, 3) : [];
   const filteredStaff = q ? teamMembers.filter(m => m.fullName.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || m.role.toLowerCase().includes(q)).slice(0, 3) : [];
 
-  const totalResults = filteredLeads.length + filteredClients.length + filteredProjects.length + filteredTasks.length + filteredInvoices.length + filteredCredentials.length + filteredAgreements.length + filteredDocuments.length + filteredStaff.length;
+  const totalResults = filteredLeads.length + filteredClients.length + filteredProjects.length + filteredTasks.length + filteredIssues.length + filteredPartners.length + filteredInvoices.length + filteredCredentials.length + filteredAgreements.length + filteredDocuments.length + filteredStaff.length;
 
   const handleSelect = (route: string, entityId?: string) => {
     onNavigate(route, entityId);
@@ -337,6 +343,56 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                         <div className="text-xs text-white/50">{m.email} • {m.department}</div>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300">{m.role}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* QA Tickets & Issues */}
+            {filteredIssues.length > 0 && (
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-white/40 mb-2 flex items-center gap-1.5 px-2">
+                  <AlertTriangle size={13} className="text-amber-400" /> QA Tickets & Issues
+                </div>
+                <div className="space-y-1">
+                  {filteredIssues.map(iss => (
+                    <div
+                      key={iss.id}
+                      onClick={() => handleSelect('issues', iss.id)}
+                      className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 cursor-pointer group transition-colors"
+                    >
+                      <div>
+                        <div className="text-sm font-medium text-white group-hover:text-[#CCFF00] transition-colors">{iss.title}</div>
+                        <div className="text-xs text-white/50">{iss.projectName} • Priority: {iss.priority} • Type: {iss.issueType}</div>
+                      </div>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        iss.status === 'RESOLVED' || iss.status === 'CLOSED' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                      }`}>{iss.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Channel Partners */}
+            {filteredPartners.length > 0 && (
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-white/40 mb-2 flex items-center gap-1.5 px-2">
+                  <Globe size={13} className="text-pink-400" /> Channel Partners
+                </div>
+                <div className="space-y-1">
+                  {filteredPartners.map(p => (
+                    <div
+                      key={p.id}
+                      onClick={() => handleSelect('partners', p.id)}
+                      className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 cursor-pointer group transition-colors"
+                    >
+                      <div>
+                        <div className="text-sm font-medium text-white group-hover:text-[#CCFF00] transition-colors">{p.name} • {p.company || 'Independent'}</div>
+                        <div className="text-xs text-white/50">Ref Code: <span className="font-mono text-white/80">{p.referralCode}</span> • Commission: {Math.round(p.commissionRate >= 1 ? p.commissionRate : p.commissionRate * 100)}%</div>
+                      </div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300">{p.status}</span>
                     </div>
                   ))}
                 </div>

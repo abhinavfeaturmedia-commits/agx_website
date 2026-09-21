@@ -8,6 +8,8 @@ interface FooterProps {
   onProcessAuditClick?: (email: string) => void;
   onPartnerPortalClick?: () => void;
   onBecomePartnerClick?: () => void;
+  isStaffLoggedIn?: boolean;
+  isPartnerLoggedIn?: boolean;
 }
 
 const Footer: React.FC<FooterProps> = ({ 
@@ -15,7 +17,9 @@ const Footer: React.FC<FooterProps> = ({
   onClientPortalClick, 
   onProcessAuditClick,
   onPartnerPortalClick,
-  onBecomePartnerClick
+  onBecomePartnerClick,
+  isStaffLoggedIn,
+  isPartnerLoggedIn
 }) => {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -142,10 +146,10 @@ const Footer: React.FC<FooterProps> = ({
               onClick={() => onPartnerPortalClick()}
               className="text-left text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              <span>Partner Portal</span> 🤝
+              <span>{isPartnerLoggedIn ? 'Partner Portal (Active)' : 'Partner Portal'}</span> 🤝
             </button>
           )}
-          {onBecomePartnerClick && (
+          {!isPartnerLoggedIn && onBecomePartnerClick && (
             <button
               onClick={() => onBecomePartnerClick()}
               className="text-left text-sm font-medium text-white/70 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5"
@@ -166,7 +170,7 @@ const Footer: React.FC<FooterProps> = ({
               onClick={() => onAdminLoginClick && onAdminLoginClick()}
               className="text-left text-sm font-medium text-[#CCFF00]/80 hover:text-[#CCFF00] transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              <span>Staff CRM Portal</span> 🔐
+              <span>{isStaffLoggedIn ? 'Staff CRM Dashboard (Active)' : 'Staff CRM Portal'}</span> 🔐
             </button>
           )}
           <a 

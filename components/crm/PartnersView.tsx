@@ -1,13 +1,46 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Handshake, Users, DollarSign, Wallet, Search, Filter, Plus, Edit2,
+  Handshake, Users, DollarSign, IndianRupee, Wallet, Search, Filter, Plus, Edit2,
   Trash2, ExternalLink, CheckCircle2, AlertCircle, Clock, ArrowUpRight,
   Sparkles, Shield, ChevronRight, X, Phone, Mail, Building, CreditCard, TrendingUp
 } from 'lucide-react';
 import { Partner, PartnerReferral, PartnerPayout } from '../../types/crm';
 import { useCrmStore } from '../../lib/crmStore';
 import { toast } from '../../lib/toastStore';
+
+function formatLastLogin(dateStr?: string): { relative: string; full: string; isRecent: boolean } {
+  if (!dateStr) return { relative: 'Never', full: 'No login record', isRecent: false };
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return { relative: 'Never', full: 'Invalid date', isRecent: false };
+
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  const full = d.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  const isRecent = diffHour < 24 && diffMs >= 0;
+
+  if (diffSec < 60) return { relative: 'Just now', full, isRecent: true };
+  if (diffMin < 60) return { relative: `${diffMin}m ago`, full, isRecent: true };
+  if (diffHour < 24) return { relative: `${diffHour}h ago`, full, isRecent: true };
+  if (diffDay === 1) return { relative: 'Yesterday', full, isRecent: false };
+  if (diffDay < 7) return { relative: `${diffDay}d ago`, full, isRecent: false };
+
+  const relative = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  return { relative, full, isRecent: false };
+}
 
 interface PartnersViewProps {
   store: ReturnType<typeof useCrmStore>;
@@ -166,10 +199,10 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight font-['Outfit']">
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
               AGX Partner Program
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-[#CCFF00] text-black font-extrabold text-[10px] uppercase font-mono tracking-wider">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#CCFF00] text-black font-extrabold text-[10px] uppercase tracking-wider">
               {activePartnersCount} Active
             </span>
           </div>
@@ -190,55 +223,55 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
         <div className="p-4 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-500 text-[10px] font-mono uppercase tracking-wider">
+          <div className="flex items-center justify-between text-gray-500 text-[10px] font-bold uppercase tracking-wider">
             <span>Total Partners</span>
             <Handshake size={14} className="text-indigo-500" />
           </div>
-          <div className="text-2xl font-black text-gray-900 mt-2 font-['Outfit']">
+          <div className="text-2xl font-black text-gray-900 mt-1.5 tabular-nums">
             {totalPartnersCount}
           </div>
           <span className="text-[10px] text-gray-400 mt-0.5">{activePartnersCount} currently active</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-500 text-[10px] font-mono uppercase tracking-wider">
+          <div className="flex items-center justify-between text-gray-500 text-[10px] font-bold uppercase tracking-wider">
             <span>Client Revenue</span>
             <TrendingUp size={14} className="text-emerald-500" />
           </div>
-          <div className="text-2xl font-black text-emerald-600 mt-2 font-['Outfit']">
+          <div className="text-2xl font-black text-emerald-600 mt-1.5 tabular-nums">
             ₹{totalPartnerRevenue.toLocaleString('en-IN')}
           </div>
           <span className="text-[10px] text-gray-400 mt-0.5">Collected via partner deals</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-500 text-[10px] font-mono uppercase tracking-wider">
+          <div className="flex items-center justify-between text-gray-500 text-[10px] font-bold uppercase tracking-wider">
             <span>Commissions Accrued</span>
-            <DollarSign size={14} className="text-purple-500" />
+            <IndianRupee size={14} className="text-purple-500" />
           </div>
-          <div className="text-2xl font-black text-gray-900 mt-2 font-['Outfit']">
+          <div className="text-2xl font-black text-gray-900 mt-1.5 tabular-nums">
             ₹{totalCommissionsEarned.toLocaleString('en-IN')}
           </div>
           <span className="text-[10px] text-gray-400 mt-0.5">Earned by all partners</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-500 text-[10px] font-mono uppercase tracking-wider">
+          <div className="flex items-center justify-between text-gray-500 text-[10px] font-bold uppercase tracking-wider">
             <span>Commissions Paid</span>
             <CheckCircle2 size={14} className="text-blue-500" />
           </div>
-          <div className="text-2xl font-black text-gray-900 mt-2 font-['Outfit']">
+          <div className="text-2xl font-black text-gray-900 mt-1.5 tabular-nums">
             ₹{totalCommissionsPaid.toLocaleString('en-IN')}
           </div>
           <span className="text-[10px] text-gray-400 mt-0.5">Disbursed successfully</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-amber-700 text-[10px] font-mono uppercase tracking-wider font-bold">
+          <div className="flex items-center justify-between text-amber-700 text-[10px] font-bold uppercase tracking-wider">
             <span>Outstanding Due</span>
             <Wallet size={14} className="text-amber-600" />
           </div>
-          <div className="text-2xl font-black text-amber-700 mt-2 font-['Outfit']">
+          <div className="text-2xl font-black text-amber-700 mt-1.5 tabular-nums">
             ₹{outstandingCommissionDue.toLocaleString('en-IN')}
           </div>
           <span className="text-[10px] text-amber-600 font-medium mt-0.5">Pending payouts to disburse</span>
@@ -259,7 +292,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono uppercase text-gray-400">Status:</span>
+          <span className="text-[10px] uppercase text-gray-400 font-bold">Status:</span>
           {(['ALL', 'Active', 'Pending', 'Suspended'] as const).map(f => (
             <button
               key={f}
@@ -281,10 +314,11 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/70 text-gray-500 uppercase tracking-wider text-[10px] font-mono">
+              <tr className="border-b border-gray-100 bg-gray-50/70 text-gray-500 uppercase tracking-wider text-[10px] font-bold">
                 <th className="py-3 px-4">Partner</th>
                 <th className="py-3 px-4">Referral Code</th>
                 <th className="py-3 px-4">Tier / Rate</th>
+                <th className="py-3 px-4">Last Login</th>
                 <th className="py-3 px-4">Revenue Brought</th>
                 <th className="py-3 px-4">Earned Cut</th>
                 <th className="py-3 px-4">Paid Out</th>
@@ -296,7 +330,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
             <tbody className="divide-y divide-gray-100">
               {filteredPartners.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-gray-400">
+                  <td colSpan={10} className="py-12 text-center text-gray-400">
                     No partners found matching criteria.
                   </td>
                 </tr>
@@ -323,7 +357,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                         </div>
                       </td>
 
-                      <td className="py-3.5 px-4 font-mono font-bold text-gray-700">
+                      <td className="py-3.5 px-4 font-bold text-gray-700 tracking-wide">
                         {partner.referralCode}
                       </td>
 
@@ -331,7 +365,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                         <button
                           onClick={(e) => { e.stopPropagation(); handleToggleCommissionRate(partner); }}
                           title="Click to toggle between 10% Standard and 15% VIP"
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold cursor-pointer transition-all ${
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
                             partner.commissionRate >= 0.15
                               ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -341,23 +375,41 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                         </button>
                       </td>
 
-                      <td className="py-3.5 px-4 font-mono font-semibold text-gray-900">
+                      <td className="py-3.5 px-4">
+                        {(() => {
+                          const loginInfo = formatLastLogin(partner.lastLoginAt || partner.createdAt);
+                          return (
+                            <div className="flex items-center gap-1.5" title={`Last Active / Login: ${loginInfo.full}`}>
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                  loginInfo.isRecent ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'
+                                }`}
+                              />
+                              <span className="text-xs text-gray-700 font-medium whitespace-nowrap">
+                                {loginInfo.relative}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </td>
+
+                      <td className="py-3.5 px-4 font-semibold text-gray-900 tabular-nums">
                         ₹{(store.partnerReferrals
                           .filter(r => r.partnerId === partner.id)
                           .reduce((sum, r) => sum + (r.totalPaid || 0), 0)
                         ).toLocaleString('en-IN')}
-                        <span className="text-[10px] text-gray-400 block">{referralsCount} deals</span>
+                        <span className="text-[10px] text-gray-400 block font-normal">{referralsCount} deals</span>
                       </td>
 
-                      <td className="py-3.5 px-4 font-mono text-gray-900 font-bold">
+                      <td className="py-3.5 px-4 text-gray-900 font-bold tabular-nums">
                         ₹{partner.totalEarnings.toLocaleString('en-IN')}
                       </td>
 
-                      <td className="py-3.5 px-4 font-mono text-gray-600">
+                      <td className="py-3.5 px-4 text-gray-600 font-medium tabular-nums">
                         ₹{partner.paidEarnings.toLocaleString('en-IN')}
                       </td>
 
-                      <td className="py-3.5 px-4 font-mono font-bold">
+                      <td className="py-3.5 px-4 font-bold tabular-nums">
                         <span className={balanceDue > 0 ? 'text-amber-600' : 'text-emerald-600'}>
                           ₹{balanceDue.toLocaleString('en-IN')}
                         </span>
@@ -433,24 +485,44 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                 </div>
 
                 {/* Partner Coordinates */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-gray-50 text-xs font-mono">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-gray-50 text-xs">
                   <div>
-                    <span className="text-[10px] text-gray-400 block">Referral Code</span>
-                    <strong className="text-gray-900">{selectedPartner.referralCode}</strong>
+                    <span className="text-[10px] text-gray-400 block font-medium">Referral Code</span>
+                    <strong className="text-gray-900 tracking-wide">{selectedPartner.referralCode}</strong>
                   </div>
                   <div>
-                    <span className="text-[10px] text-gray-400 block">Commission Rate</span>
-                    <strong className="text-gray-900">{Math.round((selectedPartner.commissionRate || 0.10) * 100)}%</strong>
+                    <span className="text-[10px] text-gray-400 block font-medium">Commission Rate</span>
+                    <strong className="text-gray-900 tabular-nums">{Math.round((selectedPartner.commissionRate || 0.10) * 100)}%</strong>
                   </div>
                   <div>
-                    <span className="text-[10px] text-gray-400 block">Payout Method</span>
+                    <span className="text-[10px] text-gray-400 block font-medium">Payout Method</span>
                     <strong className="text-gray-900">{selectedPartner.payoutMethod}</strong>
                   </div>
                   <div>
-                    <span className="text-[10px] text-gray-400 block">Balance Ready</span>
-                    <strong className="text-amber-600">
+                    <span className="text-[10px] text-gray-400 block font-medium">Balance Ready</span>
+                    <strong className="text-amber-600 tabular-nums">
                       ₹{Math.max(0, selectedPartner.totalEarnings - selectedPartner.paidEarnings).toLocaleString('en-IN')}
                     </strong>
+                  </div>
+                </div>
+
+                {/* Last Login Info Box */}
+                <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200/70 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <Clock size={15} className="text-gray-400" />
+                    <span className="text-gray-600 font-medium">Last Login:</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const loginInfo = formatLastLogin(selectedPartner.lastLoginAt || selectedPartner.createdAt);
+                      return (
+                        <>
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${loginInfo.isRecent ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
+                          <strong className="text-gray-900 tabular-nums">{loginInfo.full}</strong>
+                          <span className="text-gray-400 text-[11px]">({loginInfo.relative})</span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -465,8 +537,8 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                     </div>
                   )}
                   {selectedPartner.payoutDetails?.upiId && (
-                    <div className="flex items-center gap-2 text-gray-900 font-mono">
-                      <CreditCard size={14} /> <span>UPI ID: {selectedPartner.payoutDetails.upiId}</span>
+                    <div className="flex items-center gap-2 text-gray-900">
+                      <CreditCard size={14} /> <span>UPI ID: <strong className="tracking-wide">{selectedPartner.payoutDetails.upiId}</strong></span>
                     </div>
                   )}
                 </div>
@@ -474,7 +546,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                 {/* Referred Clients & Live Payment Tracking Section */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-gray-900 uppercase font-mono tracking-wider">
+                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
                       Referred Clients & Milestone Settlements ({selectedPartnerReferrals.length})
                     </h3>
                   </div>
@@ -511,7 +583,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                               />
                             </div>
 
-                            <div className="flex justify-between text-[11px] font-mono text-gray-600">
+                            <div className="flex justify-between text-[11px] text-gray-600 tabular-nums">
                               <span>Paid: ₹{ref.totalPaid.toLocaleString('en-IN')} / ₹{ref.dealValue.toLocaleString('en-IN')}</span>
                               <span>Partner Cut: <strong className="text-gray-900">₹{ref.commissionEarned.toLocaleString('en-IN')}</strong></span>
                             </div>
@@ -524,7 +596,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
 
                 {/* Payout History Section */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-gray-900 uppercase font-mono tracking-wider">
+                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
                     Disbursed Payouts ({selectedPartnerPayouts.length})
                   </h3>
                   {selectedPartnerPayouts.length === 0 ? (
@@ -534,7 +606,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                   ) : (
                     <div className="space-y-2">
                       {selectedPartnerPayouts.map(p => (
-                        <div key={p.id} className="p-3 rounded-xl bg-gray-50 border border-gray-200/80 flex items-center justify-between text-xs font-mono">
+                        <div key={p.id} className="p-3 rounded-xl bg-gray-50 border border-gray-200/80 flex items-center justify-between text-xs tabular-nums">
                           <div>
                             <span className="text-gray-900 font-bold">₹{p.amount.toLocaleString('en-IN')}</span>
                             <span className="text-gray-400 text-[10px] block">{p.payoutDate} via {p.paymentMethod}</span>
@@ -586,7 +658,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
 
               <form onSubmit={handleAddPartner} className="space-y-3 text-xs">
                 <div>
-                  <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">Partner Full Name *</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Partner Full Name *</label>
                   <input
                     type="text"
                     required
@@ -598,7 +670,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">Email *</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Email *</label>
                   <input
                     type="email"
                     required
@@ -611,7 +683,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">Agency / Company</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Agency / Company</label>
                     <input
                       type="text"
                       value={addCompany}
@@ -621,7 +693,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">Phone</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Phone</label>
                     <input
                       type="tel"
                       value={addPhone}
@@ -634,7 +706,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">Commission Rate</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Commission Rate</label>
                     <select
                       value={addCommissionRate}
                       onChange={(e) => setAddCommissionRate(e.target.value)}
@@ -647,7 +719,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">Payout Method</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Payout Method</label>
                     <select
                       value={addPayoutMethod}
                       onChange={(e) => setAddPayoutMethod(e.target.value as any)}
@@ -662,7 +734,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
 
                 {addPayoutMethod === 'UPI' && (
                   <div>
-                    <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">UPI ID</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">UPI ID</label>
                     <input
                       type="text"
                       value={addUpiId}
@@ -714,19 +786,19 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
 
               <form onSubmit={handleExecutePayout} className="space-y-3 text-xs">
                 <div>
-                  <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">Payout Amount (₹) *</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Payout Amount (₹) *</label>
                   <input
                     type="number"
                     required
                     value={payoutAmount}
                     onChange={(e) => setPayoutAmount(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-black font-mono font-bold"
+                    className="w-full p-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-black font-bold tabular-nums"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">Payment Method</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Payment Method</label>
                     <select
                       value={payoutMethod}
                       onChange={(e) => setPayoutMethod(e.target.value)}
@@ -740,19 +812,19 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">UTR / Ref Number</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">UTR / Ref Number</label>
                     <input
                       type="text"
                       value={payoutTxRef}
                       onChange={(e) => setPayoutTxRef(e.target.value)}
                       placeholder="e.g. UTR-491028"
-                      className="w-full p-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-black font-mono"
+                      className="w-full p-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-black"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-mono uppercase text-gray-600 block mb-1">Disbursement Notes</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Disbursement Notes</label>
                   <textarea
                     rows={2}
                     value={payoutNotes}

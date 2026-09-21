@@ -375,6 +375,7 @@ CREATE TABLE IF NOT EXISTS public.partners (
     paid_earnings NUMERIC DEFAULT 0,
     pending_earnings NUMERIC DEFAULT 0,
     notes TEXT,
+    last_login_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

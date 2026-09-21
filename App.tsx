@@ -71,12 +71,14 @@ const App: React.FC = () => {
         return authService.getCurrentPartner() ? 'partner-portal' : 'partner-auth';
       }
       if (path.startsWith('/partner') || hash === '#partner-login' || hash === '#partner-register' || hash === '#partner-auth') {
-        return 'partner-auth';
+        return authService.getCurrentPartner() ? 'partner-portal' : 'partner-auth';
       }
       if (path.startsWith('/admin/dashboard') || hash === '#crm') {
         return authService.getStaffSession() ? 'crm' : 'login';
       }
-      if (path.startsWith('/admin') || hash === '#admin') return 'login';
+      if (path.startsWith('/admin') || hash === '#admin') {
+        return authService.getStaffSession() ? 'crm' : 'login';
+      }
     }
     return 'website';
   });
@@ -106,7 +108,12 @@ const App: React.FC = () => {
     setIsDark(!isDark);
   };
 
-  const navigateToLogin = () => {
+  const navigateToLogin = (forceForm?: boolean) => {
+    const staff = authService.getStaffSession();
+    if (staff && !forceForm) {
+      navigateToCrm(staff.role, staff);
+      return;
+    }
     setCurrentView('login');
     if (typeof window !== 'undefined') {
       window.history.pushState(null, '', '/admin/login');
@@ -129,6 +136,7 @@ const App: React.FC = () => {
     if (profile) {
       try {
         localStorage.setItem('agx_crm_current_user', JSON.stringify(profile));
+        localStorage.setItem('agx_crm_authenticated', 'true');
       } catch (e) {
         console.warn(e);
       }
@@ -139,7 +147,12 @@ const App: React.FC = () => {
     }
   };
 
-  const navigateToPartnerAuth = (mode: 'login' | 'register' = 'login') => {
+  const navigateToPartnerAuth = (mode: 'login' | 'register' = 'login', forceForm?: boolean) => {
+    const existingPartner = authService.getCurrentPartner();
+    if (existingPartner && !forceForm) {
+      navigateToPartnerPortal(existingPartner);
+      return;
+    }
     setPartnerAuthMode(mode);
     setCurrentView('partner-auth');
     if (typeof window !== 'undefined') {
@@ -195,11 +208,11 @@ const App: React.FC = () => {
       } else if (path.startsWith('/partner/portal') || hash === '#partner-portal' || hash === '#partner-dashboard') {
         setCurrentView(authService.getCurrentPartner() ? 'partner-portal' : 'partner-auth');
       } else if (path.startsWith('/partner') || hash === '#partner-login' || hash === '#partner-register' || hash === '#partner-auth') {
-        setCurrentView('partner-auth');
+        setCurrentView(authService.getCurrentPartner() ? 'partner-portal' : 'partner-auth');
       } else if (path.startsWith('/admin/dashboard') || hash === '#crm') {
         setCurrentView(authService.getStaffSession() ? 'crm' : 'login');
       } else if (path.startsWith('/admin') || hash === '#admin') {
-        setCurrentView('login');
+        setCurrentView(authService.getStaffSession() ? 'crm' : 'login');
       } else {
         setCurrentView('website');
       }
@@ -364,10 +377,12 @@ const App: React.FC = () => {
         <Navbar
           isDark={isDark}
           toggleTheme={toggleTheme}
-          onAdminLoginClick={navigateToLogin}
+          onAdminLoginClick={() => navigateToLogin()}
           onClientPortalClick={() => navigateToPortal()}
           onPartnerPortalClick={() => navigateToPartnerPortal()}
           onConsultationClick={() => handleOpenConsultation()}
+          isStaffLoggedIn={Boolean(authService.getStaffSession())}
+          isPartnerLoggedIn={Boolean(authService.getCurrentPartner())}
         />
         <AnimatePresence mode="wait">
           <motion.main 
@@ -429,15 +444,18 @@ const App: React.FC = () => {
             <PartnerProgram 
               onBecomePartnerClick={() => navigateToPartnerAuth('register')}
               onPartnerLoginClick={() => navigateToPartnerAuth('login')}
+              isPartnerLoggedIn={Boolean(authService.getCurrentPartner())}
             />
             <FAQ />
           </motion.main>
         </AnimatePresence>
         <Footer 
-          onAdminLoginClick={navigateToLogin} 
+          onAdminLoginClick={() => navigateToLogin()} 
           onClientPortalClick={() => navigateToPortal()}
           onPartnerPortalClick={() => navigateToPartnerPortal()}
           onBecomePartnerClick={() => navigateToPartnerAuth('register')}
+          isStaffLoggedIn={Boolean(authService.getStaffSession())}
+          isPartnerLoggedIn={Boolean(authService.getCurrentPartner())}
           onProcessAuditClick={(email) => 
             handleOpenConsultation('Process Audit (Footer Inbound)', 'Inbound process audit request via footer input', email)
           } 

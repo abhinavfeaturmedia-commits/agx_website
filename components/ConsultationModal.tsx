@@ -80,7 +80,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         : '') || '';
 
       // 1. Create Lead in CRM Supabase Database
-      await crmService.createLead({
+      const estDealVal = selectedLeak.includes('40+') ? 350000 : 150000;
+      const createdLead = await crmService.createLead({
         name: name.trim(),
         company: company.trim() || 'Direct Client',
         phone: phone.trim() || null,
@@ -88,7 +89,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         whatsapp: phone.trim() || null,
         location: 'Website Inbound Wizard',
         interestedService: selectedBottleneck,
-        estimatedDealValue: selectedLeak.includes('40+') ? 350000 : 150000,
+        estimatedDealValue: estDealVal,
         probability: 70,
         source: partnerRef ? `Partner Referral (${partnerRef})` : 'Website Diagnostic',
         partnerCode: partnerRef || undefined,
@@ -97,6 +98,39 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         status: 'NEW',
         notes: `Operational Bottleneck: ${selectedBottleneck}\nWeekly Time Loss: ${selectedLeak}\n${partnerRef ? `Referred By Partner Code: ${partnerRef}\n` : ''}Client Notes: ${notes || 'Requested custom 14-day automation blueprint.'}`
       });
+
+      // 1b. If partner code exists, resolve partner and create partner referral entry
+      if (partnerRef && createdLead?.id) {
+        try {
+          const partner = await crmService.findPartnerByCode(partnerRef);
+          if (partner) {
+            await crmService.createPartnerReferral({
+              partnerId: partner.id,
+              leadId: createdLead.id,
+              clientName: name.trim(),
+              clientEmail: email.trim().toLowerCase(),
+              clientPhone: phone.trim() || undefined,
+              company: company.trim() || 'Direct Client',
+              projectType: selectedBottleneck || 'AI Automation',
+              dealValue: estDealVal,
+              totalPaid: 0,
+              pendingPayment: estDealVal,
+              dealStatus: 'NEW',
+              paymentStatus: 'Pending',
+              commissionRate: (partner.commissionRate && partner.commissionRate >= 1 ? partner.commissionRate / 100 : (partner.commissionRate || 0.10)),
+              commissionEarned: 0,
+              commissionPaid: 0,
+              notes: `Inbound lead from partner referral code ${partnerRef}. Selected bottleneck: ${selectedBottleneck}`
+            });
+
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('agx_crm_partner_updated'));
+            }
+          }
+        } catch (partnerErr) {
+          console.warn('Could not auto-link partner referral:', partnerErr);
+        }
+      }
 
       // 2. Trigger Real-time Staff Alert in CRM Notifications
       await crmService.createNotification({

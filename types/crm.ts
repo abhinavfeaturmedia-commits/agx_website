@@ -314,6 +314,7 @@ export interface Task {
   dueDate: string;
   estimatedHours: number;
   actualHours: number;
+  originIssueId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -563,6 +564,7 @@ export interface Partner {
   paidEarnings: number;
   pendingEarnings: number;
   notes?: string;
+  lastLoginAt?: string;
   createdAt: string;
   updatedAt?: string;
 }

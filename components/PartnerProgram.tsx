@@ -5,11 +5,13 @@ import { Handshake, ArrowRight, Users, TrendingUp, DollarSign } from 'lucide-rea
 interface PartnerProgramProps {
   onBecomePartnerClick?: () => void;
   onPartnerLoginClick?: () => void;
+  isPartnerLoggedIn?: boolean;
 }
 
 const PartnerProgram: React.FC<PartnerProgramProps> = ({
   onBecomePartnerClick,
-  onPartnerLoginClick
+  onPartnerLoginClick,
+  isPartnerLoggedIn
 }) => {
   const [referrals, setReferrals] = useState(2);
   const [projectSize, setProjectSize] = useState(8000);
@@ -114,9 +116,13 @@ const PartnerProgram: React.FC<PartnerProgramProps> = ({
               {onPartnerLoginClick && (
                 <button
                   onClick={onPartnerLoginClick}
-                  className="px-6 py-4 rounded-xl text-xs font-bold font-mono uppercase tracking-wider text-white/70 hover:text-white border border-white/10 hover:border-white/20 transition-all cursor-pointer"
+                  className={`px-6 py-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                    isPartnerLoggedIn
+                      ? 'bg-[#CCFF00] text-black hover:bg-[#b8e600] font-extrabold shadow-lg shadow-[#CCFF00]/20'
+                      : 'text-white/70 hover:text-white border border-white/10 hover:border-white/20'
+                  }`}
                 >
-                  Partner Sign In →
+                  {isPartnerLoggedIn ? 'Open Partner Portal →' : 'Partner Sign In →'}
                 </button>
               )}
             </div>

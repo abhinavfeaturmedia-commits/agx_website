@@ -65,10 +65,46 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
   const [editingCred, setEditingCred] = useState<CredentialVaultItem | null>(null);
   const [credToDelete, setCredToDelete] = useState<CredentialVaultItem | null>(null);
 
+  const [newCred, setNewCred] = useState({
+    platformName: '',
+    serviceUrl: '',
+    username: '',
+    passwordEncrypted: '',
+    apiKeyEncrypted: '',
+    clientId: '',
+    clientName: '',
+    projectId: '',
+    projectName: '',
+    notes: '',
+    accessRoles: ['Super Admin', 'Admin', 'Developer'] as UserRole[]
+  });
+
+  // Handle Open Add Modal with clean defaults
+  const handleOpenAddModal = () => {
+    const defaultClient = clients[0];
+    const defaultProjects = defaultClient ? projects.filter(p => p.clientId === defaultClient.id) : projects;
+    setNewCred({
+      platformName: '',
+      serviceUrl: '',
+      username: '',
+      passwordEncrypted: '',
+      apiKeyEncrypted: '',
+      clientId: defaultClient?.id || '',
+      clientName: defaultClient?.company || '',
+      projectId: defaultProjects[0]?.id || '',
+      projectName: defaultProjects[0]?.name || '',
+      notes: '',
+      accessRoles: ['Super Admin', 'Admin', 'Developer'] as UserRole[]
+    });
+    setShowAddPassword(false);
+    setShowAddApiKey(false);
+    setIsAddModalOpen(true);
+  };
+
   // Auto-filter or open create modal if navigated with entity ID
   useEffect(() => {
     if (initialSelectedId === 'new') {
-      setIsAddModalOpen(true);
+      handleOpenAddModal();
       onNavigate('vault', undefined);
     } else if (initialSelectedId) {
       const match = credentials.find(c => c.id === initialSelectedId);
@@ -77,21 +113,7 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
       }
       onNavigate('vault', undefined);
     }
-  }, [initialSelectedId]);
-
-  const [newCred, setNewCred] = useState({
-    platformName: '',
-    serviceUrl: '',
-    username: '',
-    passwordEncrypted: '',
-    apiKeyEncrypted: '',
-    clientId: clients[0]?.id || '',
-    clientName: clients[0]?.company || '',
-    projectId: projects[0]?.id || '',
-    projectName: projects[0]?.name || '',
-    notes: '',
-    accessRoles: ['Super Admin', 'Admin', 'Developer'] as UserRole[]
-  });
+  }, [initialSelectedId, clients, projects]);
 
   // Countdown timer for automatic mask
   useEffect(() => {
@@ -275,22 +297,37 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
       toast.error('Validation Error', 'Please enter a platform name.');
       return;
     }
+    if (!newCred.passwordEncrypted.trim() && !newCred.apiKeyEncrypted.trim()) {
+      toast.error('Validation Error', 'Please provide a Secret Password or an API Key.');
+      return;
+    }
     const cl = clients.find(c => c.id === newCred.clientId);
     const pr = projects.find(p => p.id === newCred.projectId);
 
     // Encrypt sensitive secrets using AES-GCM before saving
-    const encryptedPassword = await cryptoService.encrypt(newCred.passwordEncrypted);
-    const encryptedApiKey = newCred.apiKeyEncrypted ? await cryptoService.encrypt(newCred.apiKeyEncrypted) : '';
+    const encryptedPassword = newCred.passwordEncrypted.trim()
+      ? await cryptoService.encrypt(newCred.passwordEncrypted.trim())
+      : '';
+    const encryptedApiKey = newCred.apiKeyEncrypted.trim()
+      ? await cryptoService.encrypt(newCred.apiKeyEncrypted.trim())
+      : '';
 
-    addCredential({
-      ...newCred,
+    await addCredential({
+      platformName: newCred.platformName.trim(),
+      serviceUrl: newCred.serviceUrl.trim() || undefined,
+      username: newCred.username.trim(),
       passwordEncrypted: encryptedPassword,
-      apiKeyEncrypted: encryptedApiKey,
-      clientName: cl ? cl.company : newCred.clientName,
-      projectName: pr ? pr.name : newCred.projectName
+      apiKeyEncrypted: encryptedApiKey || undefined,
+      clientId: newCred.clientId || undefined,
+      clientName: cl ? cl.company : (newCred.clientId ? newCred.clientName : undefined),
+      projectId: newCred.projectId || undefined,
+      projectName: pr ? pr.name : (newCred.projectId ? newCred.projectName : undefined),
+      notes: newCred.notes.trim() || undefined,
+      accessRoles: newCred.accessRoles,
+      environment: 'Production',
+      status: 'Active'
     });
     setIsAddModalOpen(false);
-    toast.success('Secret Vaulted', `${newCred.platformName} credentials encrypted (AES-GCM) & stored.`);
   };
 
   const handleSaveEditCredential = async (e: React.FormEvent) => {
@@ -298,23 +335,26 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
     if (!editingCred) return;
 
     // Encrypt if modified
-    const encryptedPassword = await cryptoService.encrypt(editingCred.passwordEncrypted);
-    const encryptedApiKey = editingCred.apiKeyEncrypted ? await cryptoService.encrypt(editingCred.apiKeyEncrypted) : '';
+    const encryptedPassword = editingCred.passwordEncrypted
+      ? await cryptoService.encrypt(editingCred.passwordEncrypted)
+      : '';
+    const encryptedApiKey = editingCred.apiKeyEncrypted
+      ? await cryptoService.encrypt(editingCred.apiKeyEncrypted)
+      : '';
 
-    updateCredential(editingCred.id, {
+    await updateCredential(editingCred.id, {
       ...editingCred,
       passwordEncrypted: encryptedPassword,
       apiKeyEncrypted: encryptedApiKey
     });
     setEditingCred(null);
-    toast.success('Vault Record Updated', `${editingCred.platformName} updated & encrypted.`);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!credToDelete) return;
-    deleteCredential(credToDelete.id);
+    const cred = credToDelete;
     setCredToDelete(null);
-    toast.success('Secret Erased', 'Credential record permanently deleted.');
+    await deleteCredential(cred.id);
   };
 
   const handleExportCsv = () => {
@@ -376,7 +416,7 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
           </button>
 
           <button
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={handleOpenAddModal}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black text-white hover:bg-gray-800 font-bold text-xs shadow-md transition-colors cursor-pointer"
           >
             <Plus size={15} className="text-[#CCFF00]" /> Store Credential
@@ -751,7 +791,15 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
                 {filteredCredentials.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-gray-400 text-xs">
-                      No credentials found in vault.
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <span>No credentials found in vault.</span>
+                        <button
+                          onClick={handleOpenAddModal}
+                          className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-black text-white text-xs font-bold hover:bg-gray-800 cursor-pointer"
+                        >
+                          <Plus size={13} className="text-[#CCFF00]" /> Store New Secret
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -770,7 +818,7 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
                           <div className="font-semibold text-gray-800">{cred.clientName || 'Internal AGX'}</div>
                           <div className="text-[10px] text-gray-400">{cred.projectName || 'General Environment'}</div>
                         </td>
-                        <td className="py-3.5 px-3 font-mono">{cred.username}</td>
+                        <td className="py-3.5 px-3 font-medium text-gray-800">{cred.username}</td>
                         <td className="py-3.5 px-3 font-mono">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`font-bold transition-all ${
@@ -912,11 +960,10 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Secret Password *</label>
+                  <label className="block font-bold text-gray-700 mb-1">Secret Password</label>
                   <div className="relative">
                     <input
                       type={showAddPassword ? "text" : "password"}
-                      required
                       value={newCred.passwordEncrypted}
                       onChange={(e) => setNewCred({ ...newCred, passwordEncrypted: e.target.value })}
                       placeholder="Secure password value"
@@ -973,6 +1020,7 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
                     }}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none cursor-pointer"
                   >
+                    <option value="">General Environment / Internal AGX</option>
                     {clients.map(c => (
                       <option key={c.id} value={c.id}>{c.company}</option>
                     ))}
@@ -988,7 +1036,7 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
                     }}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none cursor-pointer"
                   >
-                    <option value="">General Environment / No Project</option>
+                    <option value="">General / All Projects</option>
                     {(newCred.clientId ? projects.filter(p => p.clientId === newCred.clientId) : projects).map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}

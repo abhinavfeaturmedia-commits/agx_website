@@ -285,6 +285,16 @@ export const authService = {
         .maybeSingle();
 
       if (partnerRow) {
+        const nowIso = new Date().toISOString();
+        try {
+          await supabase.from('partners').update({
+            last_login_at: nowIso,
+            updated_at: nowIso
+          }).eq('id', partnerRow.id);
+        } catch (e) {
+          console.warn('Failed to update partner last_login_at:', e);
+        }
+
         const partner = {
           id: partnerRow.id,
           userId: partnerRow.user_id || user.id,
@@ -301,6 +311,7 @@ export const authService = {
           paidEarnings: Number(partnerRow.paid_earnings) || 0,
           pendingEarnings: Number(partnerRow.pending_earnings) || 0,
           notes: partnerRow.notes,
+          lastLoginAt: nowIso,
           createdAt: partnerRow.created_at,
           updatedAt: partnerRow.updated_at
         };
@@ -314,6 +325,7 @@ export const authService = {
       const randomSuffix = Math.floor(1000 + Math.random() * 9000);
       const referralCode = `AGX-${cleanSlug}-${randomSuffix}`;
 
+      const nowIso = new Date().toISOString();
       const newPartner = {
         id: user.id,
         userId: user.id,
@@ -329,7 +341,8 @@ export const authService = {
         totalEarnings: 0,
         paidEarnings: 0,
         pendingEarnings: 0,
-        createdAt: new Date().toISOString()
+        lastLoginAt: nowIso,
+        createdAt: nowIso
       };
 
       try {
@@ -344,7 +357,8 @@ export const authService = {
           commission_rate: 0.10,
           status: 'Active',
           payout_method: 'UPI',
-          payout_details: {}
+          payout_details: {},
+          last_login_at: nowIso
         });
       } catch (err) {
         console.warn('Auto-provision partner DB sync notice:', err);
@@ -416,27 +430,65 @@ export const authService = {
         return { partner: null, error: new Error('Please enter both email and password.') };
       }
 
-      // 1. First look up partner directly in 'partners' table
+      // 1. First look up partner record in 'partners' table
       const { data: partnerRow, error: pErr } = await supabase
         .from('partners')
         .select('*')
         .ilike('email', trimmedEmail)
         .maybeSingle();
 
-      // Attempt Supabase auth login
+      if (partnerRow && partnerRow.status === 'Suspended') {
+        return { partner: null, error: new Error('Your partner account is currently suspended. Please contact support@agxperience.com.') };
+      }
+
+      // 2. Strict Authentication: Verify password via Supabase Auth
+      let isAuthenticated = false;
+      let authenticatedUserId: string | null = null;
+
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
         password: trimmedPass
       }).catch(e => ({ data: null, error: e }));
 
+      if (authData?.user) {
+        isAuthenticated = true;
+        authenticatedUserId = authData.user.id;
+      } else {
+        // Check if partner row has custom legacy password verification
+        const payoutDetails = partnerRow?.payout_details;
+        if (payoutDetails && typeof payoutDetails === 'object' && payoutDetails.passwordHash) {
+          if (payoutDetails.passwordHash === trimmedPass) {
+            isAuthenticated = true;
+          }
+        }
+      }
+
+      if (!isAuthenticated) {
+        return {
+          partner: null,
+          error: new Error('Invalid email or password. If you were onboarded by an admin, please use Register with your partner email to set your password.')
+        };
+      }
+
+      // 3. User is verified. Retrieve or auto-provision partner profile
       if (partnerRow) {
-        if (partnerRow.status === 'Suspended') {
-          return { partner: null, error: new Error('Your partner account is currently suspended. Please contact support@agxperience.com.') };
+        const nowIso = new Date().toISOString();
+        try {
+          const updates: any = {
+            last_login_at: nowIso,
+            updated_at: nowIso
+          };
+          if (!partnerRow.user_id && authenticatedUserId) {
+            updates.user_id = authenticatedUserId;
+          }
+          await supabase.from('partners').update(updates).eq('id', partnerRow.id);
+        } catch (e) {
+          console.warn('Failed to update partner last_login_at:', e);
         }
 
         const partner = {
           id: partnerRow.id,
-          userId: partnerRow.user_id,
+          userId: partnerRow.user_id || authenticatedUserId || partnerRow.id,
           name: partnerRow.name,
           email: partnerRow.email,
           company: partnerRow.company,
@@ -450,6 +502,7 @@ export const authService = {
           paidEarnings: Number(partnerRow.paid_earnings) || 0,
           pendingEarnings: Number(partnerRow.pending_earnings) || 0,
           notes: partnerRow.notes,
+          lastLoginAt: nowIso,
           createdAt: partnerRow.created_at,
           updatedAt: partnerRow.updated_at
         };
@@ -458,7 +511,7 @@ export const authService = {
         return { partner, error: null };
       }
 
-      // Check if user authenticated via Supabase Auth without an existing row
+      // Check if user authenticated via Supabase Auth without an existing row -> provision
       if (authData?.user) {
         const generatedCode = `AGX-${(authData.user.email?.split('@')[0] || 'PARTNER').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 5)}-${Math.floor(1000 + Math.random() * 9000)}`;
         const newPartner = {
@@ -501,14 +554,6 @@ export const authService = {
         return { partner: newPartner, error: null };
       }
 
-      // Check local storage for fallback / mock partners
-      const localPartners = JSON.parse(localStorage.getItem('agx_crm_partners') || '[]');
-      const localMatch = localPartners.find((p: any) => p.email.toLowerCase() === trimmedEmail);
-      if (localMatch) {
-        this.setPartnerSession(localMatch);
-        return { partner: localMatch, error: null };
-      }
-
       return { partner: null, error: new Error('No partner account found with this email. Please register to become an AGX Partner.') };
     } catch (err: any) {
       return { partner: null, error: err };
@@ -533,7 +578,14 @@ export const authService = {
         return { partner: null, error: new Error('Name and email are required.') };
       }
 
-      // Try registering user with Supabase Auth if password provided
+      // 1. Check if partner row was pre-created by admin
+      const { data: existingRow } = await supabase
+        .from('partners')
+        .select('*')
+        .ilike('email', trimmedEmail)
+        .maybeSingle();
+
+      // 2. Try registering user with Supabase Auth if password provided
       let authUserId = crypto.randomUUID ? crypto.randomUUID() : `partner-${Date.now()}`;
       if (data.password) {
         const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -542,8 +594,8 @@ export const authService = {
           options: {
             data: {
               full_name: trimmedName,
-              company: data.company || '',
-              phone: data.phone || '',
+              company: data.company || existingRow?.company || '',
+              phone: data.phone || existingRow?.phone || '',
               role: 'Partner'
             }
           }
@@ -554,30 +606,35 @@ export const authService = {
         }
       }
 
-      // Generate unique referral code: e.g. AGX-ACME-4821
+      // 3. Generate unique referral code if not already assigned
       const cleanSlug = (data.company || trimmedName).replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 5) || 'AGX';
       const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-      const referralCode = `AGX-${cleanSlug}-${randomSuffix}`;
+      const referralCode = existingRow?.referral_code || `AGX-${cleanSlug}-${randomSuffix}`;
+
+      const nowIso = new Date().toISOString();
+      const partnerId = existingRow?.id || authUserId;
+      const commissionRate = existingRow?.commission_rate ? Number(existingRow.commission_rate) : 0.10;
 
       const newPartner = {
-        id: authUserId,
+        id: partnerId,
         userId: authUserId,
         name: trimmedName,
         email: trimmedEmail,
-        company: data.company || '',
-        phone: data.phone || '',
+        company: data.company || existingRow?.company || '',
+        phone: data.phone || existingRow?.phone || '',
         referralCode,
-        commissionRate: 0.10, // Default 10% standard tier
-        status: 'Active',
-        payoutMethod: data.payoutMethod || 'UPI',
-        payoutDetails: data.payoutDetails || {},
-        totalEarnings: 0,
-        paidEarnings: 0,
-        pendingEarnings: 0,
-        createdAt: new Date().toISOString()
+        commissionRate,
+        status: existingRow?.status || 'Active',
+        payoutMethod: (data.payoutMethod || existingRow?.payout_method || 'UPI') as any,
+        payoutDetails: data.payoutDetails || existingRow?.payout_details || {},
+        totalEarnings: existingRow?.total_earnings ? Number(existingRow.total_earnings) : 0,
+        paidEarnings: existingRow?.paid_earnings ? Number(existingRow.paid_earnings) : 0,
+        pendingEarnings: existingRow?.pending_earnings ? Number(existingRow.pending_earnings) : 0,
+        lastLoginAt: nowIso,
+        createdAt: existingRow?.created_at || nowIso
       };
 
-      // Sync to Supabase
+      // 4. Sync to Supabase
       const { error: insertError } = await supabase.from('partners').upsert({
         id: newPartner.id,
         user_id: newPartner.userId,
@@ -586,13 +643,15 @@ export const authService = {
         company: newPartner.company,
         phone: newPartner.phone,
         referral_code: newPartner.referralCode,
-        commission_rate: 0.10,
-        status: 'Active',
+        commission_rate: newPartner.commissionRate,
+        status: newPartner.status,
         payout_method: newPartner.payoutMethod,
         payout_details: newPartner.payoutDetails,
-        total_earnings: 0,
-        paid_earnings: 0,
-        pending_earnings: 0
+        total_earnings: newPartner.totalEarnings,
+        paid_earnings: newPartner.paidEarnings,
+        pending_earnings: newPartner.pendingEarnings,
+        last_login_at: nowIso,
+        updated_at: nowIso
       });
 
       if (insertError) {
@@ -606,6 +665,11 @@ export const authService = {
       const existing = JSON.parse(localStorage.getItem('agx_crm_partners') || '[]');
       if (!existing.some((p: any) => p.id === newPartner.id)) {
         localStorage.setItem('agx_crm_partners', JSON.stringify([newPartner, ...existing]));
+      }
+
+      // Dispatch event to notify CRM in current tab
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('agx_crm_partner_updated', { detail: newPartner }));
       }
 
       return { partner: newPartner, error: null };

@@ -214,12 +214,22 @@ export function useCrmStore() {
   useEffect(() => {
     refreshFromCloud(true);
 
+    const handlePartnerEvent = () => {
+      refreshFromCloud(true);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('agx_crm_partner_updated', handlePartnerEvent);
+    }
+
     const unsubscribe = crmService.subscribeToChanges((table, payload) => {
       console.log(`[Realtime Supabase] ${table} change:`, payload.eventType);
       refreshFromCloud(true);
     });
 
     return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('agx_crm_partner_updated', handlePartnerEvent);
+      }
       unsubscribe();
     };
   }, [refreshFromCloud]);
@@ -289,7 +299,7 @@ export function useCrmStore() {
   };
 
   // --- Lead Actions ---
-  const addLead = (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addLead = (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): string => {
     const tempId = generateUUID();
     const newLead: Lead = {
       ...lead,
@@ -303,10 +313,13 @@ export function useCrmStore() {
 
     crmService.createLead(lead).then(savedLead => {
       setLeads(prev => prev.map(l => l.id === tempId ? savedLead : l));
+      setPartnerReferrals(prev => prev.map(r => r.leadId === tempId ? { ...r, leadId: savedLead.id } : r));
     }).catch(err => {
       console.warn('Supabase lead create error:', err);
       toast.error('Sync Warning', 'Failed to save lead in cloud database.');
     });
+
+    return tempId;
   };
 
   const updateLead = (leadId: string, updates: Partial<Lead>) => {
@@ -520,6 +533,55 @@ export function useCrmStore() {
       setProjects(prev => prev.map(p => p.id === tempProjectId ? persistedProject : p));
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, convertedClientId: savedClient.id, convertedProjectId: savedProject.id } : l));
       await crmService.updateLead(leadId, { convertedClientId: savedClient.id, convertedProjectId: savedProject.id });
+
+      // Link and reconcile partner referrals if lead originated from a partner
+      const matchingRefs = partnerReferrals.filter(r => 
+        (r.leadId && r.leadId === leadId) || 
+        (lead.email && r.clientEmail && r.clientEmail.toLowerCase() === lead.email.toLowerCase())
+      );
+
+      if (matchingRefs.length > 0) {
+        for (const ref of matchingRefs) {
+          const updates = {
+            clientId: savedClient.id,
+            projectId: savedProject.id,
+            dealStatus: 'WON' as const,
+            dealValue: dealVal,
+            pendingPayment: dealVal
+          };
+          setPartnerReferrals(pRefs => pRefs.map(r => r.id === ref.id ? { ...r, ...updates } : r));
+          crmService.updatePartnerReferral(ref.id, updates).catch(e => console.warn('Update partner referral on conversion err:', e));
+        }
+      } else if (lead.partnerId || lead.partnerCode) {
+        // Fallback: If lead has partner attribution but no referral row existed
+        const partner = partners.find(p => p.id === lead.partnerId || (lead.partnerCode && p.referralCode === lead.partnerCode));
+        if (partner) {
+          const rawRate = partner.commissionRate || 0.10;
+          const commRate = rawRate >= 1 ? rawRate / 100 : rawRate;
+          crmService.createPartnerReferral({
+            partnerId: partner.id,
+            leadId: lead.id,
+            clientId: savedClient.id,
+            projectId: savedProject.id,
+            clientName: savedClient.name,
+            clientEmail: savedClient.email || undefined,
+            clientPhone: savedClient.phone || undefined,
+            company: savedClient.company,
+            projectType: savedProject.serviceType,
+            dealValue: dealVal,
+            totalPaid: 0,
+            pendingPayment: dealVal,
+            dealStatus: 'WON',
+            paymentStatus: 'Pending',
+            commissionRate: commRate,
+            commissionEarned: 0,
+            commissionPaid: 0,
+            notes: `Auto-linked during lead-to-client conversion.`
+          }).then(newRef => {
+            setPartnerReferrals(pRefs => [newRef, ...pRefs]);
+          }).catch(e => console.warn('Create partner referral on conversion err:', e));
+        }
+      }
 
       return { client: savedClient, project: persistedProject };
     } catch (err) {
@@ -791,18 +853,18 @@ export function useCrmStore() {
       targetProjectId = task.projectId || undefined;
       // Auto-resolve linked issue if ticket was completed
       if (status === 'COMPLETED') {
-        const match = task.title.match(/\[Ticket #(ISSUE-[^\]]+)\]/);
-        if (match && match[1]) {
-          const ticketNum = match[1];
-          const linkedIssue = issues.find(i => i.ticketNumber === ticketNum);
-          if (linkedIssue && linkedIssue.status !== 'RESOLVED' && linkedIssue.status !== 'CLOSED') {
-            updateIssue(linkedIssue.id, {
-              status: 'RESOLVED',
-              resolvedAt: new Date().toISOString(),
-              resolutionNotes: `Automatically marked RESOLVED upon completion of sprint task "${task.title}".`
-            });
-            toast.success('Linked Issue Resolved ✅', `Ticket #${ticketNum} marked Resolved via sprint completion.`);
-          }
+        const ticketMatch = task.title.match(/\[Ticket #(ISSUE-[^\]]+)\]/);
+        const ticketNum = ticketMatch ? ticketMatch[1] : undefined;
+        const linkedIssue = (task.originIssueId ? issues.find(i => i.id === task.originIssueId) : undefined)
+          || (ticketNum ? issues.find(i => i.ticketNumber === ticketNum) : undefined);
+
+        if (linkedIssue && linkedIssue.status !== 'RESOLVED' && linkedIssue.status !== 'CLOSED') {
+          updateIssue(linkedIssue.id, {
+            status: 'RESOLVED',
+            resolvedAt: new Date().toISOString(),
+            resolutionNotes: `Automatically marked RESOLVED upon completion of sprint task "${task.title}".`
+          });
+          toast.success('Linked Issue Resolved ✅', `Ticket #${linkedIssue.ticketNumber} marked Resolved via sprint completion.`);
         }
       }
     }
@@ -951,7 +1013,9 @@ export function useCrmStore() {
         const newTotalPaid = ref.totalPaid + payment.amount;
         const newPendingPayment = Math.max(0, ref.dealValue - newTotalPaid);
         const newPaymentStatus = newTotalPaid >= ref.dealValue ? 'Fully Paid' : 'Partially Paid';
-        const newCommissionEarned = Math.round(newTotalPaid * ref.commissionRate);
+        const rawRate = ref.commissionRate || 0.10;
+        const commRate = rawRate >= 1 ? rawRate / 100 : rawRate;
+        const newCommissionEarned = Math.round(newTotalPaid * commRate);
         const commissionDelta = newCommissionEarned - ref.commissionEarned;
 
         // Update partner earnings in state
@@ -1036,7 +1100,46 @@ export function useCrmStore() {
         }));
       }
 
+      // 4. Reverse Partner Referral & Partner Earnings in local state
+      setPartnerReferrals(prev => prev.map(ref => {
+        if (ref.clientId === payment.clientId || (targetProjId && ref.projectId === targetProjId)) {
+          const newTotalPaid = Math.max(0, ref.totalPaid - payment.amount);
+          const newPendingPayment = Math.max(0, ref.dealValue - newTotalPaid);
+          const rawRate = ref.commissionRate || 0.10;
+          const commRate = rawRate >= 1 ? rawRate / 100 : rawRate;
+          const newCommissionEarned = Math.round(newTotalPaid * commRate);
+          const commissionDelta = ref.commissionEarned - newCommissionEarned;
+
+          setPartners(pPrev => pPrev.map(p => {
+            if (p.id === ref.partnerId) {
+              const updatedTotalEarnings = Math.max(0, p.totalEarnings - commissionDelta);
+              const updatedPendingEarnings = Math.max(0, updatedTotalEarnings - p.paidEarnings);
+              return {
+                ...p,
+                totalEarnings: updatedTotalEarnings,
+                pendingEarnings: updatedPendingEarnings,
+                updatedAt: new Date().toISOString()
+              };
+            }
+            return p;
+          }));
+
+          return {
+            ...ref,
+            totalPaid: newTotalPaid,
+            pendingPayment: newPendingPayment,
+            paymentStatus: newTotalPaid <= 0 ? 'Pending' : (newPendingPayment === 0 ? 'Fully Paid' : 'Partially Paid'),
+            commissionEarned: newCommissionEarned,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return ref;
+      }));
+
       logAudit('DELETE', 'Payment', paymentId, `Voided payment of ₹${payment.amount.toLocaleString('en-IN')}`);
+
+      // Persist balance reversals to Supabase
+      crmService.revertPaymentBalances(payment).catch(err => console.warn('Supabase revert payment balances error:', err));
     }
 
     setPayments(prev => prev.filter(p => p.id !== paymentId));
@@ -1107,6 +1210,7 @@ export function useCrmStore() {
     crmService.createInvoice(newInvoice).then(savedInvoice => {
       setInvoices(prev => prev.map(i => i.id === invTempId ? savedInvoice : i));
       updateMilestone(projectId, milestoneId, { isBilled: true, invoiceId: savedInvoice.id });
+      crmService.updateMilestoneInvoiced(milestoneId, true, savedInvoice.id);
     }).catch(err => console.warn('Supabase add invoice error:', err));
   };
 
@@ -1185,7 +1289,7 @@ export function useCrmStore() {
   };
 
   // --- Credentials Vault ---
-  const addCredential = (cred: Omit<CredentialVaultItem, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addCredential = async (cred: Omit<CredentialVaultItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<CredentialVaultItem> => {
     const tempId = generateUUID();
     const newCred: CredentialVaultItem = {
       ...cred,
@@ -1195,26 +1299,46 @@ export function useCrmStore() {
     };
     setCredentials(prev => [newCred, ...prev]);
     logAudit('CREATE', 'Credential', newCred.id, `Stored credential for platform: ${newCred.platformName}`);
-    toast.success('Secret Encrypted & Stored', `${newCred.platformName} credential secured.`);
 
-    crmService.createCredential(cred).then(savedCred => {
-      setCredentials(prev => prev.map(c => c.id === tempId ? savedCred : c));
-    }).catch(err => console.warn('Supabase add credential error:', err));
+    try {
+      const savedCred = await crmService.createCredential(cred);
+      const finalized: CredentialVaultItem = {
+        ...savedCred,
+        clientName: cred.clientName || savedCred.clientName,
+        projectName: cred.projectName || savedCred.projectName
+      };
+      setCredentials(prev => prev.map(c => c.id === tempId ? finalized : c));
+      toast.success('Secret Vaulted', `${newCred.platformName} credential secured & encrypted.`);
+      return finalized;
+    } catch (err: any) {
+      console.error('Supabase add credential error:', err);
+      toast.warning('Offline Cache', `${newCred.platformName} saved locally. Cloud sync pending.`);
+      return newCred;
+    }
   };
 
-  const updateCredential = (credId: string, updates: Partial<CredentialVaultItem>) => {
+  const updateCredential = async (credId: string, updates: Partial<CredentialVaultItem>) => {
     setCredentials(prev => prev.map(c => c.id === credId ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c));
     toast.success('Credential Updated', 'Secrets modified.');
 
-    crmService.updateCredential(credId, updates).catch(err => console.warn('Supabase update credential error:', err));
+    try {
+      await crmService.updateCredential(credId, updates);
+    } catch (err) {
+      console.warn('Supabase update credential error:', err);
+      toast.warning('Offline Cache', 'Updated locally. Cloud sync pending.');
+    }
   };
 
-  const deleteCredential = (credId: string) => {
+  const deleteCredential = async (credId: string) => {
     setCredentials(prev => prev.filter(c => c.id !== credId));
     logAudit('DELETE', 'Credential', credId, `Deleted vault credential ID ${credId}`);
     toast.warning('Credential Deleted', 'Vault key permanently purged.');
 
-    crmService.deleteCredential(credId).catch(err => console.warn('Supabase delete credential error:', err));
+    try {
+      await crmService.deleteCredential(credId);
+    } catch (err) {
+      console.warn('Supabase delete credential error:', err);
+    }
   };
 
   const revealCredentialSecret = (credId: string) => {
@@ -1357,6 +1481,7 @@ export function useCrmStore() {
       projectName: issue.projectName,
       clientId: issue.clientId,
       clientName: issue.clientName,
+      originIssueId: issue.id,
       assignedTo: devAssignee,
       priority: issue.priority === 'Critical' ? 'Urgent' : issue.priority,
       status: 'IN PROGRESS',
@@ -1464,7 +1589,11 @@ export function useCrmStore() {
 
   // Computed Financials
   const totalRevenue = payments.reduce((acc, p) => acc + p.amount, 0);
-  const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
+  const partnerPayoutsTotal = partnerPayouts
+    .filter(p => p.status === 'Completed' || (p.status as string) === 'Paid')
+    .reduce((acc, p) => acc + (p.amount || 0), 0);
+  const directExpensesTotal = expenses.reduce((acc, e) => acc + e.amount, 0);
+  const totalExpenses = directExpensesTotal + partnerPayoutsTotal;
   const netProfit = totalRevenue - totalExpenses;
   const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : '0';
   const outstandingInvoicesTotal = invoices
@@ -1705,6 +1834,8 @@ export function useCrmStore() {
     syncError,
     refreshFromCloud,
     totalRevenue,
+    directExpensesTotal,
+    partnerPayoutsTotal,
     totalExpenses,
     netProfit,
     profitMargin,

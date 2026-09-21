@@ -147,7 +147,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
           <span className="text-2xl font-black italic tracking-tighter text-white font-['Outfit']">
             AG<span className="text-[#CCFF00]">X</span>
           </span>
-          <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 uppercase tracking-widest font-bold flex items-center gap-1.5">
+          <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 uppercase tracking-widest font-bold flex items-center gap-1.5">
             <Handshake size={12} />
             Partner Portal
           </span>
@@ -161,7 +161,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
             {/* Header / Value Proposition */}
             <div className="text-center mb-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] text-xs font-semibold mb-3 border border-[#CCFF00]/20">
-                <DollarSign size={13} />
+                <Sparkles size={13} />
                 <span>10% – 15% Lifetime Deal Commission</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white font-['Outfit']">
@@ -200,6 +200,54 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
               </button>
             </div>
 
+            {/* Active Partner Session Detection */}
+            {authService.getCurrentPartner() && (
+              <div className="mb-5 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center font-bold text-sm text-[#CCFF00]">
+                    {authService.getCurrentPartner()?.name?.charAt(0) || 'P'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#CCFF00] animate-pulse" />
+                      <span className="font-extrabold text-white text-xs block truncate">
+                        {authService.getCurrentPartner()?.name}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-white/60 block truncate">
+                      {authService.getCurrentPartner()?.email} • Code: <strong className="text-white">{authService.getCurrentPartner()?.referralCode}</strong>
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = authService.getCurrentPartner();
+                      if (p) onLoginSuccess(p);
+                    }}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition-all"
+                  >
+                    <span>Enter Partner Portal →</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      authService.clearPartnerSession();
+                      setErrorMessage('');
+                      toast.info('Session Cleared', 'You can now sign in with another partner account.');
+                      setLoginEmail('');
+                      setLoginPassword('');
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white text-xs font-semibold cursor-pointer border border-white/10"
+                    title="Sign in with a different partner account"
+                  >
+                    Switch
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Google OAuth Quick Button */}
             <button
               type="button"
@@ -218,7 +266,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
 
             <div className="flex items-center gap-3 my-4">
               <div className="h-px bg-white/10 flex-1" />
-              <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Or with email</span>
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Or with email</span>
               <div className="h-px bg-white/10 flex-1" />
             </div>
 
@@ -232,7 +280,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
             {mode === 'login' ? (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-white/70 block mb-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
                     Partner Email
                   </label>
                   <div className="relative">
@@ -249,7 +297,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-white/70 block mb-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
                     Password
                   </label>
                   <div className="relative">
@@ -279,7 +327,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
               <form onSubmit={handleRegister} className="space-y-3.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/70 block mb-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-white/70 block mb-1">
                       Full Name *
                     </label>
                     <div className="relative">
@@ -296,7 +344,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/70 block mb-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-white/70 block mb-1">
                       Agency / Business Name
                     </label>
                     <div className="relative">
@@ -314,7 +362,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/70 block mb-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-white/70 block mb-1">
                       Business Email *
                     </label>
                     <div className="relative">
@@ -331,7 +379,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/70 block mb-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-white/70 block mb-1">
                       WhatsApp / Phone
                     </label>
                     <div className="relative">
@@ -348,7 +396,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-white/70 block mb-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-white/70 block mb-1">
                     Create Password *
                   </label>
                   <div className="relative">
@@ -366,7 +414,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
 
                 {/* Payout Preference */}
                 <div className="pt-1">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-white/70 block mb-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-white/70 block mb-1">
                     Commission Payout Method
                   </label>
                   <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-white/5 border border-white/10 mb-2">
@@ -457,7 +505,7 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
       </div>
 
       {/* Footer Branding */}
-      <div className="w-full max-w-7xl mx-auto px-6 py-4 flex-shrink-0 text-center text-white/40 text-[11px] font-mono">
+      <div className="w-full max-w-7xl mx-auto px-6 py-4 flex-shrink-0 text-center text-white/40 text-[11px] font-medium tracking-wide">
         AGX Partner Network • Enterprise Automation & AI Agency Program
       </div>
     </div>

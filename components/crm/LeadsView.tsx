@@ -174,7 +174,8 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
   const {
     leads, addLead, updateLead, updateLeadStatus, deleteLead,
     addLeadActivity, convertLeadToClient, addAgreement, currentUser, teamMembers,
-    tasks, addTask, updateTaskStatus, events, addCalendarEvent, agreements
+    tasks, addTask, updateTaskStatus, events, addCalendarEvent, agreements,
+    partners
   } = store;
 
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('list');
@@ -298,6 +299,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
     priority: 'High' as Priority,
     status: 'NEW' as LeadStatus,
     nextFollowUp: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    partnerId: '',
     notes: ''
   });
 
@@ -609,7 +611,15 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
       toast.error('Validation Error', 'Please provide contact name and company.');
       return;
     }
-    addLead(newLead);
+    const matchedPartner = partners.find(p => p.id === newLead.partnerId);
+    const payload = {
+      ...newLead,
+      partnerId: matchedPartner?.id || undefined,
+      partnerName: matchedPartner?.name || undefined,
+      partnerCode: matchedPartner?.referralCode || undefined,
+      source: matchedPartner ? `Partner Referral (${matchedPartner.name} - ${matchedPartner.referralCode})` : newLead.source
+    };
+    addLead(payload);
     setIsAddModalOpen(false);
     setNewLead({
       name: '',
@@ -626,6 +636,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
       priority: 'High',
       status: 'NEW',
       nextFollowUp: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      partnerId: '',
       notes: ''
     });
   };
@@ -2298,6 +2309,22 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
               </div>
 
               <div>
+                <label className="block font-bold text-gray-700 mb-1">Referred By Partner (Optional)</label>
+                <select
+                  value={newLead.partnerId || ''}
+                  onChange={(e) => setNewLead({ ...newLead, partnerId: e.target.value })}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none cursor-pointer focus:border-black text-xs"
+                >
+                  <option value="">No Partner Attribution (Direct Lead)</option>
+                  {partners.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.referralCode}) — {Math.round((p.commissionRate >= 1 ? p.commissionRate : p.commissionRate * 100))}% Tier
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="block font-bold text-gray-700 mb-1">Initial Notes & Requirements</label>
                 <textarea
                   rows={2}
@@ -2523,6 +2550,31 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Attributed Partner</label>
+                <select
+                  value={editingLead.partnerId || ''}
+                  onChange={(e) => {
+                    const pId = e.target.value;
+                    const matched = partners.find(p => p.id === pId);
+                    setEditingLead({
+                      ...editingLead,
+                      partnerId: matched?.id || undefined,
+                      partnerName: matched?.name || undefined,
+                      partnerCode: matched?.referralCode || undefined
+                    });
+                  }}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none cursor-pointer focus:border-black text-xs"
+                >
+                  <option value="">No Partner Attribution (Direct Lead)</option>
+                  {partners.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.referralCode}) — {Math.round((p.commissionRate >= 1 ? p.commissionRate : p.commissionRate * 100))}% Tier
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">

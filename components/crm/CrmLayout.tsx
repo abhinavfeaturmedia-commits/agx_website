@@ -549,6 +549,8 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
         agreements={store.agreements}
         documents={store.documents}
         teamMembers={store.teamMembers}
+        partners={store.partners}
+        issues={store.issues}
         currentUser={store.currentUser}
         onNavigate={handleNavigate}
       />

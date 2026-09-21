@@ -9,6 +9,8 @@ interface NavbarProps {
   onConsultationClick?: () => void;
   onClientPortalClick?: () => void;
   onPartnerPortalClick?: () => void;
+  isStaffLoggedIn?: boolean;
+  isPartnerLoggedIn?: boolean;
 }
 
 const NAV_ITEMS = [
@@ -26,7 +28,9 @@ const Navbar: React.FC<NavbarProps> = ({
   onAdminLoginClick,
   onConsultationClick,
   onClientPortalClick,
-  onPartnerPortalClick
+  onPartnerPortalClick,
+  isStaffLoggedIn,
+  isPartnerLoggedIn
 }) => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -71,11 +75,11 @@ const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      <div className={`flex flex-row items-center justify-between px-6 sm:px-8 max-w-7xl mx-auto w-full transition-all duration-300 ${scrolled ? 'py-3.5' : 'py-5'}`}>
-        {/* Brand Logo */}
+      <div className={`flex flex-row items-center justify-between gap-3 lg:gap-5 xl:gap-8 px-4 sm:px-6 lg:px-8 max-w-[1440px] mx-auto w-full transition-all duration-300 ${scrolled ? 'py-3.5' : 'py-5'}`}>
+        {/* Brand Logo with Guaranteed Separation */}
         <div 
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="flex items-end cursor-pointer hover:opacity-90 transition-opacity"
+          className="flex items-end cursor-pointer hover:opacity-90 transition-opacity shrink-0 mr-3 sm:mr-5 lg:mr-8 xl:mr-10"
         >
           <span className="text-3xl md:text-4xl font-black italic tracking-tighter text-white leading-none" style={{ paddingRight: '2px', transform: 'skewX(-5deg)' }}>
             AG<span className="text-[#CCFF00]">X</span>
@@ -83,12 +87,12 @@ const Navbar: React.FC<NavbarProps> = ({
         </div>
         
         {/* Desktop Navigation Links */}
-        <div className="hidden lg:flex items-center gap-7 text-xs font-semibold uppercase tracking-wider text-white/60">
+        <div className="hidden lg:flex items-center gap-3 xl:gap-5 2xl:gap-7 text-[11px] xl:text-xs font-semibold uppercase tracking-wider text-white/60 shrink-0">
           {NAV_ITEMS.map(item => (
             <button
               key={item.targetId}
               onClick={() => scrollToSection(item.targetId)}
-              className="hover:text-white transition-colors cursor-pointer"
+              className="hover:text-white transition-colors cursor-pointer whitespace-nowrap"
             >
               {item.label}
             </button>
@@ -96,39 +100,53 @@ const Navbar: React.FC<NavbarProps> = ({
         </div>
         
         {/* Action Controls */}
-        <div className="flex gap-2.5 sm:gap-3.5 items-center">
+        <div className="flex gap-2 sm:gap-3 xl:gap-3.5 items-center shrink-0">
           {/* Subtle Portals Capsule */}
-          <div className="hidden sm:flex items-center p-0.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+          <div className="hidden sm:flex items-center p-0.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md shrink-0">
             {onPartnerPortalClick && (
               <button
                 onClick={() => onPartnerPortalClick()}
-                className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 px-3 py-1 rounded-full hover:bg-white/10 transition-all cursor-pointer"
-                title="Access Partner Referral & Commission Portal"
+                className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 xl:px-3 py-1 rounded-full transition-all cursor-pointer whitespace-nowrap ${
+                  isPartnerLoggedIn
+                    ? 'text-[#CCFF00] bg-[#CCFF00]/10 hover:bg-[#CCFF00]/20 font-bold'
+                    : 'text-emerald-400 hover:text-emerald-300 hover:bg-white/10'
+                }`}
+                title={isPartnerLoggedIn ? "Open Active Partner Portal" : "Access Partner Referral & Commission Portal"}
               >
+                {isPartnerLoggedIn && <span className="w-1.5 h-1.5 rounded-full bg-[#CCFF00] animate-pulse" />}
                 <Handshake size={12} />
-                <span>Partners</span>
+                <span>{isPartnerLoggedIn ? 'Partner' : 'Partners'}</span>
               </button>
             )}
 
             {onClientPortalClick && (
               <button
                 onClick={() => onClientPortalClick && onClientPortalClick()}
-                className="flex items-center gap-1.5 text-[11px] font-semibold text-white/70 hover:text-white px-3 py-1 rounded-full hover:bg-white/10 transition-all cursor-pointer"
+                className="flex items-center gap-1.5 text-[11px] font-semibold text-white/70 hover:text-white px-2.5 xl:px-3 py-1 rounded-full hover:bg-white/10 transition-all cursor-pointer whitespace-nowrap"
                 title="Access Client Issue & Request Tracker"
               >
                 <Sparkles size={11} className="text-[#CCFF00]" />
-                <span>Client Portal</span>
+                <span>Client<span className="hidden 2xl:inline"> Portal</span></span>
               </button>
             )}
 
             {onAdminLoginClick && (
               <button
                 onClick={() => onAdminLoginClick && onAdminLoginClick()}
-                className="flex items-center gap-1 text-[11px] font-semibold text-white/40 hover:text-white px-2.5 py-1 rounded-full hover:bg-white/10 transition-all cursor-pointer"
-                title="Open Internal CRM Command Center"
+                className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 xl:px-3 py-1 rounded-full transition-all cursor-pointer whitespace-nowrap ${
+                  isStaffLoggedIn
+                    ? 'text-white bg-white/15 hover:bg-white/20 font-bold'
+                    : 'text-white/40 hover:text-white hover:bg-white/10'
+                }`}
+                title={isStaffLoggedIn ? "Open Active CRM Command Center" : "Open Internal CRM Command Center"}
               >
-                <Lock size={11} />
-                <span>Staff</span>
+                {isStaffLoggedIn && <span className="w-1.5 h-1.5 rounded-full bg-[#CCFF00] animate-pulse" />}
+                <Lock size={11} className={isStaffLoggedIn ? 'text-[#CCFF00]' : ''} />
+                <span>{isStaffLoggedIn ? (
+                  <>CRM<span className="hidden 2xl:inline"> Dashboard</span></>
+                ) : (
+                  'Staff'
+                )}</span>
               </button>
             )}
           </div>
@@ -138,7 +156,7 @@ const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={onConsultationClick}
-              className="group relative inline-flex items-center gap-2 px-5 sm:px-6 py-2 sm:py-2.5 rounded-full bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs uppercase tracking-wider transition-all duration-200 active:scale-[0.98] shadow-lg shadow-[#CCFF00]/15 cursor-pointer btn-press"
+              className="group relative inline-flex items-center gap-2 px-4 sm:px-5 xl:px-6 py-2 sm:py-2.5 rounded-full bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-[11px] xl:text-xs uppercase tracking-wider transition-all duration-200 active:scale-[0.98] shadow-lg shadow-[#CCFF00]/15 cursor-pointer btn-press shrink-0 whitespace-nowrap"
             >
               <span>Claim Free Audit</span>
               <span className="w-5 h-5 rounded-full bg-black/10 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
@@ -150,7 +168,7 @@ const Navbar: React.FC<NavbarProps> = ({
               href="https://wa.me/918698324316" 
               target="_blank" 
               rel="noopener noreferrer" 
-              className="group relative inline-flex items-center gap-2 px-5 sm:px-6 py-2 sm:py-2.5 rounded-full bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs uppercase tracking-wider transition-all duration-200 active:scale-[0.98] shadow-lg shadow-[#CCFF00]/15 cursor-pointer btn-press"
+              className="group relative inline-flex items-center gap-2 px-4 sm:px-5 xl:px-6 py-2 sm:py-2.5 rounded-full bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-[11px] xl:text-xs uppercase tracking-wider transition-all duration-200 active:scale-[0.98] shadow-lg shadow-[#CCFF00]/15 cursor-pointer btn-press shrink-0 whitespace-nowrap"
             >
               <span>Claim Free Audit</span>
               <span className="w-5 h-5 rounded-full bg-black/10 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
@@ -162,7 +180,7 @@ const Navbar: React.FC<NavbarProps> = ({
           {/* Mobile Menu Hamburger Toggle */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 text-white/70 hover:text-white rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-colors btn-press"
+            className="lg:hidden p-2 text-white/70 hover:text-white rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-colors btn-press shrink-0"
             aria-label="Toggle Navigation Menu"
           >
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -208,7 +226,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   >
                     <span className="flex items-center gap-2">
                       <Handshake size={14} className="text-[#CCFF00]" />
-                      Partner Referral & Commission Portal
+                      <span>{isPartnerLoggedIn ? 'Partner Portal (Active)' : 'Partner Referral & Commission Portal'}</span>
                     </span>
                     <ArrowRight size={13} className="text-white/40" />
                   </button>
@@ -240,7 +258,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   >
                     <span className="flex items-center gap-2">
                       <Lock size={14} className="text-[#CCFF00]" />
-                      Staff CRM Command Center
+                      <span>{isStaffLoggedIn ? 'Staff CRM Dashboard (Active)' : 'Staff CRM Command Center'}</span>
                     </span>
                     <ArrowRight size={13} className="text-white/40" />
                   </button>

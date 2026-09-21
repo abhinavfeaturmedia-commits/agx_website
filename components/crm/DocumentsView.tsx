@@ -4,7 +4,7 @@ import {
   FileText, Plus, Search, Download, ExternalLink, Filter, CheckCircle2,
   Clock, Shield, X, Sparkles, Folder, Edit3, Trash2, UploadCloud,
   Layers, IndianRupee, Eye, CheckCircle, AlertCircle, ArrowUpRight,
-  Briefcase, Users, FileCheck, Calendar, ArrowRight
+  Briefcase, Users, FileCheck, Calendar, ArrowRight, Printer
 } from 'lucide-react';
 import { Agreement, DocumentItem, AgreementType, AgreementStatus } from '../../types/crm';
 import { useCrmStore } from '../../lib/crmStore';
@@ -50,6 +50,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({ store, onNavigate,
 
   // Modals & Drawer State
   const [selectedAgreement, setSelectedAgreement] = useState<Agreement | null>(null);
+  const [previewingAgreement, setPreviewingAgreement] = useState<Agreement | null>(null);
   const [isAddAgreementModalOpen, setIsAddAgreementModalOpen] = useState(false);
   const [isAddDocModalOpen, setIsAddDocModalOpen] = useState(false);
   const [editingAgreement, setEditingAgreement] = useState<Agreement | null>(null);
@@ -611,6 +612,13 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({ store, onNavigate,
                         </span>
                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           <button
+                            onClick={() => setPreviewingAgreement(agr)}
+                            className="p-1 text-gray-400 hover:text-indigo-600 rounded cursor-pointer"
+                            title="Preview Agreement Document"
+                          >
+                            <Eye size={13} />
+                          </button>
+                          <button
                             onClick={() => setEditingAgreement(agr)}
                             className="p-1 text-gray-400 hover:text-indigo-600 rounded cursor-pointer"
                             title="Edit Agreement"
@@ -709,6 +717,13 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({ store, onNavigate,
                           </td>
                           <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => setPreviewingAgreement(agr)}
+                                className="p-1 text-gray-400 hover:text-indigo-600 rounded cursor-pointer"
+                                title="Preview Agreement Document"
+                              >
+                                <Eye size={13} />
+                              </button>
                               <button
                                 onClick={() => setEditingAgreement(agr)}
                                 className="p-1 text-gray-400 hover:text-black rounded cursor-pointer"
@@ -985,19 +1000,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({ store, onNavigate,
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-bold text-gray-900 text-xs">Attached Contract Document</h4>
-                      <span className="text-[10px] text-gray-400">PDF execution copy with digital signatures</span>
+                      <span className="text-[10px] text-gray-400">Formal legal document preview & printable record</span>
                     </div>
-                    <a
-                      href={currentSelectedAgreement.fileUrl !== '#' ? currentSelectedAgreement.fileUrl : undefined}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() => {
-                        if (currentSelectedAgreement.fileUrl === '#') toast.info('Preview', `Accessing document for ${currentSelectedAgreement.name}`);
-                      }}
-                      className="px-3.5 py-1.5 bg-black hover:bg-gray-800 text-white font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer"
+                    <button
+                      onClick={() => setPreviewingAgreement(currentSelectedAgreement)}
+                      className="px-3.5 py-1.5 bg-black hover:bg-gray-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
                     >
-                      <Download size={13} /> View / Download PDF
-                    </a>
+                      <Eye size={13} /> View Document
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1259,6 +1269,199 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({ store, onNavigate,
             <div className="flex items-center gap-2">
               <button onClick={() => setDocToDelete(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 font-bold text-xs text-gray-600 hover:bg-gray-50 cursor-pointer">Cancel</button>
               <button onClick={handleConfirmDeleteDoc} className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md cursor-pointer">Delete</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Agreement Document Preview Modal */}
+      {previewingAgreement && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-gray-200 my-8 overflow-hidden flex flex-col max-h-[92vh]"
+          >
+            {/* Modal Top Control Bar */}
+            <div className="p-4 bg-gray-900 text-white flex items-center justify-between border-b border-gray-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#CCFF00] text-black font-black flex items-center justify-center text-xs">
+                  AGX
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-white line-clamp-1">{previewingAgreement.name}</h4>
+                  <span className="text-[10px] text-gray-400">Ref: AGX-AGR-{previewingAgreement.id.slice(0, 8).toUpperCase()}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Print or Save as PDF"
+                >
+                  <Printer size={13} /> Print / Save PDF
+                </button>
+                {previewingAgreement.status !== 'Signed' && (
+                  <button
+                    onClick={() => {
+                      handleUpdateStatus(previewingAgreement.id, 'Signed');
+                      setPreviewingAgreement({ ...previewingAgreement, status: 'Signed' });
+                      toast.success('Document Signed', 'Agreement status updated to Signed.');
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <CheckCircle2 size={13} /> Mark Signed
+                  </button>
+                )}
+                <button
+                  onClick={() => setPreviewingAgreement(null)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Document Content (Printable Legal Canvas) */}
+            <div className="p-8 sm:p-12 overflow-y-auto space-y-6 text-gray-800 bg-[#FCFCFD]">
+              {/* Formal Document Header */}
+              <div className="border-b-2 border-gray-900 pb-6 flex items-start justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">
+                    CONFIDENTIAL LEGAL INSTRUMENT
+                  </span>
+                  <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                    {previewingAgreement.name}
+                  </h1>
+                  <p className="text-xs font-semibold text-gray-500 mt-1">
+                    Classification: {previewingAgreement.agreementType.toUpperCase()}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                    previewingAgreement.status === 'Signed' ? 'bg-emerald-100 text-emerald-800' :
+                    previewingAgreement.status === 'Sent' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {previewingAgreement.status}
+                  </span>
+                  <div className="text-[10px] font-mono text-gray-400 mt-1">
+                    Dated: {previewingAgreement.startDate}
+                  </div>
+                </div>
+              </div>
+
+              {/* Contracting Parties */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 bg-gray-50 rounded-2xl border border-gray-200 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Party 1 (Service Provider)</span>
+                  <strong className="text-sm font-black text-gray-900 block">Antigravity Technologies Pvt. Ltd.</strong>
+                  <p className="text-gray-600 mt-0.5">Represented by Executive Management</p>
+                  <p className="text-gray-500 text-[11px]">Bengaluru, Karnataka, India • contact@antigravity.in</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Party 2 (Client Entity)</span>
+                  <strong className="text-sm font-black text-gray-900 block">{previewingAgreement.clientName}</strong>
+                  <p className="text-gray-600 mt-0.5">Project: {previewingAgreement.projectName || 'Enterprise Engagement'}</p>
+                  <p className="text-gray-500 text-[11px]">Primary Authorized Signatory on Record</p>
+                </div>
+              </div>
+
+              {/* Commercial Terms Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 bg-white rounded-xl border border-gray-200">
+                  <span className="text-[10px] text-gray-400 block">Total Contract Value</span>
+                  <span className="text-base font-black text-gray-900">
+                    ₹{previewingAgreement.commercialValue?.toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-gray-200">
+                  <span className="text-[10px] text-gray-400 block">Commencement Date</span>
+                  <span className="text-xs font-bold text-gray-800 block mt-1">
+                    {previewingAgreement.startDate}
+                  </span>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-gray-200 col-span-2 sm:col-span-1">
+                  <span className="text-[10px] text-gray-400 block">Valid Until</span>
+                  <span className="text-xs font-bold text-gray-800 block mt-1">
+                    {previewingAgreement.expiryDate}
+                  </span>
+                </div>
+              </div>
+
+              {/* Standard Operative Clauses */}
+              <div className="space-y-4 text-xs text-gray-700 leading-relaxed border-t border-b border-gray-200 py-6">
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-1">1. Scope of Work & Deliverables</h4>
+                  <p>
+                    The Service Provider agrees to deliver digital engineering, software architecture, UI/UX design, and AI automation services in accordance with agreed project sprints and milestones. Any scope modifications must be mutually confirmed via formal change requests.
+                  </p>
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-1">2. Intellectual Property & Ownership</h4>
+                  <p>
+                    Upon receipt of all due milestone payments, all bespoke software source code, graphics, documentation, and proprietary assets authored specifically for the Client shall vest completely and exclusively in the Client. Pre-existing proprietary agency libraries remain licensed for client execution.
+                  </p>
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-1">3. Confidentiality & Non-Disclosure</h4>
+                  <p>
+                    Both parties covenant to hold in strict confidence all proprietary technical, business, commercial, and financial information disclosed during the course of this engagement for a period of two (2) calendar years from the effective date.
+                  </p>
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-1">4. Invoicing, Remittance & Taxes</h4>
+                  <p>
+                    Invoices are raised in accordance with agreed milestone completion schedules. Payments are due within fifteen (15) calendar days of invoice presentation. All consideration is net of applicable Goods and Services Tax (GST) and subject to statutory Tax Deducted at Source (TDS).
+                  </p>
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-1">5. Governing Law & Jurisdiction</h4>
+                  <p>
+                    This Agreement shall be construed and governed in all respects in accordance with the substantive laws of India. Courts situated in Bengaluru, Karnataka shall possess exclusive jurisdiction over any proceedings or disputes arising hereunder.
+                  </p>
+                </div>
+              </div>
+
+              {/* Execution Signatures */}
+              <div className="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-8 text-xs">
+                <div className="p-4 rounded-2xl border border-gray-200 bg-white space-y-2">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">For Antigravity Technologies</span>
+                  <div className="h-10 flex items-end">
+                    <span className="font-mono italic font-bold text-gray-800 text-sm">Abhinav (Managing Partner)</span>
+                  </div>
+                  <div className="border-t border-gray-300 pt-2 text-[11px] text-gray-500">
+                    Authorized Signatory • Date: {previewingAgreement.startDate}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-gray-200 bg-white space-y-2">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">For {previewingAgreement.clientName}</span>
+                  <div className="h-10 flex items-end">
+                    {previewingAgreement.status === 'Signed' ? (
+                      <div className="flex items-center gap-1.5 text-emerald-600 font-bold">
+                        <CheckCircle2 size={16} /> Digitally Signed & Verified
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 italic text-xs">Awaiting Execution</span>
+                    )}
+                  </div>
+                  <div className="border-t border-gray-300 pt-2 text-[11px] text-gray-500">
+                    Client Signatory • Status: {previewingAgreement.status}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Bottom Bar */}
+            <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
+              <span>AGX Secure Document Engine • Legally Binding Contract Record</span>
+              <button
+                onClick={() => setPreviewingAgreement(null)}
+                className="px-4 py-2 bg-black text-white font-bold rounded-xl hover:bg-gray-800 cursor-pointer"
+              >
+                Close Preview
+              </button>
             </div>
           </motion.div>
         </div>

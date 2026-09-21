@@ -32,7 +32,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
     invoices, addInvoice, updateInvoice, deleteInvoice,
     payments, recordPayment, deletePayment,
     expenses, addExpense, deleteExpense,
-    clients, projects, totalRevenue, totalExpenses, netProfit, profitMargin,
+    clients, projects, totalRevenue, directExpensesTotal, partnerPayoutsTotal, totalExpenses, netProfit, profitMargin,
     outstandingInvoicesTotal, currentUser, canAccessFinance
   } = store;
 
@@ -1009,7 +1009,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
                 onClick={() => exportService.exportToCsv('agx_pnl_statement', [
                   { Metric: 'Gross Invoiced Revenue', AmountINR: grossInvoiced },
                   { Metric: 'Collected Revenue Inflow', AmountINR: totalRevenue },
-                  { Metric: 'Total Direct Expenses', AmountINR: totalExpenses },
+                  { Metric: 'Direct Operating Expenses', AmountINR: directExpensesTotal || 0 },
+                  { Metric: 'Partner Referral Commissions', AmountINR: partnerPayoutsTotal || 0 },
+                  { Metric: 'Total Consolidated Expenses', AmountINR: totalExpenses },
                   { Metric: 'Net Operating Profit', AmountINR: netProfit },
                   { Metric: 'Profit Margin', AmountINR: `${profitMargin}%` }
                 ])}
@@ -1029,7 +1031,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
                 <span className="font-black text-emerald-600">+₹{totalRevenue.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-gray-100 font-semibold text-gray-700">
-                <span>Direct Operating Expenditures (Outflows)</span>
+                <span>Direct Operating Expenditures (Vendor & Tools)</span>
+                <span className="font-black text-rose-600">-₹{(directExpensesTotal || 0).toLocaleString('en-IN')}</span>
+              </div>
+              {(partnerPayoutsTotal || 0) > 0 && (
+                <div className="flex items-center justify-between py-2 border-b border-gray-100 font-semibold text-gray-700">
+                  <span className="flex items-center gap-1.5 text-amber-700">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                    Partner Referral Commissions Paid Out
+                  </span>
+                  <span className="font-black text-amber-600">-₹{(partnerPayoutsTotal || 0).toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between py-2 border-b border-gray-100 font-semibold text-gray-700 bg-gray-50 px-2 rounded-lg">
+                <span className="font-bold text-gray-900">Total Consolidated Outflows</span>
                 <span className="font-black text-rose-600">-₹{totalExpenses.toLocaleString('en-IN')}</span>
               </div>
 

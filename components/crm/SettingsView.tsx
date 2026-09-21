@@ -34,7 +34,9 @@ const MODULE_DEFINITIONS: { key: CrmModuleKey; label: string; desc: string; icon
   { key: 'clients', label: 'Clients 360°', desc: 'Client account rosters, lifetime values & active agreements', icon: Users },
   { key: 'projects', label: 'Projects & Milestones', desc: 'Project delivery tracking, milestones & development sprints', icon: Briefcase },
   { key: 'tasks', label: 'Tasks & Sprints', desc: 'Sprint board, engineering tasks, assignees & hour logs', icon: CheckSquare },
+  { key: 'issues', label: 'Client QA & Tickets', desc: 'Client portal issue tracker, triage workflows & bug resolutions', icon: CheckSquare },
   { key: 'finance', label: 'Finance & P&L', desc: 'Commercial invoices, recorded payments, expenses & tax metrics', icon: IndianRupee },
+  { key: 'partners', label: 'Partner Program & Affiliates', desc: 'Channel partner commissions, referral links & payout logs', icon: Globe },
   { key: 'documents', label: 'Agreements & Docs', desc: 'Commercial proposals, legal MSAs & uploaded client files', icon: FileText },
   { key: 'vault', label: 'Credentials Vault', desc: 'Encrypted production keys, database credentials & server secrets', icon: Key },
   { key: 'calendar', label: 'Operations Calendar', desc: 'Client meetings, project deadlines & follow-up schedules', icon: CalendarIcon },
@@ -49,7 +51,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
     createTeamMember, updateTeamMember, resetStaffPassword, toggleStaffStatus,
     deleteTeamMember, updateTeamMemberRole,
     leads, clients, projects, tasks, invoices, payments, expenses, agreements, credentials,
-    issues
+    issues, partners, partnerReferrals, partnerPayouts
   } = store;
 
   const [activeSubTab, setActiveSubTab] = useState<'Team' | 'RBAC' | 'Database'>('Team');
@@ -125,6 +127,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
     { name: 'Commercial Invoices', count: invoices.length, table: 'invoices' },
     { name: 'Recorded Payments', count: payments.length, table: 'payments' },
     { name: 'Expense Logs', count: expenses.length, table: 'expenses' },
+    { name: 'Channel Partners', count: partners.length, table: 'partners' },
+    { name: 'Partner Referrals', count: partnerReferrals.length, table: 'partner_referrals' },
+    { name: 'Partner Payouts', count: partnerPayouts.length, table: 'partner_payouts' },
     { name: 'Legal Agreements', count: agreements.length, table: 'agreements' },
     { name: 'Encrypted Vault', count: credentials.length, table: 'credentials_vault' },
     { name: 'Staff Profiles', count: teamMembers.length, table: 'profiles' }
@@ -273,7 +278,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
   };
 
   const calculateEffectivePermissionCount = (profile: UserProfile): number => {
-    if (profile.role === 'Super Admin') return 12;
+    if (profile.role === 'Super Admin') return 14;
     const perms = profile.permissions && Object.keys(profile.permissions).length > 0
       ? profile.permissions
       : ROLE_DEFAULT_PERMISSIONS[profile.role] || {};
@@ -660,7 +665,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
                         <div className="flex justify-between items-center">
                           <span className="text-gray-400">Permissions:</span>
                           <span className="font-bold text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md">
-                            {staff.role === 'Super Admin' ? 'Full Access (12/12)' : `${permCount}/12 Modules`}
+                            {staff.role === 'Super Admin' ? 'Full Access (14/14)' : `${permCount}/14 Modules`}
                           </span>
                         </div>
 

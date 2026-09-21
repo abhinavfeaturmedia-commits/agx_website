@@ -38,45 +38,49 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ store, onNavigate,
   const activeProjects = useMemo(() => projects.filter(p => p.status !== 'COMPLETED'), [projects]);
   const highPriorityLeadsCount = useMemo(() => leads.filter(l => l.priority === 'High' || l.priority === 'Urgent').length, [leads]);
   const totalMilestones = useMemo(() => projects.reduce((acc, p) => acc + (p.milestones?.length || 0), 0), [projects]);
+  const wonLeadsCount = useMemo(() => leads.filter(l => l.status === 'WON').length, [leads]);
+
+  // Output Shipped (Tasks & Deliverables Closed)
+  const completedTasksList = useMemo(() => tasks.filter(t => t.status === 'COMPLETED'), [tasks]);
+  const completedTasksCount = completedTasksList.length;
+  const totalTasksCount = tasks.length;
 
   // Quick top cards data
   const topMetrics = [
     {
       title: 'Sales Pipeline',
       subtitle: `${activeLeads.length} Active Leads (₹${pipelineValue.toLocaleString('en-IN')})`,
-      rate: (Math.min(5, 3.5 + conversionRate / 50)).toFixed(1),
-      rateType: `${conversionRate}% Win Rate`,
-      type: 'Conversion',
-      category: `${highPriorityLeadsCount} High Priority`,
+      metricLabel: 'Win Rate',
+      metricValue: `${conversionRate}%`,
+      metricDetail: leads.length > 0 ? `${wonLeadsCount} of ${leads.length} won` : 'No leads yet',
+      secondaryLabel: 'Priority',
+      secondaryValue: `${highPriorityLeadsCount} High Priority`,
       iconBg: 'bg-rose-50 text-rose-500 border border-rose-100',
       route: 'leads'
     },
     {
       title: 'Active Projects',
       subtitle: `${activeProjects.length} in Production (${projects.length} Total)`,
-      rate: (Math.min(5, 3.8 + taskCompletionRate / 80)).toFixed(1),
-      rateType: `${taskCompletionRate}% Delivery Health`,
-      type: 'Engineering',
-      category: `${totalMilestones} Milestones`,
+      metricLabel: 'Delivery Rate',
+      metricValue: `${taskCompletionRate}%`,
+      metricDetail: totalTasksCount > 0 ? `${completedTasksCount} of ${totalTasksCount} shipped` : 'No tasks yet',
+      secondaryLabel: 'Milestones',
+      secondaryValue: `${totalMilestones} Milestones`,
       iconBg: 'bg-lime-50 text-lime-700 border border-lime-200',
       route: 'projects'
     },
     {
       title: 'Net Revenue',
       subtitle: `₹${totalRevenue.toLocaleString('en-IN')} Collected`,
-      rate: profitMargin !== '0' && Number(profitMargin) > 0 ? (Math.min(5, 3.6 + Number(profitMargin) / 40)).toFixed(1) : '4.5',
-      rateType: `${profitMargin}% Margin (₹${netProfit.toLocaleString('en-IN')})`,
-      type: 'Financials',
-      category: `₹${outstandingInvoicesTotal.toLocaleString('en-IN')} Pending`,
+      metricLabel: 'Profit Margin',
+      metricValue: `${profitMargin}%`,
+      metricDetail: `₹${netProfit.toLocaleString('en-IN')} net`,
+      secondaryLabel: 'Receivables',
+      secondaryValue: `₹${outstandingInvoicesTotal.toLocaleString('en-IN')} Pending`,
       iconBg: 'bg-blue-50 text-blue-500 border border-blue-100',
       route: 'finance'
     }
   ];
-
-  // Output Shipped (Tasks & Deliverables Closed)
-  const completedTasksList = useMemo(() => tasks.filter(t => t.status === 'COMPLETED'), [tasks]);
-  const completedTasksCount = completedTasksList.length;
-  const totalTasksCount = tasks.length;
   // Dynamic Sprint Completion Rate: live calculation
   const sprintCompletionRate = totalTasksCount > 0 
     ? Math.round((completedTasksCount / totalTasksCount) * 100) 
@@ -354,14 +358,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ store, onNavigate,
 
               <div className="mt-5 pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs">
                 <div>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Health</span>
-                  <span className="font-extrabold text-gray-900 flex items-center gap-1 tabular-nums">
-                    ★ {card.rate} <span className="text-gray-400 font-normal text-[11px]">· {card.rateType}</span>
-                  </span>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">{card.metricLabel}</span>
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="font-extrabold text-gray-900 text-sm tabular-nums">
+                      {card.metricValue}
+                    </span>
+                    <span className="text-gray-400 font-medium text-[11px] tabular-nums">
+                      · {card.metricDetail}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Category</span>
-                  <span className="font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-lg text-[10px]">{card.category}</span>
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">{card.secondaryLabel}</span>
+                  <span className="font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-lg text-[10px] mt-0.5 inline-block">{card.secondaryValue}</span>
                 </div>
               </div>
             </div>

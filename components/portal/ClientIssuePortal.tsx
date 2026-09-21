@@ -2,12 +2,15 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   AlertCircle, CheckCircle2, Clock, UploadCloud, X, ArrowLeft, ArrowRight,
-  ChevronDown, Check, RefreshCw, Image as ImageIcon,
-  KeyRound, PlusCircle, ListFilter, Search, ExternalLink
+  RefreshCw, Image as ImageIcon, KeyRound, PlusCircle, ListFilter, Search,
+  ExternalLink, Calendar, CheckSquare, FileText, CreditCard, ShieldCheck,
+  Copy, ChevronRight, Download, Check
 } from 'lucide-react';
-import { useCrmStore } from '../../lib/crmStore';
 import { crmService } from '../../lib/crmService';
-import { ProjectIssue, IssueType, IssuePriority } from '../../types/crm';
+import {
+  Project, Client, ProjectMilestone, Invoice, ProjectIssue,
+  IssueType, IssuePriority, IssueStatus
+} from '../../types/crm';
 
 interface ClientIssuePortalProps {
   onBackToWebsite?: () => void;
@@ -24,10 +27,7 @@ export const sanitizePortalToken = (val: unknown): string => {
 };
 
 export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWebsite, tokenOverride }) => {
-  const store = useCrmStore();
-  const { projects, clients, issues, addIssue } = store;
-
-  // Active token with multi-source fallback (query param -> hash -> override -> localStorage)
+  // Active token with multi-source fallback (tokenOverride -> query param -> hash -> localStorage)
   const [token, setToken] = useState<string>(() => {
     const overrideClean = sanitizePortalToken(tokenOverride);
     if (overrideClean) return overrideClean;
@@ -52,73 +52,25 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
     return '';
   });
 
-  // Clean up corrupted URL parameters (e.g. ?token=%5Bobject%20Object%5D) or corrupted localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const rawQueryToken = urlParams.get('token');
-      if (rawQueryToken && (rawQueryToken === '[object Object]' || rawQueryToken === 'undefined' || rawQueryToken === 'null' || rawQueryToken === 'omnilog-demo')) {
-        const newUrl = window.location.pathname.startsWith('/portal') ? '/portal' : window.location.pathname;
-        window.history.replaceState(null, '', newUrl);
-      }
-      const stored = localStorage.getItem('agx_active_portal_token');
-      if (stored === '[object Object]' || stored === 'undefined' || stored === 'null' || stored === 'omnilog-demo') {
-        localStorage.removeItem('agx_active_portal_token');
-      }
-    }
-  }, []);
+  // Portal Scoped Data State
+  const [portalData, setPortalData] = useState<{
+    project: Project;
+    client: Client;
+    milestones: ProjectMilestone[];
+    invoices: Invoice[];
+    issues: ProjectIssue[];
+  } | null>(null);
 
-  // Sync token when tokenOverride changes
-  useEffect(() => {
-    const cleanOverride = sanitizePortalToken(tokenOverride);
-    if (cleanOverride && cleanOverride !== token && cleanOverride !== 'omnilog-demo') {
-      setToken(cleanOverride);
-    }
-  }, [tokenOverride, token]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [tokenInputValue, setTokenInputValue] = useState<string>('');
+  const [tokenModalError, setTokenModalError] = useState<string | null>(null);
 
-  // Persist current active token to localStorage
-  useEffect(() => {
-    const cleanToStore = sanitizePortalToken(token);
-    if (cleanToStore && cleanToStore !== 'omnilog-demo' && typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('agx_active_portal_token', cleanToStore);
-      } catch (_) {}
-    }
-  }, [token]);
+  // Active Navigation Tab: 'roadmap' | 'issues' | 'invoices'
+  const [activeTab, setActiveTab] = useState<'roadmap' | 'issues' | 'invoices'>('roadmap');
+  const [issueViewMode, setIssueViewMode] = useState<'list' | 'report'>('list');
 
-  // Match active project with strict verification
-  const matchedProject = useMemo(() => {
-    const cleanToken = sanitizePortalToken(token).toLowerCase();
-    if (cleanToken && cleanToken !== 'omnilog-demo') {
-      const byToken = projects.find(p => p.portalToken?.toLowerCase() === cleanToken);
-      if (byToken) return byToken;
-
-      const byId = projects.find(p => p.id.toLowerCase() === cleanToken);
-      if (byId) return byId;
-
-      const byName = projects.find(p => p.clientName.toLowerCase().includes(cleanToken));
-      if (byName) return byName;
-
-      const clientWithEmail = clients.find(c => c.email.toLowerCase() === cleanToken);
-      if (clientWithEmail) {
-        const byClientId = projects.find(p => p.clientId === clientWithEmail.id);
-        if (byClientId) return byClientId;
-      }
-    }
-
-    return null;
-  }, [projects, clients, token]);
-
-  // Client info helper
-  const matchedClient = useMemo(() => {
-    if (!matchedProject) return null;
-    return clients.find(c => c.id === matchedProject.clientId) || null;
-  }, [matchedProject, clients]);
-
-  // View state: strictly between 'report' and 'tracker'
-  const [activeTab, setActiveTab] = useState<'report' | 'tracker'>('report');
-
-  // Form State for Issue Submission
+  // Issue Reporting Form State
   const [title, setTitle] = useState('');
   const [issueType, setIssueType] = useState<IssueType>('Bug');
   const [priority, setPriority] = useState<IssuePriority>('Medium');
@@ -129,62 +81,105 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSubmittedTicket, setLastSubmittedTicket] = useState<ProjectIssue | null>(null);
 
-  // Pre-fill reporter name/email if known from client profile
-  useEffect(() => {
-    if (matchedClient && !reporterEmail) {
-      if (matchedClient.email) setReporterEmail(matchedClient.email);
-      if (matchedClient.name) setReporterName(matchedClient.name);
-    }
-  }, [matchedClient]);
-
-  // File Upload State
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dragActive, setDragActive] = useState(false);
-
-  // Filter & Search in Tracker
+  // Issue Tracking Filters
   const [trackerFilter, setTrackerFilter] = useState<'all' | 'open' | 'resolved'>('all');
   const [trackerSearch, setTrackerSearch] = useState('');
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
+  const [selectedIssueDetail, setSelectedIssueDetail] = useState<ProjectIssue | null>(null);
 
-  // Project Switcher Dropdown & Token Modal State
-  const [projectSwitcherOpen, setProjectSwitcherOpen] = useState(false);
-  const [customTokenModalOpen, setCustomTokenModalOpen] = useState(false);
-  const [customTokenInput, setCustomTokenInput] = useState('');
-  const [customTokenError, setCustomTokenError] = useState<string | null>(null);
+  // File Upload Handling
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
 
-  const handleSelectProject = (newProjectToken: string) => {
-    setToken(newProjectToken);
-    setProjectSwitcherOpen(false);
-    setCustomTokenModalOpen(false);
+  // Synchronize Token Override prop
+  useEffect(() => {
+    const cleanOverride = sanitizePortalToken(tokenOverride);
+    if (cleanOverride && cleanOverride !== token && cleanOverride !== 'omnilog-demo') {
+      setToken(cleanOverride);
+    }
+  }, [tokenOverride]);
+
+  // Fetch scoped portal data on token changes
+  const loadPortalData = async (activeTok: string) => {
+    if (!activeTok) {
+      setPortalData(null);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setFetchError(null);
+
+    try {
+      const data = await crmService.fetchClientPortalData(activeTok);
+      if (!data) {
+        setPortalData(null);
+        setFetchError('Access denied or invalid project token. Please verify with your AGX project manager.');
+      } else {
+        setPortalData(data);
+        // Pre-fill reporter information
+        if (!reporterEmail && data.client.email) {
+          setReporterEmail(data.client.email);
+        }
+        if (!reporterName && data.client.name) {
+          setReporterName(data.client.name);
+        }
+        // Save valid token to localStorage
+        try {
+          localStorage.setItem('agx_active_portal_token', activeTok);
+        } catch (_) {}
+      }
+    } catch (err: any) {
+      console.warn('Error fetching client portal data:', err);
+      setFetchError('Unable to load client portal. Please check your network connection.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPortalData(token);
+  }, [token]);
+
+  // Handle Token Manual Submission
+  const handleTokenSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setTokenModalError(null);
+    const clean = sanitizePortalToken(tokenInputValue);
+    if (!clean) {
+      setTokenModalError('Please enter your project access token.');
+      return;
+    }
+
+    setToken(clean);
     if (typeof window !== 'undefined') {
-      const targetUrl = `/portal?token=${encodeURIComponent(newProjectToken)}`;
+      const targetUrl = `/portal?token=${encodeURIComponent(clean)}`;
       window.history.pushState(null, '', targetUrl);
     }
   };
 
-  const handleCustomTokenSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCustomTokenError(null);
-    const q = customTokenInput.trim().toLowerCase();
-    if (!q) {
-      setCustomTokenError('Please enter a project token or email.');
-      return;
-    }
+  // Handle Copy Token
+  const handleCopyToken = () => {
+    if (!token) return;
+    navigator.clipboard.writeText(token);
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2000);
+  };
 
-    const found = projects.find(p => 
-      p.portalToken?.toLowerCase() === q || 
-      p.id.toLowerCase() === q ||
-      p.clientName.toLowerCase().includes(q)
-    );
-
-    if (found) {
-      handleSelectProject(found.portalToken || found.id);
-      setCustomTokenInput('');
-    } else {
-      setCustomTokenError(`No project matched "${customTokenInput}". Please check the token provided by AGX.`);
+  // Switch Workspace / Log Out
+  const handleSignOutPortal = () => {
+    setToken('');
+    setPortalData(null);
+    try {
+      localStorage.removeItem('agx_active_portal_token');
+    } catch (_) {}
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', '/portal');
     }
   };
 
+  // File Upload Handlers
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
@@ -213,7 +208,7 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
         }
       } catch (_) {}
 
-      // Fallback to DataURL if storage is offline
+      // Fallback: Read as base64 DataURL
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
@@ -228,10 +223,10 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Submit issue handler
-  const handleSubmitIssue = (e: React.FormEvent) => {
+  // Submit Issue Handler
+  const handleSubmitIssue = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!matchedProject) return;
+    if (!portalData) return;
     if (!title.trim() || !description.trim() || !reporterName.trim() || !reporterEmail.trim()) {
       alert('Please fill in all required fields (Title, Description, Name, Email).');
       return;
@@ -239,12 +234,14 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const createdIssue = addIssue({
-        projectId: matchedProject.id,
-        projectName: matchedProject.name,
-        clientId: matchedProject.clientId,
-        clientName: matchedProject.clientName,
+    try {
+      const ticketNumber = `ISSUE-${Math.floor(100 + Math.random() * 900)}`;
+      const newIssue = await crmService.createIssue({
+        projectId: portalData.project.id,
+        projectName: portalData.project.name,
+        clientId: portalData.client.id,
+        clientName: portalData.client.company || portalData.client.name,
+        ticketNumber,
         title: title.trim(),
         description: description.trim(),
         issueType,
@@ -255,53 +252,72 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
         attachments: attachments.length > 0 ? attachments : undefined
       });
 
-      setLastSubmittedTicket(createdIssue);
-      setIsSubmitting(false);
+      // Update local state immediately
+      setPortalData(prev => prev ? { ...prev, issues: [newIssue, ...prev.issues] } : prev);
+      setLastSubmittedTicket(newIssue);
 
-      // Clear inputs
+      // Trigger Staff Alert
+      crmService.createNotification({
+        title: `Client Portal Ticket #${ticketNumber}`,
+        message: `${reporterName.trim()} reported "${title.trim()}" for ${portalData.project.name}`,
+        type: priority === 'Critical' ? 'urgent' : 'system'
+      }).catch(() => {});
+
+      // Clear Form
       setTitle('');
       setDescription('');
       setAttachments([]);
-    }, 400);
+      setIssueViewMode('list');
+    } catch (err: any) {
+      console.warn('Submit issue error:', err);
+      alert('Failed to submit issue. Please check your connection and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Filtered issues for matched project
-  const projectIssues = useMemo(() => {
-    if (!matchedProject) return [];
-    return issues.filter(i => i.projectId === matchedProject.id || i.projectName === matchedProject.name);
-  }, [issues, matchedProject]);
-
+  // Filtered Issues for Tracker Tab
   const filteredIssues = useMemo(() => {
-    return projectIssues.filter(i => {
-      const matchesSearch = 
-        i.title.toLowerCase().includes(trackerSearch.toLowerCase()) ||
-        i.ticketNumber.toLowerCase().includes(trackerSearch.toLowerCase()) ||
-        i.description.toLowerCase().includes(trackerSearch.toLowerCase()) ||
-        i.reporterName.toLowerCase().includes(trackerSearch.toLowerCase());
+    if (!portalData) return [];
+    return portalData.issues.filter(issue => {
+      const q = trackerSearch.toLowerCase().trim();
+      const matchesSearch = !q ||
+        issue.ticketNumber.toLowerCase().includes(q) ||
+        issue.title.toLowerCase().includes(q) ||
+        issue.description.toLowerCase().includes(q) ||
+        issue.reporterName.toLowerCase().includes(q);
 
       if (!matchesSearch) return false;
-
-      if (trackerFilter === 'open') {
-        return i.status !== 'RESOLVED' && i.status !== 'CLOSED';
-      }
-      if (trackerFilter === 'resolved') {
-        return i.status === 'RESOLVED' || i.status === 'CLOSED';
-      }
+      if (trackerFilter === 'open') return issue.status === 'REPORTED' || issue.status === 'IN PROGRESS';
+      if (trackerFilter === 'resolved') return issue.status === 'RESOLVED' || issue.status === 'CLOSED';
       return true;
     });
-  }, [projectIssues, trackerSearch, trackerFilter]);
+  }, [portalData, trackerSearch, trackerFilter]);
 
-  const openIssuesCount = projectIssues.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length;
-
-  if (!matchedProject) {
+  // Loading State
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#070709] text-white flex flex-col justify-between p-6 antialiased selection:bg-[#CCFF00] selection:text-black">
-        <div className="w-full max-w-4xl mx-auto flex items-center justify-between py-4">
+      <div className="min-h-screen bg-[#070709] text-white flex flex-col items-center justify-center p-6">
+        <div className="w-12 h-12 rounded-2xl bg-[#CCFF00]/10 border border-[#CCFF00]/20 flex items-center justify-center text-[#CCFF00] animate-spin mb-4">
+          <RefreshCw size={24} />
+        </div>
+        <h3 className="text-lg font-bold font-['Outfit']">Authenticating Client Workspace</h3>
+        <p className="text-xs text-white/50 mt-1">Verifying encrypted access token with AGX Cloud...</p>
+      </div>
+    );
+  }
+
+  // Gate Screen: Invalid or Missing Token
+  if (!portalData) {
+    return (
+      <div className="min-h-screen bg-[#070709] text-white flex flex-col justify-between p-6 antialiased font-sans selection:bg-[#CCFF00] selection:text-black">
+        {/* Top Header */}
+        <div className="max-w-4xl w-full mx-auto flex items-center justify-between py-2">
           <button
             onClick={onBackToWebsite || (() => { window.location.href = '/'; })}
             className="flex items-center gap-2 text-xs font-semibold text-white/60 hover:text-white transition-colors px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
           >
-            <ArrowLeft size={14} /> Back to Website
+            <ArrowLeft size={14} /> Back to AGX Website
           </button>
           <div className="flex items-center gap-2">
             <span className="text-2xl font-black italic tracking-tighter text-white font-['Outfit']">
@@ -313,6 +329,7 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
           </div>
         </div>
 
+        {/* Token Form Card */}
         <div className="max-w-md w-full mx-auto my-auto p-8 rounded-3xl bg-[#0D1017] border border-white/10 shadow-2xl text-center space-y-5">
           <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
             <KeyRound size={24} />
@@ -322,28 +339,31 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
               Client Project Portal
             </h2>
             <p className="text-xs text-white/50 mt-1">
-              Enter your confidential project access token to review live deliverables, tickets & updates.
+              Enter your secure project access token to inspect live milestones, submit QA tickets, and view invoices.
             </p>
           </div>
 
-          <form onSubmit={handleCustomTokenSubmit} className="space-y-3.5 text-left">
+          <form onSubmit={handleTokenSubmit} className="space-y-3.5 text-left">
             <div>
               <label className="block text-[11px] font-bold text-white/70 uppercase tracking-wider mb-1.5">
-                Project Access Token
+                Secret Project Token
               </label>
               <div className="relative flex items-center">
                 <KeyRound size={15} className="absolute left-3.5 text-white/40" />
                 <input
                   type="text"
-                  value={customTokenInput}
-                  onChange={(e) => { setCustomTokenInput(e.target.value); setCustomTokenError(null); }}
-                  placeholder="e.g., prj_sec_..."
-                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[#CCFF00] transition-all font-mono"
+                  value={tokenInputValue}
+                  onChange={(e) => { setTokenInputValue(e.target.value); setTokenModalError(null); }}
+                  placeholder="e.g., prj_live_7x8f9..."
+                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-[#CCFF00] transition-all font-mono"
                   autoFocus
                 />
               </div>
-              {customTokenError && (
-                <p className="text-[11px] text-rose-400 mt-1.5 font-mono">{customTokenError}</p>
+              {(tokenModalError || fetchError) && (
+                <p className="text-[11px] text-rose-400 mt-2 font-mono flex items-center gap-1.5">
+                  <AlertCircle size={13} className="shrink-0" />
+                  <span>{tokenModalError || fetchError}</span>
+                </p>
               )}
             </div>
 
@@ -351,29 +371,34 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
               type="submit"
               className="w-full py-3 px-4 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer btn-press"
             >
-              <span>Access Project Workspace</span>
+              <span>Access Client Workspace</span>
               <ArrowRight size={13} />
             </button>
           </form>
 
           <p className="text-[11px] text-white/40 pt-2 border-t border-white/5">
-            Need your token? Reach out to your AGX Project Manager or email ops@agxperience.com
+            Token not found? Inquire with your AGX delivery lead or email <span className="text-white/70 font-mono">support@agxperience.com</span>
           </p>
         </div>
 
         <div className="w-full text-center py-4 text-[11px] text-white/30 font-mono">
-          © {new Date().getFullYear()} AGXPERIENCE INC. • ENTERPRISE CLIENT REPOSITORY
+          © {new Date().getFullYear()} AGXPERIENCE INC. • CLIENT REPOSITORY & OPERATIONS
         </div>
       </div>
     );
   }
 
+  // Authenticated Portal Workspace
+  const { project, client, milestones, invoices, issues } = portalData;
+  const completedMilestones = milestones.filter(m => m.status === 'Completed').length;
+  const roadmapPct = milestones.length > 0 ? Math.round((completedMilestones / milestones.length) * 100) : (project.progress || 0);
+
   return (
     <div className="min-h-screen bg-[#070709] text-white flex flex-col justify-between font-sans selection:bg-[#CCFF00] selection:text-black">
-      {/* Minimal Top Header */}
-      <header className="bg-[#0D1017]/90 backdrop-blur-xl border-b border-white/10 sticky top-0 z-40">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
-          {/* Brand & Project Identity */}
+      {/* Top Header */}
+      <header className="bg-[#0D1017]/95 backdrop-blur-xl border-b border-white/10 sticky top-0 z-40">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+          {/* Brand & Project Name */}
           <div className="flex items-center gap-3">
             <button
               onClick={onBackToWebsite || (() => { window.location.href = '/'; })}
@@ -389,537 +414,218 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
 
             <span className="h-4 w-px bg-white/15 hidden sm:inline-block" />
 
-            {/* Subtle Project Indicator / Selector */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setProjectSwitcherOpen(!projectSwitcherOpen)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-white/90 transition-all cursor-pointer"
-                title="Switch client project workspace"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span className="max-w-[140px] sm:max-w-[200px] truncate">{matchedProject.clientName}</span>
-                <ChevronDown size={12} className={`text-white/40 transition-transform ${projectSwitcherOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              <AnimatePresence>
-                {projectSwitcherOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                    transition={{ duration: 0.12 }}
-                    className="absolute top-full left-0 mt-2 w-72 rounded-xl bg-[#121620] border border-white/15 p-2.5 shadow-2xl z-50 space-y-1 text-xs"
-                  >
-                    <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-widest text-gray-400 border-b border-white/10">
-                      Client Workspaces
-                    </div>
-
-                    <div className="max-h-56 overflow-y-auto space-y-1 pt-1">
-                      {projects.map((p) => {
-                        const isCurrent = p.id === matchedProject.id || p.portalToken === matchedProject.portalToken;
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => handleSelectProject(p.portalToken || p.id)}
-                            className={`w-full text-left p-2 rounded-lg transition-all flex items-center justify-between cursor-pointer ${
-                              isCurrent
-                                ? 'bg-[#CCFF00]/10 border border-[#CCFF00]/30 text-white font-bold'
-                                : 'hover:bg-white/5 text-gray-300'
-                            }`}
-                          >
-                            <div className="truncate">
-                              <span className="block truncate text-xs">{p.clientName}</span>
-                              <span className="text-[10px] text-gray-500 block truncate">{p.name}</span>
-                            </div>
-                            {isCurrent && <Check size={13} className="text-[#CCFF00] shrink-0 ml-2" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="pt-1.5 border-t border-white/10">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProjectSwitcherOpen(false);
-                          setCustomTokenModalOpen(true);
-                        }}
-                        className="w-full py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                      >
-                        <KeyRound size={12} className="text-[#CCFF00]" />
-                        <span>Enter Access Token</span>
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div className="flex items-center gap-2 truncate">
+              <span className="w-2 h-2 rounded-full bg-[#CCFF00] animate-pulse shrink-0" />
+              <div className="truncate">
+                <span className="text-xs font-bold text-white block truncate">{project.name}</span>
+                <span className="text-[10px] text-white/50 block truncate">{client.company || client.name}</span>
+              </div>
             </div>
           </div>
 
-          {/* Right Action: Return to Website */}
-          {onBackToWebsite && (
+          {/* Right Actions */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={onBackToWebsite}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-semibold text-white transition-all cursor-pointer"
+              onClick={handleCopyToken}
+              className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-mono text-white/70 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Copy your project portal token"
             >
-              <ArrowLeft size={13} />
-              <span>Back to Website</span>
+              <Copy size={12} />
+              <span className="hidden sm:inline">{copiedToken ? 'Copied!' : 'Token'}</span>
             </button>
-          )}
+
+            <button
+              onClick={handleSignOutPortal}
+              className="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Log Out
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Main Focus Container */}
-      <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 flex-1 space-y-6">
-        {/* Page Title & View Selector */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/10">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              Client Issue & Bug Tracker
-            </h1>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Submit bugs, errors, or feedback directly to your engineering team.
-            </p>
+      {/* Main Workspace Body */}
+      <main className="max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6 flex-1">
+        {/* Project Snapshot Header */}
+        <div className="p-6 rounded-3xl bg-gradient-to-br from-[#0D1017] to-[#121622] border border-white/10 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 text-[10px] font-mono font-bold uppercase tracking-wider">
+                  {project.serviceType || 'AI System'}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono font-bold uppercase">
+                  Status: {project.status}
+                </span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-1 font-['Outfit']">
+                {project.name}
+              </h1>
+              <p className="text-xs text-white/60 mt-0.5">
+                Client Organization: <strong className="text-white">{client.company || client.name}</strong> • PM: {project.projectManager || 'AGX Solution Architect'}
+              </p>
+            </div>
+
+            {/* Overall Delivery Progress */}
+            <div className="sm:text-right bg-white/5 p-3 rounded-2xl border border-white/5">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-white/50 block">Roadmap Velocity</span>
+              <span className="text-2xl font-black text-[#CCFF00] font-mono block mt-0.5">{roadmapPct}%</span>
+              <span className="text-[11px] text-white/60 font-medium">
+                {completedMilestones} of {milestones.length} milestones completed
+              </span>
+            </div>
           </div>
 
-          {/* Minimal 2-Pill View Switcher */}
-          <div className="flex items-center bg-white/5 border border-white/10 p-1 rounded-xl shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveTab('report')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                activeTab === 'report'
-                  ? 'bg-[#CCFF00] text-black shadow-sm'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <PlusCircle size={13} />
-              <span>Report Issue</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('tracker')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                activeTab === 'tracker'
-                  ? 'bg-[#CCFF00] text-black shadow-sm'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <ListFilter size={13} />
-              <span>Track Tickets</span>
-              {openIssuesCount > 0 && (
-                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                  activeTab === 'tracker' ? 'bg-black text-[#CCFF00]' : 'bg-[#CCFF00]/20 text-[#CCFF00]'
-                }`}>
-                  {openIssuesCount}
-                </span>
-              )}
-            </button>
+          {/* Progress Bar */}
+          <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden border border-white/5">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 via-[#CCFF00] to-[#CCFF00] rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.max(5, roadmapPct))}%` }}
+            />
           </div>
         </div>
 
-        {/* TAB 1: Report Issue Form */}
-        {activeTab === 'report' && (
-          <div className="space-y-6">
-            {/* Success notification banner if a ticket was just submitted */}
-            {lastSubmittedTicket && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                    <CheckCircle2 size={20} />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white">
-                      Ticket {lastSubmittedTicket.ticketNumber} Submitted Successfully
-                    </h4>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Our engineering dispatch queue has received this report.
-                    </p>
-                  </div>
-                </div>
+        {/* 3 Core Navigation Tabs */}
+        <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+          <button
+            onClick={() => setActiveTab('roadmap')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'roadmap'
+                ? 'bg-[#CCFF00] text-black shadow-md'
+                : 'bg-white/5 text-white/70 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <CheckSquare size={14} />
+            <span>Milestones & Roadmap</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 font-mono">
+              {milestones.length}
+            </span>
+          </button>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('tracker')}
-                    className="flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-all cursor-pointer text-center"
-                  >
-                    View in Tracker
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLastSubmittedTicket(null)}
-                    className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 cursor-pointer"
-                    title="Dismiss"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </motion.div>
-            )}
+          <button
+            onClick={() => setActiveTab('issues')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'issues'
+                ? 'bg-[#CCFF00] text-black shadow-md'
+                : 'bg-white/5 text-white/70 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <AlertCircle size={14} />
+            <span>QA Tickets & Issues</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 font-mono">
+              {issues.length}
+            </span>
+          </button>
 
-            {/* Clean, Minimalist Submission Form */}
-            <form onSubmit={handleSubmitIssue} className="bg-[#0D1017] border border-white/10 rounded-2xl p-6 sm:p-7 space-y-5 shadow-xl">
-              {/* Issue Title */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-300">
-                  Issue Summary <span className="text-[#CCFF00]">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Checkout button unresponsive on mobile Safari"
-                  className="w-full bg-black/50 border border-white/15 focus:border-[#CCFF00] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-gray-600 outline-none transition-all"
-                />
-              </div>
+          <button
+            onClick={() => setActiveTab('invoices')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'invoices'
+                ? 'bg-[#CCFF00] text-black shadow-md'
+                : 'bg-white/5 text-white/70 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <FileText size={14} />
+            <span>Invoices & Payments</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 font-mono">
+              {invoices.length}
+            </span>
+          </button>
+        </div>
 
-              {/* Category & Priority Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Category Pills */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-300">
-                    Category
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(['Bug', 'UI/UX Polish', 'Feature Revision'] as IssueType[]).map((type) => {
-                      const isSelected = issueType === type;
-                      const label = type === 'Bug' ? 'Bug / Error' : type === 'UI/UX Polish' ? 'UI / Polish' : 'Feature';
-                      return (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => setIssueType(type)}
-                          className={`py-2 px-1 rounded-xl text-xs font-bold transition-all text-center cursor-pointer border ${
-                            isSelected
-                              ? 'bg-[#CCFF00]/15 border-[#CCFF00] text-[#CCFF00]'
-                              : 'bg-black/40 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Priority Selector */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-300">
-                    Urgency
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(['Low', 'Medium', 'Critical'] as IssuePriority[]).map((p) => {
-                      const isSelected = priority === p;
-                      const label = p === 'Low' ? 'Normal' : p === 'Medium' ? 'High' : 'Urgent';
-                      return (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setPriority(p)}
-                          className={`py-2 px-1 rounded-xl text-xs font-bold transition-all text-center cursor-pointer border ${
-                            isSelected
-                              ? p === 'Critical'
-                                ? 'bg-rose-500/20 border-rose-500 text-rose-400'
-                                : 'bg-[#CCFF00]/15 border-[#CCFF00] text-[#CCFF00]'
-                              : 'bg-black/40 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Description & Steps to Reproduce */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-300">
-                  Description & Steps to Reproduce <span className="text-[#CCFF00]">*</span>
-                </label>
-                <textarea
-                  required
-                  rows={4}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe what happened, what you expected, and steps to reproduce the issue..."
-                  className="w-full bg-black/50 border border-white/15 focus:border-[#CCFF00] rounded-xl p-4 text-xs sm:text-sm text-white placeholder:text-gray-600 outline-none transition-all leading-relaxed"
-                />
-              </div>
-
-              {/* Minimal Screenshot / Attachment Upload */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-300">
-                  Attachment / Screenshot <span className="text-gray-500 text-[10px] lowercase">(optional)</span>
-                </label>
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={handleFileDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all ${
-                    dragActive
-                      ? 'border-[#CCFF00] bg-[#CCFF00]/5'
-                      : 'border-white/10 hover:border-white/25 bg-black/30'
-                  }`}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf,.log,.txt"
-                    onChange={handleFileInputChange}
-                    className="hidden"
-                  />
-                  <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
-                    <UploadCloud size={16} className="text-[#CCFF00]" />
-                    <span>Drop screenshot or click to browse (Images, PDF, Logs)</span>
-                  </div>
-                </div>
-
-                {/* Uploaded File Previews */}
-                {attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {attachments.map((url, idx) => (
-                      <div key={idx} className="relative group bg-white/5 border border-white/15 rounded-lg p-1.5 flex items-center gap-2">
-                        {url.startsWith('data:image') || url.includes('supabase.co') ? (
-                          <img src={url} alt="Attachment" className="w-8 h-8 rounded object-cover" />
-                        ) : (
-                          <ImageIcon size={16} className="text-gray-400" />
-                        )}
-                        <span className="text-[10px] text-gray-300 font-mono">Attachment {idx + 1}</span>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); removeAttachment(idx); }}
-                          className="w-4 h-4 rounded-full bg-rose-500/80 text-white flex items-center justify-center text-[10px] hover:bg-rose-600 cursor-pointer"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Reporter Contact Information */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/10">
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                    Your Name <span className="text-[#CCFF00]">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={reporterName}
-                    onChange={(e) => setReporterName(e.target.value)}
-                    placeholder="e.g. Alex Mercer"
-                    className="w-full bg-black/50 border border-white/15 focus:border-[#CCFF00] rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-gray-600 outline-none transition-all"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                    Work Email <span className="text-[#CCFF00]">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={reporterEmail}
-                    onChange={(e) => setReporterEmail(e.target.value)}
-                    placeholder="e.g. alex@aethercapital.com"
-                    className="w-full bg-black/50 border border-white/15 focus:border-[#CCFF00] rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-gray-600 outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Primary Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-[#CCFF00]/10 disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <>
-                    <RefreshCw size={15} className="animate-spin" />
-                    <span>Transmitting to Engineering Queue...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Submit Issue Ticket</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* TAB 2: Track Submitted Issues */}
-        {activeTab === 'tracker' && (
+        {/* TAB 1: Milestones & Roadmap */}
+        {activeTab === 'roadmap' && (
           <div className="space-y-4">
-            {/* Search and Filters Strip */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              {/* Search Bar */}
-              <div className="relative flex-1">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                <input
-                  type="text"
-                  value={trackerSearch}
-                  onChange={(e) => setTrackerSearch(e.target.value)}
-                  placeholder="Search by ticket # or keyword..."
-                  className="w-full bg-[#0D1017] border border-white/10 focus:border-white/25 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder:text-gray-500 outline-none transition-all"
-                />
-              </div>
-
-              {/* Filter Pills */}
-              <div className="flex items-center gap-1 bg-white/5 border border-white/10 p-1 rounded-xl">
-                {(['all', 'open', 'resolved'] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    type="button"
-                    onClick={() => setTrackerFilter(filter)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                      trackerFilter === filter
-                        ? 'bg-white text-black'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    {filter}
-                  </button>
-                ))}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-extrabold text-white">Deliverable Milestones & Sprints</h2>
+                <p className="text-xs text-white/50">Track architecture releases, alpha deployments, and sign-offs in real time.</p>
               </div>
             </div>
 
-            {/* Issues Cards List */}
-            {filteredIssues.length === 0 ? (
-              <div className="bg-[#0D1017] border border-white/10 rounded-2xl p-10 text-center space-y-3">
-                <CheckCircle2 size={32} className="text-emerald-400 mx-auto" />
-                <h3 className="text-sm font-bold text-white">No Issues Found</h3>
-                <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                  {trackerSearch
-                    ? `No tickets match "${trackerSearch}".`
-                    : 'There are currently no reported issues matching this filter.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('report')}
-                  className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#CCFF00] text-black text-xs font-bold hover:bg-[#b8e600] transition-colors cursor-pointer"
-                >
-                  <PlusCircle size={13} />
-                  <span>Report an Issue</span>
-                </button>
+            {milestones.length === 0 ? (
+              <div className="p-10 rounded-3xl bg-[#0D1017] border border-white/5 text-center space-y-2">
+                <CheckCircle2 size={32} className="mx-auto text-white/30" />
+                <h3 className="font-bold text-sm text-white">No Milestones Published Yet</h3>
+                <p className="text-xs text-white/50">Your delivery team will schedule and publish sprint milestones shortly.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {filteredIssues.map((issue) => {
-                  const isResolved = issue.status === 'RESOLVED' || issue.status === 'CLOSED';
-                  const isInProgress = issue.status === 'IN PROGRESS' || issue.status === 'IN REVIEW';
-
+              <div className="grid grid-cols-1 gap-3">
+                {milestones.map((m, idx) => {
+                  const isDone = m.status === 'Completed';
+                  const isCurrent = m.status === 'In Progress';
                   return (
                     <div
-                      key={issue.id}
-                      className="bg-[#0D1017] border border-white/10 hover:border-white/20 rounded-2xl p-5 space-y-3 transition-all shadow-sm"
+                      key={m.id}
+                      className={`p-5 rounded-2xl border transition-all ${
+                        isDone
+                          ? 'bg-[#0E151B] border-emerald-500/20'
+                          : isCurrent
+                          ? 'bg-[#121624] border-[#CCFF00]/30 shadow-lg'
+                          : 'bg-[#0D1017] border-white/5 opacity-80'
+                      }`}
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs font-bold text-[#CCFF00]">
-                            {issue.ticketNumber}
-                          </span>
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/5 text-gray-300 border border-white/10">
-                            {issue.issueType}
-                          </span>
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                            issue.priority === 'Critical'
-                              ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                              : issue.priority === 'High'
-                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                              : 'bg-white/5 text-gray-400 border border-white/10'
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-start gap-3.5">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                            isDone
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : isCurrent
+                              ? 'bg-[#CCFF00]/20 text-[#CCFF00] border border-[#CCFF00]/40'
+                              : 'bg-white/5 text-white/40 border border-white/10'
                           }`}>
-                            {issue.priority}
-                          </span>
-                        </div>
+                            {isDone ? <Check size={14} /> : idx + 1}
+                          </div>
 
-                        {/* Status Pill */}
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${
-                            isResolved
-                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                              : isInProgress
-                              ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
-                              : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${
-                              isResolved ? 'bg-emerald-400' : isInProgress ? 'bg-purple-400 animate-pulse' : 'bg-amber-400'
-                            }`} />
-                            <span>
-                              {isResolved ? 'Resolved' : isInProgress ? 'In Progress' : 'Reported'}
-                            </span>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h3 className="text-sm font-bold text-white">{issue.title}</h3>
-                        <p className="text-xs text-gray-400 mt-1 leading-relaxed whitespace-pre-line">
-                          {issue.description}
-                        </p>
-                      </div>
-
-                      {/* Visual Resolution Status Card */}
-                      {isResolved && (
-                        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-                          <div className="flex items-start gap-2.5">
-                            <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 mt-0.5 sm:mt-0 shrink-0">
-                              <CheckCircle2 size={16} />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-white">{m.title}</span>
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase ${
+                                isDone
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : isCurrent
+                                  ? 'bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20'
+                                  : 'bg-white/5 text-white/40 border border-white/10'
+                              }`}>
+                                {m.status}
+                              </span>
+                              {m.isBilled && (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                  Billed
+                                </span>
+                              )}
                             </div>
-                            <div>
-                              <div className="font-bold text-emerald-300 flex items-center gap-2 flex-wrap">
-                                <span>Verified & Deployed to Production</span>
-                                {issue.resolvedAt && (
-                                  <span className="text-[10px] text-emerald-400/80 font-mono">
-                                    • {new Date(issue.resolvedAt).toLocaleDateString()}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-gray-300 text-[11px] mt-0.5 leading-relaxed">
-                                {issue.resolutionNotes || 'Our engineering team has resolved and verified this fix in the production release.'}
-                              </p>
+
+                            <div className="flex items-center gap-3 text-xs text-white/50 mt-1">
+                              {m.dueDate && (
+                                <span className="flex items-center gap-1 font-mono text-[11px]">
+                                  <Calendar size={12} /> Target: {m.dueDate}
+                                </span>
+                              )}
+                              {m.amount ? (
+                                <span className="font-mono text-[11px] text-white/70">
+                                  Allocation: ₹{m.amount.toLocaleString('en-IN')}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
-                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-mono text-[10px] font-bold shrink-0 self-end sm:self-center">
-                            Production Live
-                          </span>
                         </div>
-                      )}
 
-                      {/* Attachments previews */}
-                      {issue.attachments && issue.attachments.length > 0 && (
-                        <div className="flex items-center gap-2 pt-1">
-                          {issue.attachments.map((att, aIdx) => (
-                            <button
-                              key={aIdx}
-                              type="button"
-                              onClick={() => setSelectedPreviewImage(att)}
-                              className="flex items-center gap-1 text-[11px] text-[#CCFF00] hover:underline cursor-pointer bg-white/5 px-2 py-1 rounded border border-white/10"
-                            >
-                              <ImageIcon size={12} />
-                              <span>View Screenshot {aIdx + 1}</span>
-                            </button>
-                          ))}
+                        {/* Progress Meter */}
+                        <div className="sm:text-right min-w-[120px]">
+                          <div className="flex items-center justify-between sm:justify-end gap-2 text-xs font-mono font-bold text-white mb-1">
+                            <span className="text-[11px] text-white/40 sm:hidden">Progress</span>
+                            <span>{m.progress || (isDone ? 100 : 0)}%</span>
+                          </div>
+                          <div className="w-full sm:w-28 bg-white/10 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                isDone ? 'bg-emerald-400' : isCurrent ? 'bg-[#CCFF00]' : 'bg-white/30'
+                              }`}
+                              style={{ width: `${m.progress || (isDone ? 100 : 0)}%` }}
+                            />
+                          </div>
                         </div>
-                      )}
-
-                      <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-gray-500 font-mono">
-                        <span>Reported by {issue.reporterName}</span>
-                        <span>{new Date(issue.createdAt).toLocaleDateString()}</span>
                       </div>
                     </div>
                   );
@@ -928,107 +634,431 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
             )}
           </div>
         )}
-      </main>
 
-      {/* Minimal Footer */}
-      <footer className="border-t border-white/5 py-4 text-center text-[10px] font-mono text-gray-500 uppercase tracking-widest">
-        AGXperience Client Portal • Confidential & Encrypted
-      </footer>
-
-      {/* Image Preview Modal */}
-      {selectedPreviewImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
-          onClick={() => setSelectedPreviewImage(null)}
-        >
-          <div className="relative max-w-3xl max-h-[85vh] p-2 bg-[#121620] border border-white/20 rounded-2xl">
-            <button
-              onClick={() => setSelectedPreviewImage(null)}
-              className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center font-bold text-xs hover:bg-gray-200 cursor-pointer shadow-lg"
-            >
-              ✕
-            </button>
-            <img
-              src={selectedPreviewImage}
-              alt="Preview"
-              className="max-h-[80vh] w-auto rounded-xl object-contain"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Custom Access Token Modal */}
-      <AnimatePresence>
-        {customTokenModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setCustomTokenModalOpen(false)}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
-            />
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-sm bg-[#121620] border border-white/20 rounded-2xl p-6 z-10 text-white space-y-4 shadow-2xl"
-            >
-              <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <KeyRound size={16} className="text-[#CCFF00]" />
-                  <h3 className="text-sm font-bold">Enter Access Token</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCustomTokenModalOpen(false)}
-                  className="text-gray-400 hover:text-white cursor-pointer"
-                >
-                  <X size={16} />
-                </button>
+        {/* TAB 2: QA Tickets & Issues */}
+        {activeTab === 'issues' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-extrabold text-white">Client Issue & Bug Tracker</h2>
+                <p className="text-xs text-white/50">Direct pipeline to AGX engineers for triage, feedback and bug resolutions.</p>
               </div>
 
-              <p className="text-xs text-gray-400 leading-relaxed">
-                Paste your secret project token or workspace email to access your tickets.
-              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIssueViewMode(issueViewMode === 'report' ? 'list' : 'report')}
+                  className="px-4 py-2 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                >
+                  {issueViewMode === 'report' ? (
+                    <>
+                      <CheckSquare size={14} /> View All Tickets
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle size={14} /> Submit New Ticket
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
 
-              <form onSubmit={handleCustomTokenSubmit} className="space-y-3">
-                <input
-                  type="text"
-                  value={customTokenInput}
-                  onChange={(e) => {
-                    setCustomTokenInput(e.target.value);
-                    if (customTokenError) setCustomTokenError(null);
-                  }}
-                  placeholder="e.g. prj_sec_aether_3d7c1e"
-                  className="w-full bg-black/60 border border-white/15 focus:border-[#CCFF00] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-gray-600 outline-none font-mono"
-                />
-
-                {customTokenError && (
-                  <p className="text-xs text-rose-400 font-medium">{customTokenError}</p>
-                )}
-
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-bold text-xs transition-all cursor-pointer"
-                  >
-                    Open Workspace
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCustomTokenModalOpen(false)}
-                    className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 font-semibold text-xs transition-colors cursor-pointer"
-                  >
-                    Cancel
+            {/* Submission Form View */}
+            {issueViewMode === 'report' && (
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="p-6 rounded-3xl bg-[#0D1017] border border-white/10 shadow-xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white">Report Bug, Blocker or Change Request</h3>
+                    <p className="text-[11px] text-white/50">Logged directly into the engineering sprint board with immediate notification.</p>
+                  </div>
+                  <button onClick={() => setIssueViewMode('list')} className="p-1 text-white/40 hover:text-white cursor-pointer">
+                    <X size={16} />
                   </button>
                 </div>
-              </form>
-            </motion.div>
+
+                <form onSubmit={handleSubmitIssue} className="space-y-4 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-white/70 uppercase mb-1">Issue Category *</label>
+                      <select
+                        value={issueType}
+                        onChange={(e) => setIssueType(e.target.value as IssueType)}
+                        className="w-full bg-black/60 border border-white/15 rounded-xl p-2.5 text-xs text-white outline-none cursor-pointer"
+                      >
+                        <option value="Bug">Defect / Bug</option>
+                        <option value="Feature Request">Change / Feature Request</option>
+                        <option value="Performance">Performance / Latency</option>
+                        <option value="Question">Clarification / Question</option>
+                        <option value="Other">Other Operational Item</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-white/70 uppercase mb-1">Priority Level *</label>
+                      <select
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value as IssuePriority)}
+                        className="w-full bg-black/60 border border-white/15 rounded-xl p-2.5 text-xs text-white outline-none cursor-pointer"
+                      >
+                        <option value="Low">Low (Cosmetic / Low Urgency)</option>
+                        <option value="Medium">Medium (Normal Sprint Triage)</option>
+                        <option value="High">High (Impacting User Flow)</option>
+                        <option value="Critical">Critical (Production Blocker)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-white/70 uppercase mb-1">Issue Summary *</label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="e.g., Webhook returning 502 during checkout flow"
+                      className="w-full bg-black/60 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-white/30 outline-none focus:border-[#CCFF00]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-white/70 uppercase mb-1">Detailed Description & Steps to Reproduce *</label>
+                    <textarea
+                      rows={4}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Describe what happened, expected behavior, steps to reproduce, or required adjustment..."
+                      className="w-full bg-black/60 border border-white/15 rounded-xl p-3 text-xs text-white placeholder-white/30 outline-none focus:border-[#CCFF00]"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-white/70 uppercase mb-1">Reporter Name *</label>
+                      <input
+                        type="text"
+                        value={reporterName}
+                        onChange={(e) => setReporterName(e.target.value)}
+                        placeholder="Your Name"
+                        className="w-full bg-black/60 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-white/70 uppercase mb-1">Reporter Email *</label>
+                      <input
+                        type="email"
+                        value={reporterEmail}
+                        onChange={(e) => setReporterEmail(e.target.value)}
+                        placeholder="your.email@company.com"
+                        className="w-full bg-black/60 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Drag-and-drop Attachments */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-white/70 uppercase mb-1">Screenshots & Attachments (Max 5)</label>
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                      onDragLeave={() => setDragActive(false)}
+                      onDrop={handleFileDrop}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-colors ${
+                        dragActive ? 'border-[#CCFF00] bg-[#CCFF00]/5' : 'border-white/15 hover:border-white/30 bg-black/30'
+                      }`}
+                    >
+                      <UploadCloud size={24} className="mx-auto text-white/40 mb-1" />
+                      <p className="text-xs text-white/70">
+                        Drag screenshots or logs here, or <span className="text-[#CCFF00] font-bold">browse</span>
+                      </p>
+                      <p className="text-[10px] text-white/40 mt-0.5">PNG, JPG, PDF up to 10MB each</p>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        accept="image/*,.pdf"
+                        onChange={handleFileInputChange}
+                        className="hidden"
+                      />
+                    </div>
+
+                    {attachments.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap mt-2">
+                        {attachments.map((url, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 border border-white/15 text-[11px]">
+                            <ImageIcon size={12} className="text-[#CCFF00]" />
+                            <span className="font-mono truncate max-w-[120px]">Attachment #{idx + 1}</span>
+                            <button type="button" onClick={() => removeAttachment(idx)} className="text-white/40 hover:text-white ml-1 cursor-pointer">
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setIssueViewMode('list')}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-white/60 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-5 py-2.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw size={13} className="animate-spin" /> Submitting...
+                        </>
+                      ) : (
+                        <>
+                          <Check size={14} /> Submit QA Ticket
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            )}
+
+            {/* Tickets Table / List */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-white/50 text-[11px] font-mono">Filter:</span>
+                  {(['all', 'open', 'resolved'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setTrackerFilter(f)}
+                      className={`px-3 py-1 rounded-lg font-bold text-xs transition-colors cursor-pointer uppercase font-mono ${
+                        trackerFilter === f
+                          ? 'bg-white/20 text-white border border-white/20'
+                          : 'bg-white/5 text-white/50 hover:text-white'
+                      }`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-full sm:w-64">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                  <input
+                    type="text"
+                    value={trackerSearch}
+                    onChange={(e) => setTrackerSearch(e.target.value)}
+                    placeholder="Search ticket # or title..."
+                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-white/30 outline-none"
+                  />
+                </div>
+              </div>
+
+              {filteredIssues.length === 0 ? (
+                <div className="p-12 rounded-3xl bg-[#0D1017] border border-white/5 text-center space-y-2">
+                  <CheckCircle2 size={32} className="mx-auto text-emerald-400/50" />
+                  <h3 className="font-bold text-sm text-white">All Clear! No Matching Tickets</h3>
+                  <p className="text-xs text-white/50">No tickets found matching current search and filter criteria.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2.5">
+                  {filteredIssues.map(iss => {
+                    const isResolved = iss.status === 'RESOLVED' || iss.status === 'CLOSED';
+                    return (
+                      <div
+                        key={iss.id}
+                        onClick={() => setSelectedIssueDetail(selectedIssueDetail?.id === iss.id ? null : iss)}
+                        className="p-4 rounded-2xl bg-[#0D1017] hover:bg-[#121622] border border-white/10 transition-all cursor-pointer space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-xs text-[#CCFF00]">{iss.ticketNumber}</span>
+                            <span className="text-xs font-bold text-white">{iss.title}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase ${
+                              isResolved
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            }`}>
+                              {iss.status}
+                            </span>
+                            <span className="text-[10px] text-white/40 font-mono">
+                              {new Date(iss.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-white/60 line-clamp-2">{iss.description}</p>
+
+                        {/* Expanded details */}
+                        {selectedIssueDetail?.id === iss.id && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-3 border-t border-white/10 space-y-2 text-xs">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-white/50 font-mono">
+                              <span>Reporter: <strong className="text-white">{iss.reporterName}</strong></span>
+                              <span>Category: <strong className="text-white">{iss.issueType}</strong></span>
+                              <span>Priority: <strong className="text-white">{iss.priority}</strong></span>
+                            </div>
+
+                            {iss.resolutionNotes && (
+                              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs space-y-1">
+                                <span className="font-bold block flex items-center gap-1">
+                                  <CheckCircle2 size={13} /> Engineering Resolution Sign-off:
+                                </span>
+                                <p className="text-emerald-200">{iss.resolutionNotes}</p>
+                              </div>
+                            )}
+
+                            {iss.attachments && iss.attachments.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="text-[10px] text-white/50 uppercase font-bold block">Attachments:</span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {iss.attachments.map((url, i) => (
+                                    <a
+                                      key={i}
+                                      href={url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] text-white flex items-center gap-1 font-mono"
+                                    >
+                                      <ImageIcon size={11} className="text-[#CCFF00]" />
+                                      <span>View #{i + 1}</span>
+                                      <ExternalLink size={10} />
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
-      </AnimatePresence>
+
+        {/* TAB 3: Invoices & Payments */}
+        {activeTab === 'invoices' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-extrabold text-white">Commercial Invoices & Payment Ledger</h2>
+                <p className="text-xs text-white/50">Tax invoices, settlement records and wire remittance instructions for {client.company || client.name}.</p>
+              </div>
+            </div>
+
+            {invoices.length === 0 ? (
+              <div className="p-10 rounded-3xl bg-[#0D1017] border border-white/5 text-center space-y-2">
+                <CreditCard size={32} className="mx-auto text-white/30" />
+                <h3 className="font-bold text-sm text-white">No Invoices Issued Yet</h3>
+                <p className="text-xs text-white/50">Invoices will appear here upon milestone completion or contract inception.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {invoices.map(inv => {
+                  const isPaid = inv.status === 'Paid';
+                  return (
+                    <div
+                      key={inv.id}
+                      className="p-5 rounded-2xl bg-[#0D1017] border border-white/10 shadow-md space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-black text-sm text-white">{inv.invoiceNumber}</span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
+                              isPaid
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : inv.status === 'Partially Paid'
+                                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                            }`}>
+                              {inv.status}
+                            </span>
+                            {inv.isGst && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-white/5 text-white/60">
+                                GST Invoice
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-white/50 font-mono mt-0.5 block">
+                            Issued: {inv.issueDate} • Due: {inv.dueDate}
+                          </span>
+                        </div>
+
+                        <div className="sm:text-right">
+                          <span className="text-lg font-black text-[#CCFF00] font-mono block">
+                            ₹{inv.total.toLocaleString('en-IN')}
+                          </span>
+                          {inv.paidAmount > 0 && (
+                            <span className="text-[11px] text-emerald-400 font-mono block">
+                              ₹{inv.paidAmount.toLocaleString('en-IN')} Settled
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Items Preview */}
+                      {inv.items && inv.items.length > 0 && (
+                        <div className="pt-2 border-t border-white/5 space-y-1 text-xs">
+                          {inv.items.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-white/70">
+                              <span>{item.description}</span>
+                              <span className="font-mono">₹{item.total.toLocaleString('en-IN')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Wire Transfer & Remittance Instructions */}
+            <div className="p-6 rounded-3xl bg-[#0D1017] border border-white/10 space-y-3">
+              <div className="flex items-center gap-2 text-white">
+                <ShieldCheck size={18} className="text-[#CCFF00]" />
+                <h3 className="font-extrabold text-sm">Official Bank Remittance Details</h3>
+              </div>
+              <p className="text-xs text-white/60">
+                To settle open invoices, transfer the invoice amount referencing your Invoice Number as the transaction remark:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono bg-black/40 p-4 rounded-2xl border border-white/5">
+                <div>
+                  <span className="text-white/40 block text-[10px] uppercase">Account Holder</span>
+                  <span className="text-white font-bold">AGXPERIENCE PRIVATE LIMITED</span>
+                </div>
+                <div>
+                  <span className="text-white/40 block text-[10px] uppercase">Bank</span>
+                  <span className="text-white font-bold">HDFC Bank Ltd</span>
+                </div>
+                <div>
+                  <span className="text-white/40 block text-[10px] uppercase">Account Number</span>
+                  <span className="text-white font-bold">50200088921822</span>
+                </div>
+                <div>
+                  <span className="text-white/40 block text-[10px] uppercase">IFSC Code</span>
+                  <span className="text-white font-bold">HDFC0001822</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Sleek Footer */}
+      <footer className="border-t border-white/10 bg-[#0D1017]/80 py-4 px-6 text-center text-xs text-white/40 font-mono">
+        © {new Date().getFullYear()} AGXPERIENCE INC. • CONFIDENTIAL CLIENT PORTAL • ALL DELIVERABLES PROTECTED
+      </footer>
     </div>
   );
 };

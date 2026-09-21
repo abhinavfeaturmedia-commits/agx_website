@@ -316,6 +316,7 @@ export interface DbPartner {
   paid_earnings: number;
   pending_earnings: number;
   notes: string | null;
+  last_login_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -655,9 +656,9 @@ export function mapDocumentFromDb(row: DbDocument, clients: Client[] = [], proje
 export function mapCredentialFromDb(row: DbCredential, clients: Client[] = [], projects: Project[] = []): CredentialVaultItem {
   const client = clients.find(c => c.id === row.client_id);
   const project = projects.find(p => p.id === row.project_id);
-  let pwd = row.password_encrypted;
-  if (!pwd || pwd === '●●●●●●●●●●' || pwd === '●●●●●●●●' || pwd.trim() === '') {
-    pwd = 'AGX_VaultSecPass_2026#';
+  let pwd = row.password_encrypted || '';
+  if (pwd === '●●●●●●●●●●' || pwd === '●●●●●●●●') {
+    pwd = '';
   }
   return {
     id: row.id,
@@ -761,6 +762,7 @@ export function mapPartnerFromDb(row: DbPartner): Partner {
     paidEarnings: Number(row.paid_earnings) || 0,
     pendingEarnings: Number(row.pending_earnings) || 0,
     notes: row.notes || undefined,
+    lastLoginAt: row.last_login_at || row.updated_at || row.created_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -1649,32 +1651,42 @@ export const crmService = {
 
   // --- Credentials Vault CRUD ---
   async createCredential(cred: Omit<CredentialVaultItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<CredentialVaultItem> {
+    const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
     const { data, error } = await supabase.from('credentials_vault').insert([{
       platform_name: cred.platformName,
       service_url: cred.serviceUrl || null,
       username: cred.username || null,
-      password_encrypted: cred.passwordEncrypted,
+      password_encrypted: cred.passwordEncrypted || null,
       api_key_encrypted: cred.apiKeyEncrypted || null,
-      client_id: cred.clientId || null,
-      project_id: cred.projectId || null,
+      client_id: isUuid(cred.clientId) ? cred.clientId : null,
+      project_id: isUuid(cred.projectId) ? cred.projectId : null,
       notes: cred.notes || null,
-      access_roles: cred.accessRoles,
+      access_roles: cred.accessRoles || ['Super Admin', 'Admin', 'Developer'],
       environment: cred.environment || 'Production',
       status: cred.status || 'Active'
     }]).select().single();
 
     if (error) throw error;
-    return mapCredentialFromDb(data);
+    const mapped = mapCredentialFromDb(data);
+    return {
+      ...mapped,
+      clientName: cred.clientName || mapped.clientName,
+      projectName: cred.projectName || mapped.projectName
+    };
   },
 
   async updateCredential(id: string, updates: Partial<CredentialVaultItem>): Promise<void> {
+    const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
     const payload: any = { updated_at: new Date().toISOString() };
     if (updates.platformName !== undefined) payload.platform_name = updates.platformName;
-    if (updates.serviceUrl !== undefined) payload.service_url = updates.serviceUrl;
-    if (updates.username !== undefined) payload.username = updates.username;
-    if (updates.passwordEncrypted !== undefined) payload.password_encrypted = updates.passwordEncrypted;
-    if (updates.apiKeyEncrypted !== undefined) payload.api_key_encrypted = updates.apiKeyEncrypted;
-    if (updates.notes !== undefined) payload.notes = updates.notes;
+    if (updates.serviceUrl !== undefined) payload.service_url = updates.serviceUrl || null;
+    if (updates.username !== undefined) payload.username = updates.username || null;
+    if (updates.passwordEncrypted !== undefined) payload.password_encrypted = updates.passwordEncrypted || null;
+    if (updates.apiKeyEncrypted !== undefined) payload.api_key_encrypted = updates.apiKeyEncrypted || null;
+    if (updates.clientId !== undefined) payload.client_id = isUuid(updates.clientId) ? updates.clientId : null;
+    if (updates.projectId !== undefined) payload.project_id = isUuid(updates.projectId) ? updates.projectId : null;
+    if (updates.notes !== undefined) payload.notes = updates.notes || null;
     if (updates.accessRoles !== undefined) payload.access_roles = updates.accessRoles;
     if (updates.environment !== undefined) payload.environment = updates.environment;
     if (updates.status !== undefined) payload.status = updates.status;
@@ -1911,7 +1923,8 @@ export const crmService = {
       total_earnings: partner.totalEarnings || 0,
       paid_earnings: partner.paidEarnings || 0,
       pending_earnings: partner.pendingEarnings || 0,
-      notes: partner.notes || null
+      notes: partner.notes || null,
+      last_login_at: partner.lastLoginAt || new Date().toISOString()
     }]).select().single();
 
     if (error) throw error;
@@ -1932,6 +1945,7 @@ export const crmService = {
     if (updates.paidEarnings !== undefined) payload.paid_earnings = updates.paidEarnings;
     if (updates.pendingEarnings !== undefined) payload.pending_earnings = updates.pendingEarnings;
     if (updates.notes !== undefined) payload.notes = updates.notes;
+    if (updates.lastLoginAt !== undefined) payload.last_login_at = updates.lastLoginAt;
 
     const { error } = await supabase.from('partners').update(payload).eq('id', id);
     if (error) throw error;
@@ -2041,6 +2055,236 @@ export const crmService = {
 
     if (error) throw error;
     return mapPartnerPayoutFromDb(data);
+  },
+
+  async findPartnerByCode(code: string): Promise<Partner | null> {
+    try {
+      if (!code || !code.trim()) return null;
+      const cleanCode = code.trim().toUpperCase();
+      const { data, error } = await supabase
+        .from('partners')
+        .select('*')
+        .ilike('referral_code', cleanCode)
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return mapPartnerFromDb(data);
+    } catch (err) {
+      console.warn('findPartnerByCode error:', err);
+      return null;
+    }
+  },
+
+  async fetchClientPortalData(token: string): Promise<{
+    project: Project;
+    client: Client;
+    milestones: ProjectMilestone[];
+    invoices: Invoice[];
+    issues: ProjectIssue[];
+  } | null> {
+    try {
+      if (!token || !token.trim()) return null;
+
+      // 1. Fetch project by client_portal_token
+      const { data: projectRow, error: projError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('client_portal_token', token.trim())
+        .maybeSingle();
+
+      if (projError || !projectRow) return null;
+
+      // 2. Fetch client
+      const { data: clientRow, error: clientError } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', projectRow.client_id)
+        .maybeSingle();
+
+      if (clientError || !clientRow) return null;
+      if (clientRow.portal_enabled === false) {
+        console.warn('Client portal is disabled for this account.');
+        return null;
+      }
+
+      // 3. Fetch milestones
+      const { data: milestoneRows } = await supabase
+        .from('project_milestones')
+        .select('*')
+        .eq('project_id', projectRow.id)
+        .order('order_index', { ascending: true });
+
+      // 4. Fetch invoices (by project or client)
+      const { data: invoiceRows } = await supabase
+        .from('invoices')
+        .select('*')
+        .or(`project_id.eq.${projectRow.id},client_id.eq.${clientRow.id}`)
+        .order('issue_date', { ascending: false });
+
+      // 5. Fetch issues
+      const { data: issueRows } = await supabase
+        .from('project_issues')
+        .select('*')
+        .eq('project_id', projectRow.id)
+        .order('created_at', { ascending: false });
+
+      return {
+        project: mapProjectFromDb(projectRow),
+        client: mapClientFromDb(clientRow),
+        milestones: (milestoneRows || []).map(m => mapMilestoneFromDb(m)),
+        invoices: (invoiceRows || []).map(i => mapInvoiceFromDb(i)),
+        issues: (issueRows || []).map(iss => mapIssueFromDb(iss)),
+      };
+    } catch (err) {
+      console.error('fetchClientPortalData error:', err);
+      return null;
+    }
+  },
+
+  async updateMilestoneInvoiced(id: string, isInvoiced: boolean, invoiceId?: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('project_milestones')
+        .update({
+          is_invoiced: isInvoiced,
+          invoice_id: invoiceId || null
+        })
+        .eq('id', id);
+
+      if (error) console.warn('updateMilestoneInvoiced error:', error);
+    } catch (err) {
+      console.warn('updateMilestoneInvoiced fallback error:', err);
+    }
+  },
+
+  async revertPaymentBalances(payment: Payment): Promise<void> {
+    try {
+      // 1. Revert invoice balance if attached to an invoice
+      if (payment.invoiceId) {
+        const { data: inv } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('id', payment.invoiceId)
+          .maybeSingle();
+
+        if (inv) {
+          const currentPaid = Number(inv.paid_amount || 0);
+          const newPaid = Math.max(0, currentPaid - Number(payment.amount));
+          const total = Number(inv.total || 0);
+          let newStatus = 'SENT';
+          if (newPaid >= total && total > 0) {
+            newStatus = 'PAID';
+          } else if (newPaid > 0) {
+            newStatus = 'PARTIALLY_PAID';
+          } else if (inv.due_date && new Date(inv.due_date) < new Date()) {
+            newStatus = 'OVERDUE';
+          }
+
+          await supabase
+            .from('invoices')
+            .update({ paid_amount: newPaid, status: newStatus })
+            .eq('id', payment.invoiceId);
+        }
+      }
+
+      // 2. Revert client balance
+      if (payment.clientId) {
+        const { data: cl } = await supabase
+          .from('clients')
+          .select('*')
+          .eq('id', payment.clientId)
+          .maybeSingle();
+
+        if (cl) {
+          const currentPaid = Number(cl.total_paid || 0);
+          const currentVal = Number(cl.total_value || 0);
+          const newPaid = Math.max(0, currentPaid - Number(payment.amount));
+          const newOutstanding = Math.max(0, currentVal - newPaid);
+
+          await supabase
+            .from('clients')
+            .update({ total_paid: newPaid, outstanding_amount: newOutstanding })
+            .eq('id', payment.clientId);
+        }
+      }
+
+      // 3. Revert project balance
+      if (payment.projectId) {
+        const { data: prj } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('id', payment.projectId)
+          .maybeSingle();
+
+        if (prj) {
+          const currentPaid = Number(prj.paid_amount || 0);
+          const newPaid = Math.max(0, currentPaid - Number(payment.amount));
+
+          await supabase
+            .from('projects')
+            .update({ paid_amount: newPaid })
+            .eq('id', payment.projectId);
+        }
+      }
+
+      // 4. Revert partner referral earnings if attached to client or project
+      if (payment.clientId || payment.projectId) {
+        let query = supabase.from('partner_referrals').select('*');
+        if (payment.clientId && payment.projectId) {
+          query = query.or(`client_id.eq.${payment.clientId},project_id.eq.${payment.projectId}`);
+        } else if (payment.clientId) {
+          query = query.eq('client_id', payment.clientId);
+        } else if (payment.projectId) {
+          query = query.eq('project_id', payment.projectId);
+        }
+
+        const { data: refs } = await query;
+        if (refs && refs.length > 0) {
+          for (const ref of refs) {
+            const currentTotalPaid = Number(ref.total_paid || 0);
+            const newTotalPaid = Math.max(0, currentTotalPaid - Number(payment.amount));
+            const rawRate = Number(ref.commission_rate || 0.10);
+            const commRate = rawRate >= 1 ? rawRate / 100 : rawRate;
+            const newCommEarned = Math.round(newTotalPaid * commRate);
+            const newPending = Math.max(0, Number(ref.deal_value || 0) - newTotalPaid);
+            const commDiff = Number(ref.commission_earned || 0) - newCommEarned;
+
+            await supabase
+              .from('partner_referrals')
+              .update({
+                total_paid: newTotalPaid,
+                pending_payment: newPending,
+                commission_earned: newCommEarned,
+                payment_status: newTotalPaid <= 0 ? 'UNPAID' : (newPending === 0 ? 'PAID' : 'PARTIAL')
+              })
+              .eq('id', ref.id);
+
+            // Revert partner aggregate earnings
+            if (commDiff > 0 && ref.partner_id) {
+              const { data: partner } = await supabase
+                .from('partners')
+                .select('*')
+                .eq('id', ref.partner_id)
+                .maybeSingle();
+
+              if (partner) {
+                const newTotalEarn = Math.max(0, Number(partner.total_earnings || 0) - commDiff);
+                const newPendingEarn = Math.max(0, Number(partner.pending_earnings || 0) - commDiff);
+                await supabase
+                  .from('partners')
+                  .update({
+                    total_earnings: newTotalEarn,
+                    pending_earnings: newPendingEarn
+                  })
+                  .eq('id', ref.partner_id);
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('revertPaymentBalances error:', err);
+    }
   },
 
   // --- Realtime WebSocket Channel Listener ---

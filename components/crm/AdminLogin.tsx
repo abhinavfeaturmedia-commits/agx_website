@@ -148,6 +148,56 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                   </p>
                 </div>
 
+                {/* Active Staff Session Detection */}
+                {authService.getStaffSession() && (
+                  <div className="mb-5 p-3.5 rounded-2xl bg-[#CCFF00]/10 border border-[#CCFF00]/30 text-xs">
+                    <div className="flex items-center gap-3 mb-2.5">
+                      <img
+                        src={authService.getStaffSession()?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
+                        alt="Staff Avatar"
+                        className="w-9 h-9 rounded-full border border-[#CCFF00]/40 object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-[#CCFF00] animate-pulse" />
+                          <span className="font-extrabold text-white text-xs block truncate">
+                            {authService.getStaffSession()?.fullName}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-white/60 block truncate">
+                          {authService.getStaffSession()?.email} • {authService.getStaffSession()?.role}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const s = authService.getStaffSession();
+                          if (s) onLoginSuccess(s.role, s);
+                        }}
+                        className="flex-1 py-2 px-3 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition-all"
+                      >
+                        <span>Continue to Workspace →</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          authService.clearStaffSession();
+                          setErrorMessage('');
+                          toast.info('Session Cleared', 'You can now sign in with another account.');
+                          setEmail('');
+                          setPassword('');
+                        }}
+                        className="py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white text-xs font-semibold cursor-pointer border border-white/10"
+                        title="Sign in with a different staff account"
+                      >
+                        Switch
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-[11px] font-bold text-white/70 uppercase tracking-wider mb-1.5">
