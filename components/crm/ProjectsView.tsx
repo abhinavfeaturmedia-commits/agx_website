@@ -421,15 +421,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ store, onNavigate, i
             <Download size={14} /> Export CSV
           </button>
 
-          {store.resetToSampleData && (
-            <button
-              onClick={() => store.resetToSampleData()}
-              title="Reset sample projects and issues to test onboarding and magic links"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold text-xs shadow-2xs transition-colors cursor-pointer btn-press"
-            >
-              <RotateCcw size={14} /> Reset Mock Data
-            </button>
-          )}
 
           <div className="flex items-center bg-gray-100 p-1 rounded-xl">
             <button

@@ -6,12 +6,16 @@ interface FooterProps {
   onAdminLoginClick?: () => void;
   onClientPortalClick?: () => void;
   onProcessAuditClick?: (email: string) => void;
+  onPartnerPortalClick?: () => void;
+  onBecomePartnerClick?: () => void;
 }
 
 const Footer: React.FC<FooterProps> = ({ 
   onAdminLoginClick, 
   onClientPortalClick, 
-  onProcessAuditClick 
+  onProcessAuditClick,
+  onPartnerPortalClick,
+  onBecomePartnerClick
 }) => {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -133,6 +137,22 @@ const Footer: React.FC<FooterProps> = ({
           className="flex flex-col gap-4"
         >
           <div className="text-[10px] font-mono uppercase text-[#CCFF00] tracking-[0.2em]">Portals & Clients</div>
+          {onPartnerPortalClick && (
+            <button
+              onClick={() => onPartnerPortalClick()}
+              className="text-left text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Partner Portal</span> 🤝
+            </button>
+          )}
+          {onBecomePartnerClick && (
+            <button
+              onClick={() => onBecomePartnerClick()}
+              className="text-left text-sm font-medium text-white/70 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Become a Partner</span> 🚀
+            </button>
+          )}
           {onClientPortalClick && (
             <button
               onClick={() => onClientPortalClick && onClientPortalClick()}

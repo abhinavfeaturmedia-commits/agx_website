@@ -231,12 +231,21 @@ input[type=range]::-webkit-slider-runnable-track {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
-/* Dark cards within CRM (e.g. AGX OS Automation card) */
+/* Dark cards within CRM (e.g. AGX OS Automation card, Dark Bezel) */
+.crm-theme .double-bezel-outer.dark-bezel,
+.crm-theme .double-bezel-outer[class*="bg-white/"] {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
 .crm-theme .double-bezel-inner.text-white,
 .crm-theme .double-bezel-inner[class*="from-[#0E131F]"],
 .crm-theme .double-bezel-inner[class*="from-slate-900"],
-.crm-theme .double-bezel-inner[class*="from-gray-900"] {
-  background: linear-gradient(to bottom right, #0E131F, #080B12) !important;
+.crm-theme .double-bezel-inner[class*="from-gray-900"],
+.crm-theme .double-bezel-inner[class*="bg-[#0D1017]"],
+.crm-theme .double-bezel-inner[class*="bg-[#0b0e14]"],
+.crm-theme .double-bezel-inner[class*="bg-[#07090E]"] {
+  background: #0D1017 !important;
   border-color: rgba(255, 255, 255, 0.1) !important;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), 0 8px 32px rgba(0, 0, 0, 0.35) !important;
   color: #ffffff !important;

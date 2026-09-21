@@ -1,30 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, UserCheck, Users, Briefcase, CheckSquare, IndianRupee,
   FileText, Key, Calendar as CalendarIcon, BarChart3, Shield, Settings,
   Search, Bell, Plus, ArrowUpRight, LogOut, Globe, Sparkles, X, Check,
-  RefreshCw, Database, UserPlus, Lock, AlertOctagon, Layers
+  RefreshCw, Database, UserPlus, Lock, AlertOctagon, Layers, Handshake
 } from 'lucide-react';
 import { useCrmStore } from '../../lib/crmStore';
 import { authService } from '../../lib/authService';
 import { DashboardView } from './DashboardView';
-import { LeadsView } from './LeadsView';
-import { ClientsView } from './ClientsView';
-import { ProjectsView } from './ProjectsView';
-import { TasksView } from './TasksView';
-import { FinanceView } from './FinanceView';
-import { DocumentsView } from './DocumentsView';
-import { CredentialsVaultView } from './CredentialsVaultView';
-import { CalendarView } from './CalendarView';
-import { AnalyticsView } from './AnalyticsView';
-import { AuditLogsView } from './AuditLogsView';
-import { SettingsView } from './SettingsView';
-import { IssuesView } from './IssuesView';
 import { GlobalSearchModal } from './GlobalSearchModal';
 import { ToastNotification } from './ToastNotification';
 import { AuthModal } from './AuthModal';
 import { UserRole, CrmModuleKey } from '../../types/crm';
+
+// Code-split heavy views to optimize bundle performance
+const LeadsView = lazy(() => import('./LeadsView').then(m => ({ default: m.LeadsView })));
+const ClientsView = lazy(() => import('./ClientsView').then(m => ({ default: m.ClientsView })));
+const ProjectsView = lazy(() => import('./ProjectsView').then(m => ({ default: m.ProjectsView })));
+const TasksView = lazy(() => import('./TasksView').then(m => ({ default: m.TasksView })));
+const IssuesView = lazy(() => import('./IssuesView').then(m => ({ default: m.IssuesView })));
+const FinanceView = lazy(() => import('./FinanceView').then(m => ({ default: m.FinanceView })));
+const PartnersView = lazy(() => import('./PartnersView').then(m => ({ default: m.PartnersView })));
+const DocumentsView = lazy(() => import('./DocumentsView').then(m => ({ default: m.DocumentsView })));
+const CredentialsVaultView = lazy(() => import('./CredentialsVaultView').then(m => ({ default: m.CredentialsVaultView })));
+const CalendarView = lazy(() => import('./CalendarView').then(m => ({ default: m.CalendarView })));
+const AnalyticsView = lazy(() => import('./AnalyticsView').then(m => ({ default: m.AnalyticsView })));
+const AuditLogsView = lazy(() => import('./AuditLogsView').then(m => ({ default: m.AuditLogsView })));
+const SettingsView = lazy(() => import('./SettingsView').then(m => ({ default: m.SettingsView })));
+
+const ViewLoadingSkeleton = () => (
+  <div className="w-full h-96 flex flex-col items-center justify-center gap-3">
+    <div className="w-7 h-7 border-2 border-black border-t-[#CCFF00] rounded-full animate-spin" />
+    <span className="text-xs font-mono text-gray-500 tracking-wide uppercase">Loading module...</span>
+  </div>
+);
 
 interface CrmLayoutProps {
   onLogout: () => void;
@@ -68,6 +78,7 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
     { id: 'tasks', label: 'Tasks & Sprints', icon: CheckSquare, count: tasks.filter(t => t.status === 'IN PROGRESS').length },
     { id: 'issues', label: 'Client Issues & QA', icon: AlertOctagon, count: issues.filter(i => i.status === 'REPORTED').length },
     { id: 'finance', label: 'Finance & P&L', icon: IndianRupee },
+    { id: 'partners', label: 'AGX Partners', icon: Handshake, count: store.partners.filter(p => p.status === 'Active').length },
     { id: 'documents', label: 'Agreements & Docs', icon: FileText },
     { id: 'vault', label: 'Credentials Vault', icon: Key },
     { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
@@ -505,7 +516,7 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
               </button>
             </div>
           ) : (
-            <>
+            <Suspense fallback={<ViewLoadingSkeleton />}>
               {activeRoute === 'dashboard' && <DashboardView store={store} onNavigate={handleNavigate} onOpenQuickCreate={handleQuickCreate} />}
               {activeRoute === 'leads' && <LeadsView store={store} onNavigate={handleNavigate} initialSelectedId={selectedEntityId} />}
               {activeRoute === 'clients' && <ClientsView store={store} onNavigate={handleNavigate} initialSelectedId={selectedEntityId} />}
@@ -513,13 +524,14 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
               {activeRoute === 'tasks' && <TasksView store={store} onNavigate={handleNavigate} initialSelectedId={selectedEntityId} />}
               {activeRoute === 'issues' && <IssuesView store={store} onNavigate={handleNavigate} initialSelectedId={selectedEntityId} />}
               {activeRoute === 'finance' && <FinanceView store={store} onNavigate={handleNavigate} initialSelectedId={selectedEntityId} />}
+              {activeRoute === 'partners' && <PartnersView store={store} onNavigate={handleNavigate} initialSelectedId={selectedEntityId} />}
               {activeRoute === 'documents' && <DocumentsView store={store} onNavigate={handleNavigate} initialSelectedId={selectedEntityId} />}
               {activeRoute === 'vault' && <CredentialsVaultView store={store} onNavigate={handleNavigate} initialSelectedId={selectedEntityId} />}
               {activeRoute === 'calendar' && <CalendarView store={store} onNavigate={handleNavigate} initialSelectedId={selectedEntityId} />}
               {activeRoute === 'analytics' && <AnalyticsView store={store} onNavigate={handleNavigate} />}
               {activeRoute === 'audit' && <AuditLogsView store={store} onNavigate={handleNavigate} />}
               {activeRoute === 'settings' && <SettingsView store={store} onNavigate={handleNavigate} />}
-            </>
+            </Suspense>
           )}
         </main>
       </div>

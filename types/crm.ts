@@ -17,6 +17,7 @@ export type CrmModuleKey =
   | 'tasks'
   | 'issues'
   | 'finance'
+  | 'partners'
   | 'documents'
   | 'vault'
   | 'calendar'
@@ -32,6 +33,7 @@ export interface ModulePermissions {
   tasks?: boolean;
   issues?: boolean;
   finance?: boolean;
+  partners?: boolean;
   documents?: boolean;
   vault?: boolean;
   calendar?: boolean;
@@ -49,6 +51,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Record<CrmModuleKey, boo
     tasks: true,
     issues: true,
     finance: true,
+    partners: true,
     documents: true,
     vault: true,
     calendar: true,
@@ -64,6 +67,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Record<CrmModuleKey, boo
     tasks: true,
     issues: true,
     finance: true,
+    partners: true,
     documents: true,
     vault: true,
     calendar: true,
@@ -79,6 +83,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Record<CrmModuleKey, boo
     tasks: true,
     issues: true,
     finance: false,
+    partners: true,
     documents: true,
     vault: false,
     calendar: true,
@@ -94,6 +99,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Record<CrmModuleKey, boo
     tasks: true,
     issues: false,
     finance: false,
+    partners: false,
     documents: true,
     vault: false,
     calendar: true,
@@ -109,6 +115,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Record<CrmModuleKey, boo
     tasks: true,
     issues: true,
     finance: false,
+    partners: false,
     documents: true,
     vault: true,
     calendar: true,
@@ -124,6 +131,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Record<CrmModuleKey, boo
     tasks: true,
     issues: true,
     finance: false,
+    partners: false,
     documents: false,
     vault: false,
     calendar: true,
@@ -139,6 +147,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Record<CrmModuleKey, boo
     tasks: false,
     issues: false,
     finance: true,
+    partners: true,
     documents: true,
     vault: false,
     calendar: true,
@@ -205,6 +214,9 @@ export interface Lead {
   lastContacted?: string;
   notes?: string;
   lossReason?: string;
+  partnerId?: string;
+  partnerName?: string;
+  partnerCode?: string;
   convertedClientId?: string;
   convertedProjectId?: string;
   activities?: LeadActivity[];
@@ -223,6 +235,9 @@ export interface Client {
   industry?: string;
   gstTaxId?: string;
   accountManager: string;
+  partnerId?: string;
+  partnerName?: string;
+  partnerCode?: string;
   totalValue: number;
   totalPaid: number;
   outstandingAmount: number;
@@ -484,7 +499,7 @@ export interface AuditLog {
   userName: string;
   userRole: UserRole;
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE' | 'REVEAL_SECRET' | 'CONVERT_LEAD' | 'PAYMENT_RECORDED';
-  entityType: 'User' | 'Lead' | 'Client' | 'Project' | 'Task' | 'Invoice' | 'Payment' | 'Expense' | 'Credential' | 'Agreement' | 'Issue';
+  entityType: 'User' | 'Lead' | 'Client' | 'Project' | 'Task' | 'Invoice' | 'Payment' | 'Expense' | 'Credential' | 'Agreement' | 'Issue' | 'Partner';
   entityId?: string;
   description: string;
   beforeState?: any;
@@ -518,5 +533,75 @@ export interface ProjectIssue {
   resolvedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// --- AGX Partner Program Models ---
+
+export interface PartnerPayoutDetails {
+  upiId?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifsc?: string;
+  accountName?: string;
+  paypalEmail?: string;
+  notes?: string;
+}
+
+export interface Partner {
+  id: string;
+  userId?: string;
+  name: string;
+  email: string;
+  company?: string;
+  phone?: string;
+  referralCode: string;
+  commissionRate: number; // e.g. 0.10 for 10%, 0.15 for 15%
+  status: 'Active' | 'Pending' | 'Suspended';
+  payoutMethod: 'UPI' | 'Bank Transfer' | 'PayPal' | 'Wire';
+  payoutDetails?: PartnerPayoutDetails;
+  totalEarnings: number;
+  paidEarnings: number;
+  pendingEarnings: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PartnerReferral {
+  id: string;
+  partnerId: string;
+  partnerName?: string;
+  leadId?: string;
+  clientId?: string;
+  projectId?: string;
+  clientName: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  company?: string;
+  projectType: string;
+  dealValue: number;
+  totalPaid: number;
+  pendingPayment: number;
+  dealStatus: 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'PROPOSAL SENT' | 'WON' | 'IN PROGRESS' | 'COMPLETED' | 'LOST';
+  paymentStatus: 'Pending' | 'Partially Paid' | 'Fully Paid';
+  commissionRate: number;
+  commissionEarned: number;
+  commissionPaid: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PartnerPayout {
+  id: string;
+  partnerId: string;
+  partnerName?: string;
+  amount: number;
+  payoutDate: string;
+  paymentMethod: string;
+  transactionRef?: string;
+  status: 'Pending' | 'Completed' | 'Failed';
+  notes?: string;
+  createdAt: string;
 }
 

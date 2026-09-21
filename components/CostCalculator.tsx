@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { AlertCircle, TrendingDown, ArrowRight, ShieldCheck, Zap, Users } from 'lucide-react';
+import { AlertCircle, TrendingDown, ArrowRight, ShieldCheck, Zap, Users, FileDown, Check } from 'lucide-react';
 
 interface CostCalculatorProps {
   onAuditClick?: (hours: number, monthlyLoss: number) => void;
@@ -36,6 +36,7 @@ const CostCalculator: React.FC<CostCalculatorProps> = ({ onAuditClick }) => {
   const [teamSize, setTeamSize] = useState(3);
   const [hours, setHours] = useState(12);
   const [rate, setRate] = useState(45);
+  const [isDownloaded, setIsDownloaded] = useState(false);
 
   const monthlyLoss = Math.round(teamSize * hours * rate * 4.33);
   const yearlyLoss = monthlyLoss * 12;
@@ -49,6 +50,50 @@ const CostCalculator: React.FC<CostCalculatorProps> = ({ onAuditClick }) => {
     } else {
       window.open('https://wa.me/918698324316', '_blank');
     }
+  };
+
+  const handleDownloadReport = () => {
+    const reportText = `=====================================================
+AGXPERIENCE INC. - FINANCIAL INACTION & PAYROLL LEAK AUDIT
+Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+=====================================================
+
+1. EXECUTIVE DIAGNOSTIC PARAMETERS:
+- Operational Team Size Trapped in Repetitive Admin: ${teamSize} Member(s)
+- Average Lost Hours Per Person / Week: ${hours} hrs/week
+- Total Organizational Capacity Lost: ${teamSize * hours} hours/week
+- Blended Hourly Capital Cost: $${rate}/hr
+
+2. FINANCIAL IMPACT SUMMARY:
+- Estimated Monthly Payroll Waste: $${monthlyLoss.toLocaleString()}/month
+- Annual Inaction Capital Burn: $${yearlyLoss.toLocaleString()}/year
+- Daily Operational Burn Rate: ~$${dailyLoss.toLocaleString()}/day
+
+3. PROJECTED RETURN WITH AGX AUTONOMOUS ENGINES:
+- Estimated Break-Even Payback Period: ~${estimatedPaybackDays} Business Days
+- Net Projected Year-1 Capital Reclaimed: +$${netYearlySavings.toLocaleString()}
+- Turnkey Delivery Velocity: 14 Business Days
+- 30-Day Zero-Risk Efficiency ROI Guarantee: Save 10+ hrs/wk or AGX works 100% free
+
+=====================================================
+Book Your 14-Day Custom Architecture Diagnostic:
+Web: https://agxperience.com
+Direct WhatsApp VIP: +91 86983 24316
+Desk: abhinavagxprience@gmail.com
+=====================================================`;
+
+    const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `AGX_Payroll_Leak_Audit_${monthlyLoss}mo.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setIsDownloaded(true);
+    setTimeout(() => setIsDownloaded(false), 3500);
   };
 
   return (
@@ -196,12 +241,30 @@ const CostCalculator: React.FC<CostCalculatorProps> = ({ onAuditClick }) => {
               <div className="space-y-3">
                 <button
                   onClick={handleAuditAction}
-                  className="group relative w-full inline-flex items-center justify-center gap-2.5 px-6 py-4 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs uppercase tracking-wider transition-all duration-200 active:scale-[0.98] shadow-xl shadow-[#CCFF00]/15 cursor-pointer btn-press"
+                  className="group relative w-full inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs uppercase tracking-wider transition-all duration-200 active:scale-[0.98] shadow-xl shadow-[#CCFF00]/15 cursor-pointer btn-press"
                 >
                   <span>Plug This Leak → Get Free Blueprint</span>
                   <span className="w-5 h-5 rounded-full bg-black/10 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
                     <ArrowRight size={12} className="text-black" />
                   </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadReport}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 text-xs font-mono uppercase tracking-wider transition-all cursor-pointer btn-press"
+                >
+                  {isDownloaded ? (
+                    <>
+                      <Check size={13} className="text-[#CCFF00]" />
+                      <span className="text-[#CCFF00] font-bold">CFO Audit Memo Downloaded!</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileDown size={13} className="text-white/60" />
+                      <span>Download Audit Report (Memo)</span>
+                    </>
+                  )}
                 </button>
                 
                 <div className="flex items-center justify-center gap-1.5 text-white/50 text-[11px] font-mono">

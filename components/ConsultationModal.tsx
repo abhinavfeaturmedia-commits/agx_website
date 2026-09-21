@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Sparkles, Send, CheckCircle2, MessageSquare, Phone, Mail, Building, ArrowRight, Shield, Clock, ArrowLeft, Zap } from 'lucide-react';
+import { X, Sparkles, Send, CheckCircle2, MessageSquare, Phone, Mail, Building, ArrowRight, Shield, Clock, ArrowLeft, Zap, Calendar } from 'lucide-react';
 import { crmService } from '../lib/crmService';
 import { toast } from '../lib/toastStore';
 
@@ -74,6 +74,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setIsSubmitting(true);
 
     try {
+      // Check for partner referral code in session or localStorage
+      const partnerRef = (typeof window !== 'undefined' 
+        ? (sessionStorage.getItem('agx_partner_ref') || localStorage.getItem('agx_partner_ref')) 
+        : '') || '';
+
       // 1. Create Lead in CRM Supabase Database
       await crmService.createLead({
         name: name.trim(),
@@ -85,17 +90,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         interestedService: selectedBottleneck,
         estimatedDealValue: selectedLeak.includes('40+') ? 350000 : 150000,
         probability: 70,
-        source: 'Website Diagnostic',
-        assignedTo: 'Taylor Vance',
+        source: partnerRef ? `Partner Referral (${partnerRef})` : 'Website Diagnostic',
+        partnerCode: partnerRef || undefined,
+        assignedTo: 'Abhinav (Super Admin)',
         priority: 'High',
         status: 'NEW',
-        notes: `Operational Bottleneck: ${selectedBottleneck}\nWeekly Time Loss: ${selectedLeak}\nClient Notes: ${notes || 'Requested custom 14-day automation blueprint.'}`
+        notes: `Operational Bottleneck: ${selectedBottleneck}\nWeekly Time Loss: ${selectedLeak}\n${partnerRef ? `Referred By Partner Code: ${partnerRef}\n` : ''}Client Notes: ${notes || 'Requested custom 14-day automation blueprint.'}`
       });
 
       // 2. Trigger Real-time Staff Alert in CRM Notifications
       await crmService.createNotification({
         title: 'New High-Intent Diagnostic Lead ⚡',
-        message: `${name.trim()} (${company.trim() || 'Direct'}) requested blueprint for ${selectedBottleneck} (${selectedLeak}).`,
+        message: `${name.trim()} (${company.trim() || 'Direct'}) requested blueprint for ${selectedBottleneck} (${selectedLeak}).${partnerRef ? ` [Ref: ${partnerRef}]` : ''}`,
         type: 'urgent'
       });
 
@@ -187,21 +193,30 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
                 <a
-                  href="https://wa.me/918698324316"
+                  href={`https://calendly.com/abhinavagxprience/agx-automation-diagnostic?name=${encodeURIComponent(name.trim())}&email=${encodeURIComponent(email.trim())}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer"
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer btn-press"
+                >
+                  <Calendar size={14} />
+                  <span>Schedule Strategy Call (20 min)</span>
+                </a>
+                <a
+                  href={`https://wa.me/918698324316?text=${encodeURIComponent(`Hi AGX, I just submitted the 14-Day Diagnostic Blueprint for ${selectedBottleneck} (${selectedLeak}). My name is ${name.trim()} from ${company.trim() || 'our team'}.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer btn-press"
                 >
                   <Phone size={14} />
-                  <span>Chat Instantly on WhatsApp VIP</span>
+                  <span>WhatsApp VIP Line</span>
                 </a>
                 <button
                   onClick={handleReset}
-                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white font-bold text-xs transition-colors cursor-pointer"
                 >
-                  Close Window
+                  Close
                 </button>
               </div>
             </div>

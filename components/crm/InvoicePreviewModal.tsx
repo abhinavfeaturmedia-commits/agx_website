@@ -24,6 +24,10 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ invoic
   const sgstAmount = isGst && gstType === 'CGST_SGST' ? Math.round((invoice.tax || 0) / 2) : (invoice.sgst || 0);
   const igstAmount = isGst && gstType === 'IGST' ? (invoice.tax || 0) : (invoice.igst || 0);
 
+  const balanceDue = Math.max(0, (invoice.total || 0) - (invoice.paidAmount || 0));
+  const upiIntentUri = `upi://pay?pa=agxperience@hdfcbank&pn=AGXperience&am=${balanceDue}&cu=INR&tn=Invoice-${invoice.invoiceNumber}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=0&data=${encodeURIComponent(upiIntentUri)}`;
+
   const handlePrint = () => {
     if (!printAreaRef.current) return;
     const content = printAreaRef.current.innerHTML;
@@ -231,15 +235,50 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ invoic
             </div>
           </div>
 
-          {/* Banking & Remittance Instructions */}
-          <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 text-[11px] space-y-1 mb-4">
-            <span className="font-extrabold uppercase text-gray-900 block text-xs mb-1">Electronic Remittance Instructions:</span>
-            <div className="grid grid-cols-2 gap-2 text-gray-600">
-              <div><strong>Account Name:</strong> AGXperience Technologies Pvt Ltd</div>
-              <div><strong>Bank:</strong> HDFC Bank Ltd, Indiranagar</div>
-              <div><strong>Account Number:</strong> 50200088921829</div>
-              <div><strong>IFSC Code:</strong> HDFC0001234</div>
+          {/* Banking & Remittance Instructions with Dynamic UPI QR Code */}
+          <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 text-[11px] mb-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="space-y-1.5 flex-1">
+              <span className="font-extrabold uppercase text-gray-900 block text-xs mb-1">Electronic Remittance Instructions:</span>
+              <div className="grid grid-cols-2 gap-2 text-gray-600">
+                <div><strong>Account Name:</strong> AGXperience Technologies Pvt Ltd</div>
+                <div><strong>Bank:</strong> HDFC Bank Ltd, Indiranagar</div>
+                <div><strong>Account Number:</strong> 50200088921829</div>
+                <div><strong>IFSC Code:</strong> HDFC0001234</div>
+                <div><strong>UPI VPA:</strong> agxperience@hdfcbank</div>
+                <div><strong>Card Settlement:</strong> Stripe Verified</div>
+              </div>
+              {balanceDue > 0 && (
+                <div className="pt-2 flex flex-wrap items-center gap-2">
+                  <a
+                    href={upiIntentUri}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors"
+                  >
+                    <span>Instant Pay via UPI</span>
+                  </a>
+                  <a
+                    href={`https://buy.stripe.com/test_inbound?client_reference_id=${encodeURIComponent(invoice.invoiceNumber)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black hover:bg-gray-800 text-[#CCFF00] font-bold text-[11px] transition-colors"
+                  >
+                    <span>Pay via Card (Stripe)</span>
+                  </a>
+                </div>
+              )}
             </div>
+
+            {balanceDue > 0 && (
+              <div className="flex flex-col items-center justify-center p-2.5 bg-white rounded-xl border border-gray-200 shadow-xs shrink-0 text-center">
+                <img
+                  src={qrCodeUrl}
+                  alt="UPI QR Code"
+                  className="w-20 h-20 object-contain rounded"
+                  loading="lazy"
+                />
+                <span className="text-[9px] font-bold text-gray-700 mt-1 uppercase tracking-wider">Scan & Pay via UPI</span>
+                <span className="text-[8px] font-mono text-gray-400">GPay • PhonePe • Paytm</span>
+              </div>
+            )}
           </div>
 
           {/* Footer Note */}

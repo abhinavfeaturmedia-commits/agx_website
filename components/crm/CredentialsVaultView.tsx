@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Key, Shield, Plus, Search, Eye, EyeOff, Copy, Check, Lock,
+  Key, Shield, Plus, Search, Eye, EyeOff, Copy, Check, Lock, Unlock,
   AlertTriangle, ExternalLink, X, Sparkles, Edit3, Trash2, Download,
   Layers, Users, Briefcase, Clock, FileText, CheckCircle2, ArrowRight
 } from 'lucide-react';
@@ -49,6 +49,17 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
   const [showAddApiKey, setShowAddApiKey] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [showEditApiKey, setShowEditApiKey] = useState(false);
+
+  // Master PIN Challenge & Session Authorization (5 minutes validity)
+  const [vaultUnlockedUntil, setVaultUnlockedUntil] = useState<number>(0);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinCode, setPinCode] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pendingAction, setPendingAction] = useState<
+    | { type: 'reveal'; id: string }
+    | { type: 'copy'; text: string; id: string; label: string }
+    | null
+  >(null);
 
   // Edit & Delete states
   const [editingCred, setEditingCred] = useState<CredentialVaultItem | null>(null);
@@ -164,7 +175,11 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
     );
   }
 
-  const toggleReveal = async (id: string) => {
+  const isVaultAuthorized = () => {
+    return vaultUnlockedUntil > Date.now();
+  };
+
+  const executeReveal = async (id: string) => {
     const isCurrentlyRevealed = revealedIds[id];
     if (isCurrentlyRevealed) {
       setRevealedIds(prev => ({ ...prev, [id]: false }));
@@ -187,13 +202,71 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
     }
   };
 
-  const handleCopy = async (text: string, id: string, label: string) => {
+  const executeCopy = async (text: string, id: string, label: string) => {
     const plain = cryptoService.isEncrypted(text) ? await cryptoService.decrypt(text) : text;
     navigator.clipboard.writeText(plain);
     setCopiedId(id);
     revealCredentialSecret(id.split('-')[0]);
     toast.success('Copied to Clipboard', `${label} decrypted & copied.`);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const toggleReveal = async (id: string) => {
+    // Hiding secret doesn't require PIN challenge
+    if (revealedIds[id]) {
+      executeReveal(id);
+      return;
+    }
+    if (!isVaultAuthorized()) {
+      setPendingAction({ type: 'reveal', id });
+      setPinCode('');
+      setPinError('');
+      setShowPinModal(true);
+      return;
+    }
+    executeReveal(id);
+  };
+
+  const handleCopy = async (text: string, id: string, label: string) => {
+    if (!isVaultAuthorized()) {
+      setPendingAction({ type: 'copy', text, id, label });
+      setPinCode('');
+      setPinError('');
+      setShowPinModal(true);
+      return;
+    }
+    executeCopy(text, id, label);
+  };
+
+  const handleVerifyPin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    // Agency Master PINs: 9924 or 0000
+    if (pinCode.trim() === '9924' || pinCode.trim() === '0000') {
+      const unlockExpires = Date.now() + 5 * 60 * 1000; // 5 mins
+      setVaultUnlockedUntil(unlockExpires);
+      setShowPinModal(false);
+      setPinError('');
+      toast.success('Vault Session Authorized', 'Master access granted for 5 minutes. Decryption active.');
+
+      if (pendingAction) {
+        if (pendingAction.type === 'reveal') {
+          executeReveal(pendingAction.id);
+        } else if (pendingAction.type === 'copy') {
+          executeCopy(pendingAction.text, pendingAction.id, pendingAction.label);
+        }
+        setPendingAction(null);
+      }
+    } else {
+      setPinError('Invalid Master PIN. Default: 9924');
+    }
+  };
+
+  const handleLockVaultNow = () => {
+    setVaultUnlockedUntil(0);
+    setRevealedIds({});
+    setRevealTimers({});
+    setDecryptedValues({});
+    toast.info('Vault Locked', 'Master session cleared. All secrets masked.');
   };
 
   const handleCreateCredential = async (e: React.FormEvent) => {
@@ -271,6 +344,30 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {isVaultAuthorized() ? (
+            <button
+              onClick={handleLockVaultNow}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 font-bold text-xs shadow-2xs transition-colors cursor-pointer"
+              title="Click to immediately lock the vault and hide all secrets"
+            >
+              <Unlock size={14} className="text-emerald-600" />
+              <span>Vault Unlocked (Lock Now)</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setPendingAction(null);
+                setPinCode('');
+                setPinError('');
+                setShowPinModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gray-100 border border-gray-200 text-gray-700 hover:bg-gray-200 font-bold text-xs shadow-2xs transition-colors cursor-pointer"
+            >
+              <Lock size={14} className="text-gray-500" />
+              <span>Unlock Master Vault</span>
+            </button>
+          )}
+
           <button
             onClick={handleExportCsv}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold text-xs shadow-2xs transition-colors cursor-pointer"
@@ -1042,6 +1139,66 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
               <button onClick={() => setCredToDelete(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 font-bold text-xs text-gray-600 hover:bg-gray-50 cursor-pointer">Cancel</button>
               <button onClick={handleConfirmDelete} className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md cursor-pointer">Delete Secret</button>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Master PIN Challenge Modal */}
+      {showPinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-gray-100 text-center"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center mx-auto mb-3">
+              <Shield size={24} />
+            </div>
+            <h3 className="font-extrabold text-base text-gray-900 mb-1">Master Vault Security PIN</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Enter the 4-digit agency master PIN to decrypt production client secrets. Authorized sessions remain valid for 5 minutes.
+            </p>
+
+            <form onSubmit={handleVerifyPin} className="space-y-4">
+              <div>
+                <input
+                  type="password"
+                  maxLength={6}
+                  autoFocus
+                  value={pinCode}
+                  onChange={(e) => {
+                    setPinCode(e.target.value);
+                    if (pinError) setPinError('');
+                  }}
+                  placeholder="••••"
+                  className="w-36 mx-auto text-center tracking-[0.4em] font-mono text-xl py-2.5 px-4 bg-gray-50 border border-gray-300 rounded-xl outline-none focus:border-black focus:ring-2 focus:ring-black/5"
+                />
+                {pinError ? (
+                  <p className="text-[11px] text-rose-500 font-bold mt-2">{pinError}</p>
+                ) : (
+                  <p className="text-[10px] text-gray-400 mt-2 font-mono">Master PIN: 9924</p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPinModal(false);
+                    setPendingAction(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 font-bold text-xs text-gray-600 hover:bg-gray-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-black hover:bg-gray-800 text-[#CCFF00] font-extrabold text-xs shadow-md transition-colors cursor-pointer"
+                >
+                  Authorize
+                </button>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}

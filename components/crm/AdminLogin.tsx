@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Lock, Mail, Eye, EyeOff, Shield, ArrowLeft, Sparkles, KeyRound, ArrowRight, CheckCircle2, ShieldCheck
+  Lock, Mail, Eye, EyeOff, Shield, ArrowLeft, Sparkles, KeyRound, ArrowRight, CheckCircle2, ShieldCheck, Handshake
 } from 'lucide-react';
 import { UserRole, UserProfile } from '../../types/crm';
 import { authService } from '../../lib/authService';
@@ -11,9 +11,15 @@ interface AdminLoginProps {
   onLoginSuccess: (role: UserRole, profile?: UserProfile) => void;
   onBackToWebsite: () => void;
   onNavigateToPortal?: (token?: string) => void;
+  onNavigateToPartnerPortal?: () => void;
 }
 
-export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackToWebsite, onNavigateToPortal }) => {
+export const AdminLogin: React.FC<AdminLoginProps> = ({ 
+  onLoginSuccess, 
+  onBackToWebsite, 
+  onNavigateToPortal,
+  onNavigateToPartnerPortal
+}) => {
   const [activeTab, setActiveTab] = useState<'staff' | 'client'>('staff');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,22 +69,15 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
     }
   };
 
-  const handleDemoPortalAccess = () => {
-    if (onNavigateToPortal) {
-      onNavigateToPortal('omnilog-demo');
-    } else {
-      window.location.href = '/portal?token=omnilog-demo';
-    }
-  };
 
   return (
-    <div className="crm-theme min-h-screen w-full bg-[#07090E] text-white flex flex-col justify-between relative overflow-hidden antialiased">
+    <div className="min-h-screen w-full bg-[#07090E] text-white flex flex-col justify-between relative overflow-y-auto antialiased">
       {/* Background Decorative Gradients */}
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#CCFF00]/10 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[160px] pointer-events-none" />
 
       {/* Top Bar */}
-      <div className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-10">
+      <div className="w-full max-w-7xl mx-auto px-6 py-5 flex-shrink-0 flex items-center justify-between z-10">
         <button
           onClick={onBackToWebsite}
           className="flex items-center gap-2 text-xs font-semibold text-white/60 hover:text-white transition-colors px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer btn-press"
@@ -97,15 +96,15 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
       </div>
 
       {/* Main Login Card with Double-Bezel */}
-      <div className="w-full max-w-md mx-auto px-6 py-8 z-10">
+      <div className="w-full max-w-md mx-auto px-6 py-4 sm:py-6 my-auto z-10 flex-shrink-0">
         <motion.div
           key={shakeTrigger}
           initial={shakeTrigger > 0 ? { x: [-10, 10, -7, 7, -3, 3, 0] } : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0, x: 0 }}
           transition={{ duration: shakeTrigger > 0 ? 0.35 : 0.5, ease: 'easeInOut' }}
-          className="double-bezel-outer shadow-2xl"
+          className="double-bezel-outer shadow-2xl !bg-white/[0.03] !border-white/10"
         >
-          <div className="double-bezel-inner p-8 bg-[#0D1017]">
+          <div className="double-bezel-inner p-6 sm:p-8 !bg-[#0D1017] border border-white/10">
             {/* Bifurcated Mode Switcher */}
             <div className="grid grid-cols-2 p-1 rounded-2xl bg-white/5 border border-white/10 mb-6">
               <button
@@ -197,7 +196,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="rounded border-white/20 bg-black/40 text-[#CCFF00] focus:ring-[#CCFF00]"
+                        className="rounded border-white/20 bg-black/40 text-[#CCFF00] accent-[#CCFF00] focus:ring-[#CCFF00] cursor-pointer"
                       />
                       <span>Remember session</span>
                     </label>
@@ -227,65 +226,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
                     )}
                   </button>
                 </form>
-
-                {/* 1-Click Role Switcher */}
-                <div className="mt-6 pt-5 border-t border-white/10">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[10px] font-mono text-white/50 uppercase tracking-widest flex items-center gap-1">
-                      <span className="text-[#CCFF00]">⚡</span> 1-Click Role Simulator
-                    </span>
-                    <span className="text-[10px] text-white/30 font-mono">Demo Mode</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {[
-                      { role: 'Super Admin' as UserRole, name: 'Abhinav', email: 'abhinav@agxperience.com', colSpan: 'col-span-2' },
-                      { role: 'Sales Manager' as UserRole, name: 'Taylor', email: 'taylor@agxperience.com', colSpan: 'col-span-1' },
-                      { role: 'Project Manager' as UserRole, name: 'Michael', email: 'michael@agxperience.com', colSpan: 'col-span-1' },
-                      { role: 'Developer' as UserRole, name: 'Natalia', email: 'natalia@agxperience.com', colSpan: 'col-span-1' },
-                      { role: 'Accountant' as UserRole, name: 'Robert', email: 'robert@agxperience.com', colSpan: 'col-span-1' }
-                    ].map((acc) => (
-                      <button
-                        key={acc.role}
-                        type="button"
-                        disabled={isLoading}
-                        onClick={async () => {
-                          setEmail(acc.email);
-                          setPassword('admin123');
-                          setIsLoading(true);
-                          setErrorMessage('');
-                          const { profile } = await authService.signIn(acc.email, 'admin123');
-                          if (profile) {
-                            toast.success('Access Granted', `Signed in as ${acc.name} (${acc.role})`);
-                            onLoginSuccess(acc.role, profile);
-                          } else {
-                            const fallbackProfile: UserProfile = {
-                              id: `demo-${acc.role.toLowerCase().replace(/\s+/g, '-')}`,
-                              email: acc.email,
-                              fullName: `${acc.name} (${acc.role})`,
-                              role: acc.role,
-                              department: acc.role === 'Super Admin' ? 'Leadership' : acc.role === 'Developer' ? 'Engineering' : 'Operations',
-                              avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(acc.name)}`
-                            };
-                            toast.success('Access Granted', `Signed in as ${acc.name} (${acc.role})`);
-                            onLoginSuccess(acc.role, fallbackProfile);
-                          }
-                          setIsLoading(false);
-                        }}
-                        className={`${acc.colSpan} p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-[#CCFF00]/30 text-left transition-all cursor-pointer group`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-white group-hover:text-[#CCFF00] transition-colors">
-                            {acc.role}
-                          </span>
-                          <span className="text-[9px] text-white/40 font-mono">
-                            {acc.name}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </>
             )}
 
@@ -315,7 +255,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
                         type="text"
                         value={clientToken}
                         onChange={(e) => setClientToken(e.target.value)}
-                        placeholder="e.g., omnilog-demo or prj_8x92"
+                        placeholder="e.g., prj_sec_a8bcd5 or enter your access token"
                         className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[#CCFF00] transition-all font-mono"
                       />
                     </div>
@@ -330,24 +270,23 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
                   </button>
                 </form>
 
-                {/* Instant Demo Sandbox Button */}
-                <div className="pt-4 border-t border-white/10 text-center space-y-2">
-                  <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest block">
-                    No token? Explore client experience
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleDemoPortalAccess}
-                    className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Sparkles size={13} className="text-[#CCFF00]" />
-                    <span>Launch Demo Project Sandbox (Omnilog Freight)</span>
-                  </button>
+                <div className="pt-4 border-t border-white/10 text-center text-[11px] text-white/50">
+                  Confidential client portal. Lost or need access? Contact your AGX Project Manager or email ops@agxperience.com
                 </div>
+              </div>
+            )}
 
-                <div className="text-center text-[10px] text-white/40 pt-1">
-                  Need access? Reach your Project Manager or email ops@agxperience.com
-                </div>
+            {onNavigateToPartnerPortal && (
+              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-white/50">
+                <span>AGX Referral Partner?</span>
+                <button
+                  type="button"
+                  onClick={onNavigateToPartnerPortal}
+                  className="text-emerald-400 hover:text-emerald-300 font-bold font-mono cursor-pointer flex items-center gap-1 transition-colors"
+                >
+                  <Handshake size={12} />
+                  <span>Partner Portal →</span>
+                </button>
               </div>
             )}
 
@@ -361,7 +300,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
       </div>
 
       {/* Footer */}
-      <div className="w-full text-center py-6 text-[11px] text-white/30 font-mono">
+      <div className="w-full text-center py-5 flex-shrink-0 text-[11px] text-white/30 font-mono">
         © {new Date().getFullYear()} AGXPERIENCE INC. • ENTERPRISE BUSINESS OS
       </div>
     </div>

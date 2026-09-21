@@ -2,7 +2,15 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Handshake, ArrowRight, Users, TrendingUp, DollarSign } from 'lucide-react';
 
-const PartnerProgram: React.FC = () => {
+interface PartnerProgramProps {
+  onBecomePartnerClick?: () => void;
+  onPartnerLoginClick?: () => void;
+}
+
+const PartnerProgram: React.FC<PartnerProgramProps> = ({
+  onBecomePartnerClick,
+  onPartnerLoginClick
+}) => {
   const [referrals, setReferrals] = useState(2);
   const [projectSize, setProjectSize] = useState(8000);
   const [commissionRate, setCommissionRate] = useState(0.10);
@@ -82,16 +90,35 @@ const PartnerProgram: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-6">
-              <a 
-                href="https://wa.me/918698324316?text=I'm%20interested%20in%20the%20AGX%20Partner%20Program" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="liquid-glass inline-flex items-center gap-3 px-8 py-4 rounded-xl text-sm font-bold uppercase tracking-widest text-white transition-all hover:scale-[1.02] active:scale-95 group"
-              >
-                <span>Become a Partner</span>
-                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-              </a>
+            <div className="pt-6 flex flex-wrap items-center gap-4">
+              {onBecomePartnerClick ? (
+                <button 
+                  onClick={onBecomePartnerClick}
+                  className="liquid-glass inline-flex items-center gap-3 px-8 py-4 rounded-xl text-sm font-bold uppercase tracking-widest text-white transition-all hover:scale-[1.02] active:scale-95 group cursor-pointer"
+                >
+                  <span>Become a Partner</span>
+                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              ) : (
+                <a 
+                  href="https://wa.me/918698324316?text=I'm%20interested%20in%20the%20AGX%20Partner%20Program" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="liquid-glass inline-flex items-center gap-3 px-8 py-4 rounded-xl text-sm font-bold uppercase tracking-widest text-white transition-all hover:scale-[1.02] active:scale-95 group"
+                >
+                  <span>Become a Partner</span>
+                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                </a>
+              )}
+
+              {onPartnerLoginClick && (
+                <button
+                  onClick={onPartnerLoginClick}
+                  className="px-6 py-4 rounded-xl text-xs font-bold font-mono uppercase tracking-wider text-white/70 hover:text-white border border-white/10 hover:border-white/20 transition-all cursor-pointer"
+                >
+                  Partner Sign In →
+                </button>
+              )}
             </div>
           </motion.div>
 

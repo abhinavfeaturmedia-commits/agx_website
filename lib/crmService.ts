@@ -5,7 +5,8 @@ import {
   Task, TaskStatus, Invoice, InvoiceItem, Payment, Expense, Agreement, DocumentItem,
   CredentialVaultItem, CalendarEvent, NotificationItem, AuditLog, Priority,
   UserProfile, UserRole, ExpenseCategory, AgreementStatus, InvoiceStatus,
-  ProjectIssue, IssueStatus, IssueType, IssuePriority
+  ProjectIssue, IssueStatus, IssueType, IssuePriority,
+  Partner, PartnerReferral, PartnerPayout
 } from '../types/crm';
 
 // --- Database Row Types ---
@@ -299,6 +300,62 @@ export interface DbAuditLog {
   created_at: string;
 }
 
+export interface DbPartner {
+  id: string;
+  user_id: string | null;
+  name: string;
+  email: string;
+  company: string | null;
+  phone: string | null;
+  referral_code: string;
+  commission_rate: number;
+  status: string;
+  payout_method: string;
+  payout_details: any;
+  total_earnings: number;
+  paid_earnings: number;
+  pending_earnings: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbPartnerReferral {
+  id: string;
+  partner_id: string;
+  lead_id: string | null;
+  client_id: string | null;
+  project_id: string | null;
+  client_name: string;
+  client_email: string | null;
+  client_phone: string | null;
+  company: string | null;
+  project_type: string;
+  deal_value: number;
+  total_paid: number;
+  pending_payment: number;
+  deal_status: string;
+  payment_status: string;
+  commission_rate: number;
+  commission_earned: number;
+  commission_paid: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbPartnerPayout {
+  id: string;
+  partner_id: string;
+  amount: number;
+  payout_date: string;
+  payment_method: string;
+  transaction_ref: string | null;
+  status: string;
+  notes: string | null;
+  created_at: string;
+}
+
 // Helper to sanitize date-only strings coming back with midnight UTC timestamps from Postgres
 function sanitizeDateString(val?: string | null): string | undefined {
   if (!val) return undefined;
@@ -340,6 +397,9 @@ export function mapLeadFromDb(row: DbLead, activities: LeadActivity[] = []): Lea
     lastContacted: sanitizeDateString(row.last_contacted),
     notes: row.notes || undefined,
     lossReason: row.loss_reason || undefined,
+    partnerId: (row as any).partner_id || undefined,
+    partnerName: (row as any).partner_name || undefined,
+    partnerCode: (row as any).partner_code || undefined,
     convertedClientId: row.converted_client_id || undefined,
     convertedProjectId: row.converted_project_id || undefined,
     activities: activities.filter(a => a.leadId === row.id),
@@ -360,6 +420,9 @@ export function mapClientFromDb(row: DbClient): Client {
     industry: row.industry || undefined,
     gstTaxId: row.gst_tax_id || undefined,
     accountManager: row.account_manager || '',
+    partnerId: (row as any).partner_id || undefined,
+    partnerName: (row as any).partner_name || undefined,
+    partnerCode: (row as any).partner_code || undefined,
     totalValue: Number(row.total_value) || 0,
     totalPaid: Number(row.total_paid) || 0,
     outstandingAmount: Number(row.outstanding_amount) || 0,
@@ -677,6 +740,72 @@ export function mapAuditLogFromDb(row: DbAuditLog): AuditLog {
     description: row.description,
     beforeState: row.before_state,
     afterState: row.after_state,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapPartnerFromDb(row: DbPartner): Partner {
+  return {
+    id: row.id,
+    userId: row.user_id || undefined,
+    name: row.name,
+    email: row.email,
+    company: row.company || undefined,
+    phone: row.phone || undefined,
+    referralCode: row.referral_code,
+    commissionRate: Number(row.commission_rate) || 0.10,
+    status: (row.status as any) || 'Active',
+    payoutMethod: (row.payout_method as any) || 'UPI',
+    payoutDetails: row.payout_details || {},
+    totalEarnings: Number(row.total_earnings) || 0,
+    paidEarnings: Number(row.paid_earnings) || 0,
+    pendingEarnings: Number(row.pending_earnings) || 0,
+    notes: row.notes || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+export function mapPartnerReferralFromDb(row: DbPartnerReferral, partners: Partner[] = []): PartnerReferral {
+  const partner = partners.find(p => p.id === row.partner_id);
+  return {
+    id: row.id,
+    partnerId: row.partner_id,
+    partnerName: partner?.name,
+    leadId: row.lead_id || undefined,
+    clientId: row.client_id || undefined,
+    projectId: row.project_id || undefined,
+    clientName: row.client_name,
+    clientEmail: row.client_email || undefined,
+    clientPhone: row.client_phone || undefined,
+    company: row.company || undefined,
+    projectType: row.project_type || 'AI Automation',
+    dealValue: Number(row.deal_value) || 0,
+    totalPaid: Number(row.total_paid) || 0,
+    pendingPayment: Number(row.pending_payment) || 0,
+    dealStatus: (row.deal_status as any) || 'NEW',
+    paymentStatus: (row.payment_status as any) || 'Pending',
+    commissionRate: Number(row.commission_rate) || 0.10,
+    commissionEarned: Number(row.commission_earned) || 0,
+    commissionPaid: Number(row.commission_paid) || 0,
+    notes: row.notes || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+export function mapPartnerPayoutFromDb(row: DbPartnerPayout, partners: Partner[] = []): PartnerPayout {
+  const partner = partners.find(p => p.id === row.partner_id);
+  return {
+    id: row.id,
+    partnerId: row.partner_id,
+    partnerName: partner?.name,
+    amount: Number(row.amount) || 0,
+    payoutDate: sanitizeDateString(row.payout_date) || '',
+    paymentMethod: row.payment_method || 'UPI',
+    transactionRef: row.transaction_ref || undefined,
+    status: (row.status as any) || 'Completed',
+    notes: row.notes || undefined,
     createdAt: row.created_at
   };
 }
@@ -736,7 +865,10 @@ export const crmService = {
       credentialsRes,
       eventsRes,
       notificationsRes,
-      auditLogsRes
+      auditLogsRes,
+      partnersRes,
+      referralsRes,
+      payoutsRes
     ] = await Promise.all([
       supabase.from('profiles').select('*').order('created_at', { ascending: true }),
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
@@ -753,7 +885,10 @@ export const crmService = {
       supabase.from('credentials_vault').select('*').order('created_at', { ascending: false }),
       supabase.from('calendar_events').select('*').order('start_time', { ascending: true }),
       supabase.from('notifications').select('*').order('created_at', { ascending: false }),
-      supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100)
+      supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100),
+      supabase.from('partners').select('*').order('created_at', { ascending: false }),
+      supabase.from('partner_referrals').select('*').order('created_at', { ascending: false }),
+      supabase.from('partner_payouts').select('*').order('created_at', { ascending: false })
     ]);
 
     // Verify whether critical entity queries failed (e.g. paused DB, network offline, missing tables)
@@ -786,6 +921,9 @@ export const crmService = {
     const events = (eventsRes.data || []).map(e => mapCalendarEventFromDb(e, leads));
     const notifications = (notificationsRes.data || []).map(mapNotificationFromDb);
     const auditLogs = (auditLogsRes.data || []).map(mapAuditLogFromDb);
+    const partners = ((partnersRes as any)?.data || []).map(mapPartnerFromDb);
+    const partnerReferrals = ((referralsRes as any)?.data || []).map((r: any) => mapPartnerReferralFromDb(r, partners));
+    const partnerPayouts = ((payoutsRes as any)?.data || []).map((p: any) => mapPartnerPayoutFromDb(p, partners));
 
     return {
       profiles: (profilesRes.data || []).map(mapProfileFromDb),
@@ -802,7 +940,10 @@ export const crmService = {
       credentials,
       events,
       notifications,
-      auditLogs
+      auditLogs,
+      partners,
+      partnerReferrals,
+      partnerPayouts
     };
   },
 
@@ -1741,6 +1882,165 @@ export const crmService = {
   async deleteIssue(id: string): Promise<void> {
     const { error } = await supabase.from('project_issues').delete().eq('id', id);
     if (error) throw error;
+  },
+
+  // --- Partners CRUD ---
+  async fetchPartners(): Promise<Partner[]> {
+    try {
+      const { data, error } = await supabase.from('partners').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(mapPartnerFromDb);
+    } catch (err) {
+      console.warn('fetchPartners error / offline fallback:', err);
+      return [];
+    }
+  },
+
+  async createPartner(partner: Omit<Partner, 'id' | 'createdAt' | 'updatedAt'>): Promise<Partner> {
+    const { data, error } = await supabase.from('partners').insert([{
+      user_id: partner.userId || null,
+      name: partner.name,
+      email: partner.email,
+      company: partner.company || null,
+      phone: partner.phone || null,
+      referral_code: partner.referralCode,
+      commission_rate: partner.commissionRate || 0.10,
+      status: partner.status || 'Active',
+      payout_method: partner.payoutMethod || 'UPI',
+      payout_details: partner.payoutDetails || {},
+      total_earnings: partner.totalEarnings || 0,
+      paid_earnings: partner.paidEarnings || 0,
+      pending_earnings: partner.pendingEarnings || 0,
+      notes: partner.notes || null
+    }]).select().single();
+
+    if (error) throw error;
+    return mapPartnerFromDb(data);
+  },
+
+  async updatePartner(id: string, updates: Partial<Partner>): Promise<void> {
+    const payload: any = { updated_at: new Date().toISOString() };
+    if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.email !== undefined) payload.email = updates.email;
+    if (updates.company !== undefined) payload.company = updates.company;
+    if (updates.phone !== undefined) payload.phone = updates.phone;
+    if (updates.commissionRate !== undefined) payload.commission_rate = updates.commissionRate;
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.payoutMethod !== undefined) payload.payout_method = updates.payoutMethod;
+    if (updates.payoutDetails !== undefined) payload.payout_details = updates.payoutDetails;
+    if (updates.totalEarnings !== undefined) payload.total_earnings = updates.totalEarnings;
+    if (updates.paidEarnings !== undefined) payload.paid_earnings = updates.paidEarnings;
+    if (updates.pendingEarnings !== undefined) payload.pending_earnings = updates.pendingEarnings;
+    if (updates.notes !== undefined) payload.notes = updates.notes;
+
+    const { error } = await supabase.from('partners').update(payload).eq('id', id);
+    if (error) throw error;
+  },
+
+  async deletePartner(id: string): Promise<void> {
+    const { error } = await supabase.from('partners').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  // --- Partner Referrals CRUD ---
+  async fetchPartnerReferrals(partnerId?: string): Promise<PartnerReferral[]> {
+    try {
+      let query = supabase.from('partner_referrals').select('*').order('created_at', { ascending: false });
+      if (partnerId) {
+        query = query.eq('partner_id', partnerId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).map(r => mapPartnerReferralFromDb(r));
+    } catch (err) {
+      console.warn('fetchPartnerReferrals error / offline fallback:', err);
+      return [];
+    }
+  },
+
+  async createPartnerReferral(referral: Omit<PartnerReferral, 'id' | 'createdAt' | 'updatedAt'>): Promise<PartnerReferral> {
+    const { data, error } = await supabase.from('partner_referrals').insert([{
+      partner_id: referral.partnerId,
+      lead_id: referral.leadId || null,
+      client_id: referral.clientId || null,
+      project_id: referral.projectId || null,
+      client_name: referral.clientName,
+      client_email: referral.clientEmail || null,
+      client_phone: referral.clientPhone || null,
+      company: referral.company || null,
+      project_type: referral.projectType || 'AI Automation',
+      deal_value: referral.dealValue || 0,
+      total_paid: referral.totalPaid || 0,
+      pending_payment: referral.pendingPayment || 0,
+      deal_status: referral.dealStatus || 'NEW',
+      payment_status: referral.paymentStatus || 'Pending',
+      commission_rate: referral.commissionRate || 0.10,
+      commission_earned: referral.commissionEarned || 0,
+      commission_paid: referral.commissionPaid || 0,
+      notes: referral.notes || null
+    }]).select().single();
+
+    if (error) throw error;
+    return mapPartnerReferralFromDb(data);
+  },
+
+  async updatePartnerReferral(id: string, updates: Partial<PartnerReferral>): Promise<void> {
+    const payload: any = { updated_at: new Date().toISOString() };
+    if (updates.leadId !== undefined) payload.lead_id = updates.leadId;
+    if (updates.clientId !== undefined) payload.client_id = updates.clientId;
+    if (updates.projectId !== undefined) payload.project_id = updates.projectId;
+    if (updates.clientName !== undefined) payload.client_name = updates.clientName;
+    if (updates.clientEmail !== undefined) payload.client_email = updates.clientEmail;
+    if (updates.clientPhone !== undefined) payload.client_phone = updates.clientPhone;
+    if (updates.company !== undefined) payload.company = updates.company;
+    if (updates.dealValue !== undefined) payload.deal_value = updates.dealValue;
+    if (updates.totalPaid !== undefined) payload.total_paid = updates.totalPaid;
+    if (updates.pendingPayment !== undefined) payload.pending_payment = updates.pendingPayment;
+    if (updates.dealStatus !== undefined) payload.deal_status = updates.dealStatus;
+    if (updates.paymentStatus !== undefined) payload.payment_status = updates.paymentStatus;
+    if (updates.commissionRate !== undefined) payload.commission_rate = updates.commissionRate;
+    if (updates.commissionEarned !== undefined) payload.commission_earned = updates.commissionEarned;
+    if (updates.commissionPaid !== undefined) payload.commission_paid = updates.commissionPaid;
+    if (updates.notes !== undefined) payload.notes = updates.notes;
+
+    const { error } = await supabase.from('partner_referrals').update(payload).eq('id', id);
+    if (error) throw error;
+  },
+
+  async deletePartnerReferral(id: string): Promise<void> {
+    const { error } = await supabase.from('partner_referrals').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  // --- Partner Payouts CRUD ---
+  async fetchPartnerPayouts(partnerId?: string): Promise<PartnerPayout[]> {
+    try {
+      let query = supabase.from('partner_payouts').select('*').order('created_at', { ascending: false });
+      if (partnerId) {
+        query = query.eq('partner_id', partnerId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).map(p => mapPartnerPayoutFromDb(p));
+    } catch (err) {
+      console.warn('fetchPartnerPayouts error / offline fallback:', err);
+      return [];
+    }
+  },
+
+  async createPartnerPayout(payout: Omit<PartnerPayout, 'id' | 'createdAt'>): Promise<PartnerPayout> {
+    const { data, error } = await supabase.from('partner_payouts').insert([{
+      partner_id: payout.partnerId,
+      amount: payout.amount,
+      payout_date: payout.payoutDate,
+      payment_method: payout.paymentMethod || 'UPI',
+      transaction_ref: payout.transactionRef || null,
+      status: payout.status || 'Completed',
+      notes: payout.notes || null
+    }]).select().single();
+
+    if (error) throw error;
+    return mapPartnerPayoutFromDb(data);
   },
 
   // --- Realtime WebSocket Channel Listener ---

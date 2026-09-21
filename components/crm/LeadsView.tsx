@@ -1036,10 +1036,15 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
                               </span>
                             </div>
 
-                            <div className="mb-3">
+                            <div className="mb-3 flex items-center gap-1.5 flex-wrap">
                               <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50/80 px-2.5 py-0.5 rounded-md line-clamp-1 inline-block">
                                 {lead.interestedService}
                               </span>
+                              {lead.partnerName && (
+                                <span className="text-[9px] font-bold text-violet-700 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-md truncate inline-flex items-center gap-1" title={`Partner: ${lead.partnerName}`}>
+                                  🤝 {lead.partnerName}
+                                </span>
+                              )}
                             </div>
 
                             {lead.status === 'LOST' && lead.lossReason && (
@@ -1253,7 +1258,14 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
                         </td>
 
                         <td className="py-3.5 px-3">
-                          <div className="text-[11px] font-medium text-gray-700">{lead.source}</div>
+                          <div className="text-[11px] font-medium text-gray-700 flex items-center gap-1.5 flex-wrap">
+                            <span>{lead.source}</span>
+                            {lead.partnerName && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[9px] font-bold border border-indigo-200" title={`Referred by ${lead.partnerName} (${lead.partnerCode || ''})`}>
+                                🤝 {lead.partnerName}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-gray-400">{lead.assignedTo || 'Unassigned'}</div>
                         </td>
 

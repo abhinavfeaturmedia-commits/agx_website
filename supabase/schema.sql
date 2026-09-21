@@ -350,6 +350,72 @@ ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS related_lead_id UUID
 ALTER TABLE public.calendar_events ADD COLUMN IF NOT EXISTS related_lead_name TEXT;
 
 ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS loss_reason TEXT;
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS partner_id UUID;
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS partner_name TEXT;
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS partner_code TEXT;
+
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS partner_id UUID;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS partner_name TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS partner_code TEXT;
+
+-- 18. AGX Partners Table
+CREATE TABLE IF NOT EXISTS public.partners (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    company TEXT,
+    phone TEXT,
+    referral_code TEXT UNIQUE NOT NULL,
+    commission_rate NUMERIC DEFAULT 0.10, -- 10% standard, 15% VIP
+    status TEXT DEFAULT 'Active', -- 'Active', 'Pending', 'Suspended'
+    payout_method TEXT DEFAULT 'UPI', -- 'UPI', 'Bank Transfer', 'PayPal', 'Wire'
+    payout_details JSONB DEFAULT '{}'::jsonb, -- { upiId, bankName, accountNumber, ifsc, paypalEmail, accountName }
+    total_earnings NUMERIC DEFAULT 0,
+    paid_earnings NUMERIC DEFAULT 0,
+    pending_earnings NUMERIC DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 19. Partner Client Referrals Table
+CREATE TABLE IF NOT EXISTS public.partner_referrals (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    partner_id UUID REFERENCES public.partners(id) ON DELETE CASCADE,
+    lead_id UUID REFERENCES public.leads(id) ON DELETE SET NULL,
+    client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL,
+    project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
+    client_name TEXT NOT NULL,
+    client_email TEXT,
+    client_phone TEXT,
+    company TEXT,
+    project_type TEXT DEFAULT 'AI Automation',
+    deal_value NUMERIC DEFAULT 0,
+    total_paid NUMERIC DEFAULT 0,
+    pending_payment NUMERIC DEFAULT 0,
+    deal_status TEXT DEFAULT 'NEW', -- 'NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL SENT', 'WON', 'IN PROGRESS', 'COMPLETED', 'LOST'
+    payment_status TEXT DEFAULT 'Pending', -- 'Pending', 'Partially Paid', 'Fully Paid'
+    commission_rate NUMERIC DEFAULT 0.10,
+    commission_earned NUMERIC DEFAULT 0,
+    commission_paid NUMERIC DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 20. Partner Payouts Table
+CREATE TABLE IF NOT EXISTS public.partner_payouts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    partner_id UUID REFERENCES public.partners(id) ON DELETE CASCADE,
+    amount NUMERIC NOT NULL,
+    payout_date DATE NOT NULL,
+    payment_method TEXT DEFAULT 'UPI',
+    transaction_ref TEXT,
+    status TEXT DEFAULT 'Completed', -- 'Pending', 'Completed', 'Failed'
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
 
 -- Enable RLS and setup permissive policies for CRM Client App
 DO $$ 
@@ -359,7 +425,8 @@ DECLARE
         'profiles', 'leads', 'lead_activities', 'clients', 'projects',
         'project_milestones', 'tasks', 'invoices', 'payments', 'expenses',
         'agreements', 'documents', 'credentials_vault', 'calendar_events',
-        'notifications', 'audit_logs', 'project_issues'
+        'notifications', 'audit_logs', 'project_issues',
+        'partners', 'partner_referrals', 'partner_payouts'
     ];
 BEGIN
     FOREACH tbl IN ARRAY tables
@@ -369,4 +436,5 @@ BEGIN
         EXECUTE format('CREATE POLICY "Public access policy" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl);
     END LOOP;
 END $$;
+
 

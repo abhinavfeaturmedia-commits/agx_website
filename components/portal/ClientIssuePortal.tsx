@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  AlertCircle, CheckCircle2, Clock, UploadCloud, X, ArrowLeft,
+  AlertCircle, CheckCircle2, Clock, UploadCloud, X, ArrowLeft, ArrowRight,
   ChevronDown, Check, RefreshCw, Image as ImageIcon,
   KeyRound, PlusCircle, ListFilter, Search, ExternalLink
 } from 'lucide-react';
@@ -27,7 +27,7 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
   const store = useCrmStore();
   const { projects, clients, issues, addIssue } = store;
 
-  // Active token with multi-source fallback (query param -> hash -> override -> localStorage -> default demo)
+  // Active token with multi-source fallback (query param -> hash -> override -> localStorage)
   const [token, setToken] = useState<string>(() => {
     const overrideClean = sanitizePortalToken(tokenOverride);
     if (overrideClean) return overrideClean;
@@ -35,21 +35,21 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const queryToken = sanitizePortalToken(urlParams.get('token'));
-      if (queryToken) return queryToken;
+      if (queryToken && queryToken !== 'omnilog-demo') return queryToken;
 
       const hash = window.location.hash;
       if (hash.includes('token=')) {
         const hashMatch = hash.match(/token=([^&]+)/);
         if (hashMatch && hashMatch[1]) {
           const hashClean = sanitizePortalToken(decodeURIComponent(hashMatch[1]));
-          if (hashClean) return hashClean;
+          if (hashClean && hashClean !== 'omnilog-demo') return hashClean;
         }
       }
 
       const stored = sanitizePortalToken(localStorage.getItem('agx_active_portal_token'));
-      if (stored) return stored;
+      if (stored && stored !== 'omnilog-demo') return stored;
     }
-    return 'omnilog-demo';
+    return '';
   });
 
   // Clean up corrupted URL parameters (e.g. ?token=%5Bobject%20Object%5D) or corrupted localStorage
@@ -57,12 +57,12 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const rawQueryToken = urlParams.get('token');
-      if (rawQueryToken && (rawQueryToken === '[object Object]' || rawQueryToken === 'undefined' || rawQueryToken === 'null')) {
+      if (rawQueryToken && (rawQueryToken === '[object Object]' || rawQueryToken === 'undefined' || rawQueryToken === 'null' || rawQueryToken === 'omnilog-demo')) {
         const newUrl = window.location.pathname.startsWith('/portal') ? '/portal' : window.location.pathname;
         window.history.replaceState(null, '', newUrl);
       }
       const stored = localStorage.getItem('agx_active_portal_token');
-      if (stored === '[object Object]' || stored === 'undefined' || stored === 'null') {
+      if (stored === '[object Object]' || stored === 'undefined' || stored === 'null' || stored === 'omnilog-demo') {
         localStorage.removeItem('agx_active_portal_token');
       }
     }
@@ -71,7 +71,7 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
   // Sync token when tokenOverride changes
   useEffect(() => {
     const cleanOverride = sanitizePortalToken(tokenOverride);
-    if (cleanOverride && cleanOverride !== token) {
+    if (cleanOverride && cleanOverride !== token && cleanOverride !== 'omnilog-demo') {
       setToken(cleanOverride);
     }
   }, [tokenOverride, token]);
@@ -79,17 +79,17 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
   // Persist current active token to localStorage
   useEffect(() => {
     const cleanToStore = sanitizePortalToken(token);
-    if (cleanToStore && typeof window !== 'undefined') {
+    if (cleanToStore && cleanToStore !== 'omnilog-demo' && typeof window !== 'undefined') {
       try {
         localStorage.setItem('agx_active_portal_token', cleanToStore);
       } catch (_) {}
     }
   }, [token]);
 
-  // Match active project with guaranteed fallback
+  // Match active project with strict verification
   const matchedProject = useMemo(() => {
     const cleanToken = sanitizePortalToken(token).toLowerCase();
-    if (cleanToken) {
+    if (cleanToken && cleanToken !== 'omnilog-demo') {
       const byToken = projects.find(p => p.portalToken?.toLowerCase() === cleanToken);
       if (byToken) return byToken;
 
@@ -106,8 +106,7 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
       }
     }
 
-    const demoProject = projects.find(p => p.id === 'omnilog-demo' || p.portalToken === 'omnilog-demo');
-    return demoProject || projects[0] || null;
+    return null;
   }, [projects, clients, token]);
 
   // Client info helper
@@ -296,10 +295,74 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
 
   if (!matchedProject) {
     return (
-      <div className="min-h-screen bg-[#070709] text-white flex items-center justify-center p-6">
-        <div className="text-center space-y-4">
-          <RefreshCw size={28} className="animate-spin text-[#CCFF00] mx-auto" />
-          <h2 className="text-base font-bold">Connecting to Client Workspace...</h2>
+      <div className="min-h-screen bg-[#070709] text-white flex flex-col justify-between p-6 antialiased selection:bg-[#CCFF00] selection:text-black">
+        <div className="w-full max-w-4xl mx-auto flex items-center justify-between py-4">
+          <button
+            onClick={onBackToWebsite || (() => { window.location.href = '/'; })}
+            className="flex items-center gap-2 text-xs font-semibold text-white/60 hover:text-white transition-colors px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
+          >
+            <ArrowLeft size={14} /> Back to Website
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl font-black italic tracking-tighter text-white font-['Outfit']">
+              AG<span className="text-[#CCFF00]">X</span>
+            </span>
+            <span className="text-[10px] font-mono uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 font-bold">
+              Client Portal
+            </span>
+          </div>
+        </div>
+
+        <div className="max-w-md w-full mx-auto my-auto p-8 rounded-3xl bg-[#0D1017] border border-white/10 shadow-2xl text-center space-y-5">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
+            <KeyRound size={24} />
+          </div>
+          <div>
+            <h2 className="text-xl font-black uppercase text-white tracking-tight font-['Outfit']">
+              Client Project Portal
+            </h2>
+            <p className="text-xs text-white/50 mt-1">
+              Enter your confidential project access token to review live deliverables, tickets & updates.
+            </p>
+          </div>
+
+          <form onSubmit={handleCustomTokenSubmit} className="space-y-3.5 text-left">
+            <div>
+              <label className="block text-[11px] font-bold text-white/70 uppercase tracking-wider mb-1.5">
+                Project Access Token
+              </label>
+              <div className="relative flex items-center">
+                <KeyRound size={15} className="absolute left-3.5 text-white/40" />
+                <input
+                  type="text"
+                  value={customTokenInput}
+                  onChange={(e) => { setCustomTokenInput(e.target.value); setCustomTokenError(null); }}
+                  placeholder="e.g., prj_sec_..."
+                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[#CCFF00] transition-all font-mono"
+                  autoFocus
+                />
+              </div>
+              {customTokenError && (
+                <p className="text-[11px] text-rose-400 mt-1.5 font-mono">{customTokenError}</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 px-4 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer btn-press"
+            >
+              <span>Access Project Workspace</span>
+              <ArrowRight size={13} />
+            </button>
+          </form>
+
+          <p className="text-[11px] text-white/40 pt-2 border-t border-white/5">
+            Need your token? Reach out to your AGX Project Manager or email ops@agxperience.com
+          </p>
+        </div>
+
+        <div className="w-full text-center py-4 text-[11px] text-white/30 font-mono">
+          © {new Date().getFullYear()} AGXPERIENCE INC. • ENTERPRISE CLIENT REPOSITORY
         </div>
       </div>
     );
@@ -809,6 +872,33 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
                           {issue.description}
                         </p>
                       </div>
+
+                      {/* Visual Resolution Status Card */}
+                      {isResolved && (
+                        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                          <div className="flex items-start gap-2.5">
+                            <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 mt-0.5 sm:mt-0 shrink-0">
+                              <CheckCircle2 size={16} />
+                            </div>
+                            <div>
+                              <div className="font-bold text-emerald-300 flex items-center gap-2 flex-wrap">
+                                <span>Verified & Deployed to Production</span>
+                                {issue.resolvedAt && (
+                                  <span className="text-[10px] text-emerald-400/80 font-mono">
+                                    • {new Date(issue.resolvedAt).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-gray-300 text-[11px] mt-0.5 leading-relaxed">
+                                {issue.resolutionNotes || 'Our engineering team has resolved and verified this fix in the production release.'}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-mono text-[10px] font-bold shrink-0 self-end sm:self-center">
+                            Production Live
+                          </span>
+                        </div>
+                      )}
 
                       {/* Attachments previews */}
                       {issue.attachments && issue.attachments.length > 0 && (

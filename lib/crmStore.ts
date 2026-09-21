@@ -9,1240 +9,53 @@ import {
   ProjectStatus, Task, TaskStatus, Invoice, Payment, Expense, Agreement, DocumentItem,
   CredentialVaultItem, CalendarEvent, NotificationItem, AuditLog, Priority,
   InvoiceStatus, ExpenseCategory, AgreementStatus, CrmModuleKey, ModulePermissions, ROLE_DEFAULT_PERMISSIONS,
-  ProjectIssue, IssueStatus, IssueType, IssuePriority
+  ProjectIssue, IssueStatus, IssueType, IssuePriority,
+  Partner, PartnerReferral, PartnerPayout
 } from '../types/crm';
 
-export const INITIAL_USERS: UserProfile[] = [
-  {
-    id: '00000000-0000-0000-0000-000000000001',
-    email: 'abhinav@agxperience.com',
-    fullName: 'Abhinav (Founder & Super Admin)',
-    role: 'Super Admin',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    department: 'Leadership'
-  },
-  {
-    id: '00000000-0000-0000-0000-000000000002',
-    email: 'taylor@agxperience.com',
-    fullName: 'Taylor Vance',
-    role: 'Sales Manager',
-    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    department: 'Sales & Growth'
-  },
-  {
-    id: '00000000-0000-0000-0000-000000000003',
-    email: 'michael@agxperience.com',
-    fullName: 'Michael Andrew',
-    role: 'Project Manager',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    department: 'Engineering'
-  },
-  {
-    id: '00000000-0000-0000-0000-000000000004',
-    email: 'natalia@agxperience.com',
-    fullName: 'Natalia Varnan',
-    role: 'Developer',
-    avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-    department: 'AI Architecture'
-  },
-  {
-    id: '00000000-0000-0000-0000-000000000005',
-    email: 'robert@agxperience.com',
-    fullName: 'Robert Sterling',
-    role: 'Accountant',
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    department: 'Finance'
-  }
-];
+export const DEFAULT_ADMIN_USER: UserProfile = {
+  id: '00000000-0000-0000-0000-000000000001',
+  email: 'admin@agxperience.com',
+  fullName: 'Abhinav (Super Admin)',
+  role: 'Super Admin',
+  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  department: 'Leadership',
+  isActive: true,
+  permissions: ROLE_DEFAULT_PERMISSIONS['Super Admin']
+};
 
-export const INITIAL_LEADS: Lead[] = [
-  {
-    id: '10000000-0000-0000-0000-000000000001',
-    name: 'Sarah Jenkins',
-    company: 'Apex Logistics Inc.',
-    phone: '+1 (555) 382-9012',
-    email: 'sjenkins@apexlogistics.io',
-    whatsapp: '+15553829012',
-    location: 'Chicago, USA',
-    interestedService: 'AI Customer Support & Dispatch Automation',
-    estimatedDealValue: 12500,
-    probability: 80,
-    source: 'Website',
-    assignedTo: 'Taylor Vance',
-    priority: 'High',
-    status: 'NEGOTIATION',
-    nextFollowUp: '2026-08-22T15:00:00Z',
-    lastContacted: '2026-08-19T11:30:00Z',
-    notes: 'Needs webhook integration with TMS and WhatsApp alert triggers for fleet drivers.',
-    createdAt: '2026-08-10T09:00:00Z',
-    updatedAt: '2026-08-19T11:30:00Z'
-  },
-  {
-    id: '10000000-0000-0000-0000-000000000002',
-    name: 'Marcus Sterling',
-    company: 'Vanguard FinTech Group',
-    phone: '+44 20 7946 0912',
-    email: 'm.sterling@vanguardft.co.uk',
-    whatsapp: '+442079460912',
-    location: 'London, UK',
-    interestedService: 'Automated Loan Underwriting Agent',
-    estimatedDealValue: 24000,
-    probability: 60,
-    source: 'LinkedIn',
-    assignedTo: 'Taylor Vance',
-    priority: 'Urgent',
-    status: 'PROPOSAL SENT',
-    nextFollowUp: '2026-08-21T14:00:00Z',
-    lastContacted: '2026-08-18T16:00:00Z',
-    notes: 'Sent enterprise SLA draft and security architecture diagram.',
-    createdAt: '2026-08-12T10:15:00Z',
-    updatedAt: '2026-08-18T16:00:00Z'
-  },
-  {
-    id: '10000000-0000-0000-0000-000000000003',
-    name: 'Elena Rostova',
-    company: 'Solaria BioMed',
-    phone: '+49 89 2018 391',
-    email: 'elena.rostova@solariabiomed.de',
-    whatsapp: '+49892018391',
-    location: 'Munich, Germany',
-    interestedService: 'Clinical Research Data Extraction Engine',
-    estimatedDealValue: 18500,
-    probability: 40,
-    source: 'Referral',
-    assignedTo: 'Michael Andrew',
-    priority: 'Medium',
-    status: 'QUALIFIED',
-    nextFollowUp: '2026-08-23T10:00:00Z',
-    lastContacted: '2026-08-17T09:00:00Z',
-    notes: 'Evaluating GDPR compliance and localized LLM deployment requirements.',
-    createdAt: '2026-08-14T14:20:00Z',
-    updatedAt: '2026-08-17T09:00:00Z'
-  },
-  {
-    id: '10000000-0000-0000-0000-000000000004',
-    name: 'Devon Miller',
-    company: 'CloudScale SaaS',
-    phone: '+1 (415) 890-2341',
-    email: 'dmiller@cloudscale.net',
-    whatsapp: '+14158902341',
-    location: 'San Francisco, USA',
-    interestedService: 'n8n & Supabase Billing Orchestration',
-    estimatedDealValue: 8000,
-    probability: 95,
-    source: 'Website',
-    assignedTo: 'Taylor Vance',
-    priority: 'High',
-    status: 'WON',
-    lastContacted: '2026-08-20T10:00:00Z',
-    notes: 'Agreement executed. Project kickoff scheduled.',
-    createdAt: '2026-08-01T11:00:00Z',
-    updatedAt: '2026-08-20T10:00:00Z'
-  },
-  {
-    id: '10000000-0000-0000-0000-000000000005',
-    name: 'Vikram Patel',
-    company: 'Zenith Retail Chains',
-    phone: '+91 98201 44521',
-    email: 'vpatel@zenithretail.in',
-    whatsapp: '+919820144521',
-    location: 'Mumbai, India',
-    interestedService: 'Multi-Store Inventory AI Copilot',
-    estimatedDealValue: 15000,
-    probability: 20,
-    source: 'Direct Outreach',
-    assignedTo: 'Taylor Vance',
-    priority: 'Medium',
-    status: 'NEW',
-    nextFollowUp: '2026-08-21T11:00:00Z',
-    notes: 'Initial discovery call requested via Calendly.',
-    createdAt: '2026-08-20T08:00:00Z',
-    updatedAt: '2026-08-20T08:00:00Z'
-  }
-];
-
-export const INITIAL_CLIENTS: Client[] = [
-  {
-    id: '20000000-0000-0000-0000-000000000001',
-    name: 'Karan Mehta',
-    company: 'Shrawello Systems',
-    phone: '+91 98450 12345',
-    email: 'karan@shrawello.com',
-    website: 'https://shrawello.com',
-    address: 'Bengaluru, Karnataka, India',
-    industry: 'Enterprise E-Commerce',
-    gstTaxId: '29ABCDE1234F1Z5',
-    accountManager: 'Abhinav',
-    totalValue: 25000,
-    totalPaid: 15000,
-    outstandingAmount: 10000,
-    source: 'Direct Referral',
-    notes: 'Long-term enterprise partner for AI automated search and voice agents.',
-    status: 'Active',
-    createdAt: '2026-06-15T09:00:00Z',
-    updatedAt: '2026-08-15T14:30:00Z'
-  },
-  {
-    id: '20000000-0000-0000-0000-000000000002',
-    name: 'Liam O\'Connor',
-    company: 'Aether Capital',
-    phone: '+1 (212) 555-0199',
-    email: 'liam@aethercap.com',
-    website: 'https://aethercap.com',
-    address: 'New York, NY, USA',
-    industry: 'Venture Capital & Private Equity',
-    gstTaxId: 'US-EIN-9923841',
-    accountManager: 'Taylor Vance',
-    totalValue: 18000,
-    totalPaid: 11000,
-    outstandingAmount: 7000,
-    source: 'LinkedIn Inbound',
-    notes: 'Monthly retainer for automated deal screening AI pipeline.',
-    status: 'Active',
-    createdAt: '2026-07-01T10:00:00Z',
-    updatedAt: '2026-08-10T16:00:00Z'
-  },
-  {
-    id: '20000000-0000-0000-0000-000000000003',
-    name: 'Chloe Dubois',
-    company: 'Nexis Health Solutions',
-    phone: '+33 1 42 68 55 00',
-    email: 'c.dubois@nexishealth.fr',
-    website: 'https://nexishealth.fr',
-    address: 'Paris, France',
-    industry: 'Digital Health',
-    gstTaxId: 'FR8839201923',
-    accountManager: 'Michael Andrew',
-    totalValue: 32000,
-    totalPaid: 20000,
-    outstandingAmount: 12000,
-    source: 'Website Form',
-    notes: 'Building AI patient onboarding & FHIR compliance pipeline.',
-    status: 'Active',
-    createdAt: '2026-05-20T11:00:00Z',
-    updatedAt: '2026-08-18T12:00:00Z'
-  },
-  {
-    id: '20000000-0000-0000-0000-000000000004',
-    name: 'Rohan Deshmukh',
-    company: 'Zomira Retail Hub',
-    phone: '+91 98201 44882',
-    email: 'rohan@zomiraretail.com',
-    website: 'https://zomiraretail.com',
-    address: 'Mumbai, Maharashtra, India',
-    industry: 'Omnichannel Retail & E-Commerce',
-    gstTaxId: '27AABCZ1234F1Z8',
-    accountManager: 'Michael Andrew',
-    totalValue: 75000,
-    totalPaid: 35000,
-    outstandingAmount: 40000,
-    source: 'Referral',
-    notes: 'Retail brand scaling automated WhatsApp support & multi-lingual product advisory voice agent.',
-    status: 'Active',
-    createdAt: '2026-08-01T10:00:00Z',
-    updatedAt: '2026-08-20T11:00:00Z'
-  },
-  {
-    id: '20000000-0000-0000-0000-000000000005',
-    name: 'Pooja Singhania',
-    company: 'NeoFin Wealth Partners',
-    phone: '+91 97110 55991',
-    email: 'pooja.s@neofinwealth.in',
-    website: 'https://neofinwealth.in',
-    address: 'Bandra Kurla Complex, Mumbai, India',
-    industry: 'Fintech & WealthTech',
-    gstTaxId: '27AABCN8823K1ZT',
-    accountManager: 'Abhinav',
-    totalValue: 120000,
-    totalPaid: 50000,
-    outstandingAmount: 70000,
-    source: 'Direct Inbound',
-    notes: 'Next-gen wealth advisory dashboard with real-time portfolio analytics and compliance reporting.',
-    status: 'Active',
-    createdAt: '2026-07-15T09:30:00Z',
-    updatedAt: '2026-08-22T15:00:00Z'
-  },
-  {
-    id: '20000000-0000-0000-0000-000000000006',
-    name: 'Vikram Malhotra',
-    company: 'Apex Logistics Global',
-    phone: '+91 99880 33221',
-    email: 'v.malhotra@apexlogistics.in',
-    website: 'https://apexlogistics.in',
-    address: 'Gurugram, Haryana, India',
-    industry: 'Logistics & Supply Chain',
-    gstTaxId: '06AABCA4321P1Z3',
-    accountManager: 'Taylor Vance',
-    totalValue: 90000,
-    totalPaid: 0,
-    outstandingAmount: 90000,
-    source: 'Conference Lead',
-    notes: 'Fleet IoT automation and dispatch dispatch tracking agent. Awaiting agreement signing and deposit.',
-    status: 'On Hold',
-    createdAt: '2026-08-15T14:00:00Z',
-    updatedAt: '2026-08-24T16:00:00Z'
-  },
-  {
-    id: '20000000-0000-0000-0000-000000000007',
-    name: 'Marcus Chen',
-    company: 'Omnilog Freight Systems',
-    phone: '+1 (312) 880-9214',
-    email: 'marcus.chen@omnilog.io',
-    website: 'https://omnilog.io',
-    address: 'Chicago, IL, USA',
-    industry: 'Freight & Supply Chain Logistics',
-    gstTaxId: 'US-EIN-8819241',
-    accountManager: 'Michael Andrew',
-    totalValue: 65000,
-    totalPaid: 45000,
-    outstandingAmount: 20000,
-    source: 'Enterprise Inbound',
-    notes: 'Autonomous carrier dispatch and fleet telematics AI orchestration.',
-    status: 'Active',
-    createdAt: '2026-07-01T09:00:00Z',
-    updatedAt: '2026-08-20T10:00:00Z'
-  }
-];
-
-export const INITIAL_PROJECTS: Project[] = [
-  {
-    id: 'omnilog-demo',
-    name: 'Autonomous Freight Dispatch & Fleet Telemetry AI',
-    clientId: '20000000-0000-0000-0000-000000000007',
-    clientName: 'Omnilog Freight Systems',
-    serviceType: 'Workflow Automation',
-    projectManager: 'Michael Andrew',
-    assignedTeam: ['Natalia Varnan', 'Abhinav'],
-    startDate: '2026-08-01',
-    dueDate: '2026-09-15',
-    deliveryDate: '2026-09-15',
-    projectValue: 65000,
-    receivedAmount: 45000,
-    pendingAmount: 20000,
-    status: 'IN PROGRESS',
-    priority: 'High',
-    progress: 78,
-    description: 'Real-time GPS fleet telemetry ingestion with autonomous carrier dispatch agent and automated driver SMS/WhatsApp alerts.',
-    portalToken: 'omnilog-demo',
-    portalEnabled: true,
-    milestones: [
-      { id: 'm-omni-1', projectId: 'omnilog-demo', title: 'Phase 1: Telematics Webhook & Kafka Pipeline', dueDate: '2026-08-10', status: 'Completed', progress: 100, amount: 20000 },
-      { id: 'm-omni-2', projectId: 'omnilog-demo', title: 'Phase 2: Autonomous Rate Negotiation Voice Agent', dueDate: '2026-08-28', status: 'In Progress', progress: 85, amount: 25000 },
-      { id: 'm-omni-3', projectId: 'omnilog-demo', title: 'Phase 3: TMS Bidirectional Sync & Fleet Load Testing', dueDate: '2026-09-15', status: 'Pending', progress: 30, amount: 20000 }
-    ],
-    createdAt: '2026-07-28T10:00:00Z',
-    updatedAt: '2026-08-20T14:00:00Z'
-  },
-  {
-    id: '30000000-0000-0000-0000-000000000001',
-    name: 'AI Voice Agent & Support Pipeline',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    serviceType: 'Custom AI Agent',
-    projectManager: 'Michael Andrew',
-    assignedTeam: ['Natalia Varnan', 'Abhinav'],
-    startDate: '2026-08-01',
-    dueDate: '2026-09-15',
-    projectValue: 25000,
-    receivedAmount: 15000,
-    pendingAmount: 10000,
-    status: 'IN PROGRESS',
-    priority: 'High',
-    progress: 65,
-    description: 'Deploying ultra-low latency voicebot using LiveKit WebRTC and ElevenLabs with LangChain tool calling.',
-    portalToken: 'prj_sec_shrawello_8f9a2b',
-    portalEnabled: true,
-    milestones: [
-      { id: '40000000-0000-0000-0000-000000000001', projectId: '30000000-0000-0000-0000-000000000001', title: 'Phase 1: Architecture & Latency Benchmark', dueDate: '2026-08-10', status: 'Completed', progress: 100, amount: 5000 },
-      { id: '40000000-0000-0000-0000-000000000002', projectId: '30000000-0000-0000-0000-000000000001', title: 'Phase 2: CRM Tool Handlers & Voice Integration', dueDate: '2026-08-28', status: 'In Progress', progress: 70, amount: 10000 },
-      { id: '40000000-0000-0000-0000-000000000003', projectId: '30000000-0000-0000-0000-000000000001', title: 'Phase 3: Production Deployment & QA', dueDate: '2026-09-15', status: 'Pending', progress: 0, amount: 10000 }
-    ],
-    createdAt: '2026-07-28T10:00:00Z',
-    updatedAt: '2026-08-18T14:00:00Z'
-  },
-  {
-    id: '30000000-0000-0000-0000-000000000002',
-    name: 'Development Basics & Workflow Hub',
-    clientId: '20000000-0000-0000-0000-000000000002',
-    clientName: 'Aether Capital',
-    serviceType: 'Workflow Automation',
-    projectManager: 'Michael Andrew',
-    assignedTeam: ['Natalia Varnan'],
-    startDate: '2026-07-15',
-    dueDate: '2026-08-30',
-    projectValue: 18000,
-    receivedAmount: 11000,
-    pendingAmount: 7000,
-    status: 'TESTING',
-    priority: 'Urgent',
-    progress: 85,
-    description: 'Connecting SEC Edgar filing webhooks to PostgreSQL vector embeddings and summarizer agents.',
-    portalToken: 'prj_sec_aether_3d7c1e',
-    portalEnabled: true,
-    milestones: [
-      { id: '40000000-0000-0000-0000-000000000004', projectId: '30000000-0000-0000-0000-000000000002', title: 'Phase 1: Ingestion Pipelines & n8n Scenarios', dueDate: '2026-07-30', status: 'Completed', progress: 100, amount: 6000 },
-      { id: '40000000-0000-0000-0000-000000000005', projectId: '30000000-0000-0000-0000-000000000002', title: 'Phase 2: Automated Analysis Engine', dueDate: '2026-08-15', status: 'Completed', progress: 100, amount: 5000 },
-      { id: '40000000-0000-0000-0000-000000000006', projectId: '30000000-0000-0000-0000-000000000002', title: 'Phase 3: Final Acceptance Testing', dueDate: '2026-08-30', status: 'In Progress', progress: 60, amount: 7000 }
-    ],
-    createdAt: '2026-07-10T11:00:00Z',
-    updatedAt: '2026-08-19T09:00:00Z'
-  },
-  {
-    id: '30000000-0000-0000-0000-000000000003',
-    name: 'Enterprise RAG Architecture',
-    clientId: '20000000-0000-0000-0000-000000000003',
-    clientName: 'Nexis Health Solutions',
-    serviceType: 'Full-stack Platform',
-    projectManager: 'Abhinav',
-    assignedTeam: ['Natalia Varnan', 'Michael Andrew'],
-    startDate: '2026-08-10',
-    dueDate: '2026-10-30',
-    projectValue: 32000,
-    receivedAmount: 20000,
-    pendingAmount: 12000,
-    status: 'IN PROGRESS',
-    priority: 'High',
-    progress: 40,
-    description: 'HIPAA compliant private cloud LLM with hybrid dense/sparse vector retrieval over medical documentation.',
-    portalToken: 'prj_sec_nexis_9b4e72',
-    portalEnabled: true,
-    milestones: [],
-    createdAt: '2026-08-05T12:00:00Z',
-    updatedAt: '2026-08-18T10:00:00Z'
-  },
-  {
-    id: '30000000-0000-0000-0000-000000000004',
-    name: 'OmniChannel WhatsApp & Voice AI Bot',
-    clientId: '20000000-0000-0000-0000-000000000004',
-    clientName: 'Zomira Retail Hub',
-    serviceType: 'Custom AI Agent',
-    projectManager: 'Michael Andrew',
-    assignedTeam: ['Natalia Varnan', 'Abhinav'],
-    startDate: '2026-08-01',
-    dueDate: '2026-10-15',
-    projectValue: 75000,
-    receivedAmount: 35000,
-    pendingAmount: 40000,
-    status: 'IN PROGRESS',
-    priority: 'Urgent',
-    progress: 55,
-    description: 'High-concurrency WhatsApp bot with automated catalog lookup, order tracking, and voice note transcription.',
-    portalToken: 'prj_sec_zomira_9a4f1c',
-    portalEnabled: true,
-    milestones: [
-      { id: '40000000-0000-0000-0000-000000000007', projectId: '30000000-0000-0000-0000-000000000004', title: 'Phase 1: WhatsApp Cloud API & Webhook Infrastructure', dueDate: '2026-08-15', status: 'Completed', progress: 100, amount: 20000 },
-      { id: '40000000-0000-0000-0000-000000000008', projectId: '30000000-0000-0000-0000-000000000004', title: 'Phase 2: Product Recommendation & Voice Notes AI', dueDate: '2026-09-10', status: 'In Progress', progress: 50, amount: 25000 },
-      { id: '40000000-0000-0000-0000-000000000009', projectId: '30000000-0000-0000-0000-000000000004', title: 'Phase 3: Production Load Test & ERP Sync', dueDate: '2026-10-15', status: 'Pending', progress: 0, amount: 30000 }
-    ],
-    createdAt: '2026-08-01T10:00:00Z',
-    updatedAt: '2026-08-20T12:00:00Z'
-  },
-  {
-    id: '30000000-0000-0000-0000-000000000005',
-    name: 'Fintech Wealth Management Dashboard',
-    clientId: '20000000-0000-0000-0000-000000000005',
-    clientName: 'NeoFin Wealth Partners',
-    serviceType: 'Full-stack Platform',
-    projectManager: 'Abhinav',
-    assignedTeam: ['Natalia Varnan', 'Taylor Vance'],
-    startDate: '2026-07-20',
-    dueDate: '2026-09-30',
-    projectValue: 120000,
-    receivedAmount: 50000,
-    pendingAmount: 70000,
-    status: 'TESTING',
-    priority: 'High',
-    progress: 80,
-    description: 'High-frequency portfolio calculation engine, live mutual fund NAV sync, and custom risk-profiling reports.',
-    portalToken: 'prj_sec_neofin_7b2e88',
-    portalEnabled: true,
-    milestones: [
-      { id: '40000000-0000-0000-0000-000000000010', projectId: '30000000-0000-0000-0000-000000000005', title: 'Phase 1: Core Dashboard & Asset Class Breakdown', dueDate: '2026-08-05', status: 'Completed', progress: 100, amount: 30000 },
-      { id: '40000000-0000-0000-0000-000000000011', projectId: '30000000-0000-0000-0000-000000000005', title: 'Phase 2: Risk Analytics & PDF Statement Engine', dueDate: '2026-08-25', status: 'Completed', progress: 100, amount: 40000 },
-      { id: '40000000-0000-0000-0000-000000000012', projectId: '30000000-0000-0000-0000-000000000005', title: 'Phase 3: User Acceptance Testing & Security Audit', dueDate: '2026-09-30', status: 'In Progress', progress: 60, amount: 50000 }
-    ],
-    createdAt: '2026-07-18T11:00:00Z',
-    updatedAt: '2026-08-22T17:00:00Z'
-  },
-  {
-    id: '30000000-0000-0000-0000-000000000006',
-    name: 'Cloud Supply Chain Automation & Fleet IoT',
-    clientId: '20000000-0000-0000-0000-000000000006',
-    clientName: 'Apex Logistics Global',
-    serviceType: 'Workflow Automation',
-    projectManager: 'Taylor Vance',
-    assignedTeam: ['Abhinav'],
-    startDate: '2026-09-01',
-    dueDate: '2026-11-30',
-    projectValue: 90000,
-    receivedAmount: 0,
-    pendingAmount: 90000,
-    status: 'PLANNING',
-    priority: 'Medium',
-    progress: 10,
-    description: 'Fleet sensor streaming into automated dispatch alerting system. SOW sent; awaiting signature and advance deposit.',
-    portalToken: 'prj_sec_apex_3c8d4a',
-    portalEnabled: true,
-    milestones: [],
-    createdAt: '2026-08-20T14:00:00Z',
-    updatedAt: '2026-08-25T09:00:00Z'
-  }
-];
-
-export const INITIAL_TASKS: Task[] = [
-  {
-    id: '50000000-0000-0000-0000-000000000001',
-    title: 'Token Architecture & Design Tokens Sync',
-    description: 'Standardize CSS design tokens and theme palettes across CRM & main app.',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    assignedTo: 'Abhinav',
-    priority: 'High',
-    status: 'IN PROGRESS',
-    startDate: '2026-08-18',
-    dueDate: '2026-08-22',
-    estimatedHours: 12,
-    actualHours: 8,
-    createdAt: '2026-08-18T09:00:00Z',
-    updatedAt: '2026-08-20T10:00:00Z'
-  },
-  {
-    id: '50000000-0000-0000-0000-000000000002',
-    title: 'Implement PostgreSQL RLS & Realtime Channels',
-    description: 'Configure PostgreSQL policies for role-based data security in Supabase.',
-    clientId: '20000000-0000-0000-0000-000000000002',
-    clientName: 'Aether Capital',
-    projectId: '30000000-0000-0000-0000-000000000002',
-    projectName: 'Development Basics & Workflow Hub',
-    assignedTo: 'Natalia Varnan',
-    priority: 'Urgent',
-    status: 'COMPLETED',
-    startDate: '2026-08-15',
-    dueDate: '2026-08-19',
-    estimatedHours: 16,
-    actualHours: 14,
-    createdAt: '2026-08-15T09:00:00Z',
-    updatedAt: '2026-08-19T17:00:00Z'
-  },
-  {
-    id: '50000000-0000-0000-0000-000000000003',
-    title: 'Zod API Schema & Webhook Validation',
-    description: 'Validate incoming telemetry webhooks from Voice Agent API server.',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    assignedTo: 'Natalia Varnan',
-    priority: 'Medium',
-    status: 'TO DO',
-    startDate: '2026-08-22',
-    dueDate: '2026-08-26',
-    estimatedHours: 8,
-    actualHours: 0,
-    createdAt: '2026-08-19T14:00:00Z',
-    updatedAt: '2026-08-19T14:00:00Z'
-  },
-  {
-    id: '50000000-0000-0000-0000-000000000004',
-    title: 'FHIR API Connector & Medical EHR Integration',
-    description: 'Complete testing suite for HL7/FHIR health data transformation pipeline.',
-    clientId: '20000000-0000-0000-0000-000000000003',
-    clientName: 'Nexis Health Solutions',
-    projectId: '30000000-0000-0000-0000-000000000003',
-    projectName: 'Enterprise RAG Architecture',
-    assignedTo: 'Michael Andrew',
-    priority: 'High',
-    status: 'IN REVIEW',
-    startDate: '2026-08-10',
-    dueDate: '2026-08-24',
-    estimatedHours: 24,
-    actualHours: 22,
-    createdAt: '2026-08-10T10:00:00Z',
-    updatedAt: '2026-08-19T11:00:00Z'
-  }
-];
-
-export const INITIAL_INVOICES: Invoice[] = [
-  {
-    id: '60000000-0000-0000-0000-000000000001',
-    invoiceNumber: 'INV-2026-001',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    issueDate: '2026-08-01',
-    dueDate: '2026-08-15',
-    items: [
-      { description: 'Phase 1 Voice Agent Architecture & Setup', quantity: 1, unitPrice: 15000, total: 15000 }
-    ],
-    subtotal: 15000,
-    tax: 0,
-    total: 15000,
-    paidAmount: 15000,
-    status: 'Paid',
-    notes: 'Paid via Stripe Wire.',
-    createdAt: '2026-08-01T09:00:00Z'
-  },
-  {
-    id: '60000000-0000-0000-0000-000000000002',
-    invoiceNumber: 'INV-2026-002',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    issueDate: '2026-08-15',
-    dueDate: '2026-08-30',
-    items: [
-      { description: 'Phase 2 Voice Integration & Handover', quantity: 1, unitPrice: 10000, total: 10000 }
-    ],
-    subtotal: 10000,
-    tax: 0,
-    total: 10000,
-    paidAmount: 0,
-    status: 'Sent',
-    notes: 'Awaiting client approval.',
-    createdAt: '2026-08-15T09:00:00Z'
-  },
-  {
-    id: '60000000-0000-0000-0000-000000000003',
-    invoiceNumber: 'INV-2026-003',
-    clientId: '20000000-0000-0000-0000-000000000002',
-    clientName: 'Aether Capital',
-    projectId: '30000000-0000-0000-0000-000000000002',
-    projectName: 'Development Basics & Workflow Hub',
-    issueDate: '2026-07-15',
-    dueDate: '2026-07-30',
-    items: [
-      { description: 'Financial Data Scraping & Pipeline Setup', quantity: 1, unitPrice: 11000, total: 11000 }
-    ],
-    subtotal: 11000,
-    tax: 0,
-    total: 11000,
-    paidAmount: 11000,
-    status: 'Paid',
-    notes: 'Settled via Bank Wire.',
-    createdAt: '2026-07-15T10:00:00Z'
-  },
-  {
-    id: '60000000-0000-0000-0000-000000000004',
-    invoiceNumber: 'INV-2026-004',
-    clientId: '20000000-0000-0000-0000-000000000003',
-    clientName: 'Nexis Health Solutions',
-    projectId: '30000000-0000-0000-0000-000000000003',
-    projectName: 'Enterprise RAG Architecture',
-    issueDate: '2026-08-10',
-    dueDate: '2026-08-25',
-    items: [
-      { description: 'Medical RAG Initial Retainer', quantity: 1, unitPrice: 20000, total: 20000 }
-    ],
-    subtotal: 20000,
-    tax: 0,
-    total: 20000,
-    paidAmount: 20000,
-    status: 'Paid',
-    notes: 'Paid via International SWIFT.',
-    createdAt: '2026-08-10T12:00:00Z'
-  }
-];
-
-export const INITIAL_PAYMENTS: Payment[] = [
-  {
-    id: '70000000-0000-0000-0000-000000000001',
-    invoiceId: '60000000-0000-0000-0000-000000000001',
-    invoiceNumber: 'INV-2026-001',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    amount: 15000,
-    paymentDate: '2026-08-05',
-    paymentMethod: 'Bank Wire',
-    transactionId: 'TXN-9021-SHRAW',
-    status: 'Paid',
-    notes: 'Full settlement for invoice INV-2026-001',
-    createdAt: '2026-08-05T14:30:00Z'
-  },
-  {
-    id: '70000000-0000-0000-0000-000000000002',
-    invoiceId: '60000000-0000-0000-0000-000000000003',
-    invoiceNumber: 'INV-2026-003',
-    clientId: '20000000-0000-0000-0000-000000000002',
-    clientName: 'Aether Capital',
-    projectId: '30000000-0000-0000-0000-000000000002',
-    projectName: 'Development Basics & Workflow Hub',
-    amount: 11000,
-    paymentDate: '2026-07-24',
-    paymentMethod: 'Stripe',
-    transactionId: 'ch_3N928F201KL',
-    status: 'Paid',
-    notes: 'Automated credit card processing',
-    createdAt: '2026-07-24T11:20:00Z'
-  },
-  {
-    id: '70000000-0000-0000-0000-000000000003',
-    invoiceId: '60000000-0000-0000-0000-000000000004',
-    invoiceNumber: 'INV-2026-004',
-    clientId: '20000000-0000-0000-0000-000000000003',
-    clientName: 'Nexis Health Solutions',
-    projectId: '30000000-0000-0000-0000-000000000003',
-    projectName: 'Enterprise RAG Architecture',
-    amount: 20000,
-    paymentDate: '2026-08-12',
-    paymentMethod: 'Bank Wire',
-    transactionId: 'SWIFT-PARIS-2026',
-    status: 'Paid',
-    notes: 'Advance retainer for project launch',
-    createdAt: '2026-08-12T16:45:00Z'
-  },
-  {
-    id: '70000000-0000-0000-0000-000000000004',
-    invoiceId: '60000000-0000-0000-0000-000000000005',
-    invoiceNumber: 'INV-2026-005',
-    clientId: '20000000-0000-0000-0000-000000000004',
-    clientName: 'Zomira Retail Hub',
-    projectId: '30000000-0000-0000-0000-000000000004',
-    projectName: 'OmniChannel WhatsApp & Voice AI Bot',
-    amount: 35000,
-    paymentDate: '2026-08-02',
-    paymentMethod: 'Bank Transfer (NEFT)',
-    transactionId: 'NEFT-HDFC-98213',
-    status: 'Paid',
-    notes: 'Kickoff advance 50% initial payment',
-    createdAt: '2026-08-02T12:00:00Z'
-  },
-  {
-    id: '70000000-0000-0000-0000-000000000005',
-    invoiceId: '60000000-0000-0000-0000-000000000006',
-    invoiceNumber: 'INV-2026-006',
-    clientId: '20000000-0000-0000-0000-000000000005',
-    clientName: 'NeoFin Wealth Partners',
-    projectId: '30000000-0000-0000-0000-000000000005',
-    projectName: 'Fintech Wealth Management Dashboard',
-    amount: 50000,
-    paymentDate: '2026-07-22',
-    paymentMethod: 'Corporate Wire',
-    transactionId: 'WIRE-ICICI-88124',
-    status: 'Paid',
-    notes: 'Phase 1 & initial onboarding payment',
-    createdAt: '2026-07-22T14:30:00Z'
-  }
-];
-
-export const INITIAL_EXPENSES: Expense[] = [
-  {
-    id: '80000000-0000-0000-0000-000000000001',
-    category: 'Developer Cost',
-    amount: 4500,
-    expenseDate: '2026-08-05',
-    vendor: 'Contractor Pool',
-    description: 'Senior AI Engineer sprint compensation',
-    paymentMethod: 'Bank Transfer',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    approvedBy: 'Abhinav',
-    status: 'Approved',
-    createdAt: '2026-08-05T09:00:00Z'
-  },
-  {
-    id: '80000000-0000-0000-0000-000000000002',
-    category: 'SaaS Tools',
-    amount: 850,
-    expenseDate: '2026-08-01',
-    vendor: 'OpenAI & Anthropic',
-    description: 'LLM API Tokens for development & prompt testing',
-    paymentMethod: 'Corporate Card',
-    approvedBy: 'Abhinav',
-    status: 'Approved',
-    createdAt: '2026-08-01T10:00:00Z'
-  },
-  {
-    id: '80000000-0000-0000-0000-000000000003',
-    category: 'Infrastructure/Cloud',
-    amount: 620,
-    expenseDate: '2026-08-02',
-    vendor: 'Supabase & AWS',
-    description: 'PostgreSQL database hosting & GPU compute',
-    paymentMethod: 'Corporate Card',
-    approvedBy: 'Abhinav',
-    status: 'Approved',
-    createdAt: '2026-08-02T11:00:00Z'
-  }
-];
-
-export const INITIAL_AGREEMENTS: Agreement[] = [
-  {
-    id: '90000000-0000-0000-0000-000000000001',
-    name: 'Master Services Agreement (MSA)',
-    agreementType: 'Master Service Agreement',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    startDate: '2026-08-01',
-    expiryDate: '2027-08-01',
-    commercialValue: 25000,
-    status: 'Signed',
-    signedDate: '2026-07-28',
-    fileUrl: 'https://agxperience.com/docs/msa-shrawello.pdf',
-    createdAt: '2026-07-28T09:00:00Z'
-  },
-  {
-    id: '90000000-0000-0000-0000-000000000002',
-    name: 'Mutual Non-Disclosure Agreement',
-    agreementType: 'NDA',
-    clientId: '20000000-0000-0000-0000-000000000002',
-    clientName: 'Aether Capital',
-    projectId: '30000000-0000-0000-0000-000000000002',
-    projectName: 'Development Basics & Workflow Hub',
-    startDate: '2026-07-10',
-    expiryDate: '2029-07-10',
-    commercialValue: 18000,
-    status: 'Signed',
-    signedDate: '2026-07-10',
-    fileUrl: 'https://agxperience.com/docs/nda-aether.pdf',
-    createdAt: '2026-07-10T08:00:00Z'
-  },
-  {
-    id: '90000000-0000-0000-0000-000000000003',
-    name: 'Healthcare Data Processing Agreement',
-    agreementType: 'Statement of Work',
-    clientId: '20000000-0000-0000-0000-000000000003',
-    clientName: 'Nexis Health Solutions',
-    projectId: '30000000-0000-0000-0000-000000000003',
-    projectName: 'Enterprise RAG Architecture',
-    startDate: '2026-08-05',
-    expiryDate: '2027-02-05',
-    commercialValue: 32000,
-    status: 'Sent',
-    fileUrl: 'https://agxperience.com/docs/sow-nexis.pdf',
-    createdAt: '2026-08-05T14:00:00Z'
-  },
-  {
-    id: '90000000-0000-0000-0000-000000000004',
-    name: 'Master Service Agreement & SLA',
-    agreementType: 'Master Service Agreement',
-    clientId: '20000000-0000-0000-0000-000000000004',
-    clientName: 'Zomira Retail Hub',
-    projectId: '30000000-0000-0000-0000-000000000004',
-    projectName: 'OmniChannel WhatsApp & Voice AI Bot',
-    startDate: '2026-08-01',
-    expiryDate: '2027-08-01',
-    commercialValue: 75000,
-    status: 'Signed',
-    signedDate: '2026-08-01',
-    fileUrl: 'https://agxperience.com/docs/msa-zomira.pdf',
-    createdAt: '2026-07-30T10:00:00Z'
-  },
-  {
-    id: '90000000-0000-0000-0000-000000000005',
-    name: 'Enterprise Software Development Agreement',
-    agreementType: 'Statement of Work',
-    clientId: '20000000-0000-0000-0000-000000000005',
-    clientName: 'NeoFin Wealth Partners',
-    projectId: '30000000-0000-0000-0000-000000000005',
-    projectName: 'Fintech Wealth Management Dashboard',
-    startDate: '2026-07-20',
-    expiryDate: '2027-01-20',
-    commercialValue: 120000,
-    status: 'Signed',
-    signedDate: '2026-07-20',
-    fileUrl: 'https://agxperience.com/docs/sow-neofin.pdf',
-    createdAt: '2026-07-18T14:00:00Z'
-  },
-  {
-    id: '90000000-0000-0000-0000-000000000006',
-    name: 'Supply Chain Automation SOW',
-    agreementType: 'Statement of Work',
-    clientId: '20000000-0000-0000-0000-000000000006',
-    clientName: 'Apex Logistics Global',
-    projectId: '30000000-0000-0000-0000-000000000006',
-    projectName: 'Cloud Supply Chain Automation & Fleet IoT',
-    startDate: '2026-09-01',
-    expiryDate: '2027-03-01',
-    commercialValue: 90000,
-    status: 'Sent',
-    fileUrl: 'https://agxperience.com/docs/sow-apex.pdf',
-    createdAt: '2026-08-20T11:00:00Z'
-  }
-];
-
-export const INITIAL_DOCUMENTS: DocumentItem[] = [
-  {
-    id: 'a0000000-0000-0000-0000-000000000001',
-    title: 'AGX-Shrawello-Technical-Architecture.pdf',
-    docType: 'Specification',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    fileUrl: 'https://agxperience.com/docs/arch.pdf',
-    fileSize: '3.4 MB',
-    uploadedBy: 'Natalia Varnan',
-    createdAt: '2026-08-02T10:00:00Z'
-  },
-  {
-    id: 'a0000000-0000-0000-0000-000000000002',
-    title: 'Aether-SEC-Ingestion-Flowchart.png',
-    docType: 'Design',
-    clientId: '20000000-0000-0000-0000-000000000002',
-    clientName: 'Aether Capital',
-    projectId: '30000000-0000-0000-0000-000000000002',
-    projectName: 'Development Basics & Workflow Hub',
-    fileUrl: 'https://agxperience.com/docs/flow.png',
-    fileSize: '1.2 MB',
-    uploadedBy: 'Michael Andrew',
-    createdAt: '2026-08-16T15:30:00Z'
-  }
-];
-
-export const INITIAL_CREDENTIALS: CredentialVaultItem[] = [
-  {
-    id: 'b0000000-0000-0000-0000-000000000001',
-    platformName: 'LiveKit WebRTC Cloud Gateway',
-    serviceUrl: 'https://cloud.livekit.io',
-    username: 'ops@agxperience.com',
-    passwordEncrypted: 'LiveKit_SecPass_9921#',
-    apiKeyEncrypted: 'API_KEY_LIVEKIT_PROD_998127',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    notes: 'Voice agent stream connector',
-    accessRoles: ['Super Admin', 'Admin', 'Project Manager'],
-    createdAt: '2026-08-01T09:00:00Z',
-    updatedAt: '2026-08-01T09:00:00Z'
-  },
-  {
-    id: 'b0000000-0000-0000-0000-000000000002',
-    platformName: 'SEC EDGAR Ingestion Pipeline Webhook',
-    serviceUrl: 'https://api.sec.gov/edgar',
-    username: 'data-sync@aethercap.com',
-    passwordEncrypted: 'Aether_SecPass_8192$',
-    apiKeyEncrypted: 'SEC_AUTH_TOKEN_99812',
-    clientId: '20000000-0000-0000-0000-000000000002',
-    clientName: 'Aether Capital',
-    projectId: '30000000-0000-0000-0000-000000000002',
-    projectName: 'Development Basics & Workflow Hub',
-    notes: 'Webhook authorization token',
-    accessRoles: ['Super Admin', 'Admin', 'Developer'],
-    createdAt: '2026-07-16T11:00:00Z',
-    updatedAt: '2026-07-16T11:00:00Z'
-  },
-  {
-    id: 'b0000000-0000-0000-0000-000000000003',
-    platformName: 'Nexis HIPAA Private Vault Endpoint',
-    serviceUrl: 'https://vault.nexishealth.fr',
-    username: 'agx_service_acc',
-    passwordEncrypted: 'Nexis_VaultKey_7719@',
-    apiKeyEncrypted: 'NEXIS_BEARER_TOKEN_PROD_1',
-    clientId: '20000000-0000-0000-0000-000000000003',
-    clientName: 'Nexis Health Solutions',
-    projectId: '30000000-0000-0000-0000-000000000003',
-    projectName: 'Enterprise RAG Architecture',
-    notes: 'Encrypted TLS key for FHIR database sync',
-    accessRoles: ['Super Admin'],
-    createdAt: '2026-08-11T14:00:00Z',
-    updatedAt: '2026-08-11T14:00:00Z'
-  }
-];
-
-export const INITIAL_EVENTS: CalendarEvent[] = [
-  {
-    id: 'c0000000-0000-0000-0000-000000000001',
-    title: 'Sprint Review & Demo: Voice Agent',
-    eventType: 'Meeting',
-    startTime: '2026-08-21T14:00:00Z',
-    endTime: '2026-08-21T15:00:00Z',
-    location: 'Google Meet',
-    participants: ['Abhinav', 'Karan Mehta', 'Michael Andrew'],
-    relatedClientId: '20000000-0000-0000-0000-000000000001',
-    relatedProjectId: '30000000-0000-0000-0000-000000000001',
-    notes: 'Demonstrate real-time voice latency and tool calling flow.',
-    createdAt: '2026-08-18T10:00:00Z'
-  },
-  {
-    id: 'c0000000-0000-0000-0000-000000000002',
-    title: 'Phase 2 Milestone Due',
-    eventType: 'Project Deadline',
-    startTime: '2026-08-28T18:00:00Z',
-    location: 'Internal',
-    participants: ['Michael Andrew', 'Natalia Varnan'],
-    relatedClientId: '20000000-0000-0000-0000-000000000001',
-    relatedProjectId: '30000000-0000-0000-0000-000000000001',
-    notes: 'Deliverables handover.',
-    createdAt: '2026-08-15T09:00:00Z'
-  },
-  {
-    id: 'c0000000-0000-0000-0000-000000000003',
-    title: 'Invoice Due Reminder (₹10,000)',
-    eventType: 'Payment Reminder',
-    startTime: '2026-08-30T09:00:00Z',
-    participants: ['Robert Sterling'],
-    relatedClientId: '20000000-0000-0000-0000-000000000001',
-    notes: 'Follow up with Shrawello accounts team.',
-    createdAt: '2026-08-15T09:00:00Z'
-  }
-];
-
-export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 'd0000000-0000-0000-0000-000000000001',
-    title: 'New High-Value Lead',
-    message: 'Marcus Sterling from Vanguard FinTech submitted an enterprise request (₹24,000).',
-    type: 'urgent',
-    isRead: false,
-    link: '/admin/leads',
-    createdAt: '2026-08-20T08:30:00Z'
-  },
-  {
-    id: 'd0000000-0000-0000-0000-000000000002',
-    title: 'Milestone Completed',
-    message: 'FHIR API Connector for Nexis Health marked as Completed.',
-    type: 'success',
-    isRead: false,
-    link: '/admin/projects',
-    createdAt: '2026-08-19T14:15:00Z'
-  },
-  {
-    id: 'd0000000-0000-0000-0000-000000000003',
-    title: 'Invoice Payment Received',
-    message: 'Payment of ₹11,000 received from Aether Capital.',
-    type: 'success',
-    isRead: true,
-    link: '/admin/finance',
-    createdAt: '2026-07-24T11:20:00Z'
-  }
-];
-
-export const INITIAL_AUDIT_LOGS: AuditLog[] = [
-  {
-    id: 'e0000000-0000-0000-0000-000000000001',
-    userName: 'Abhinav',
-    userRole: 'Super Admin',
-    actionType: 'STATUS_CHANGE',
-    entityType: 'Project',
-    entityId: '30000000-0000-0000-0000-000000000002',
-    description: 'Updated project status for "Development Basics & Workflow Hub" from IN PROGRESS to TESTING.',
-    beforeState: { status: 'IN PROGRESS' },
-    afterState: { status: 'TESTING' },
-    createdAt: '2026-08-20T08:00:00Z'
-  },
-  {
-    id: 'e0000000-0000-0000-0000-000000000002',
-    userName: 'Taylor Vance',
-    userRole: 'Sales Manager',
-    actionType: 'STATUS_CHANGE',
-    entityType: 'Lead',
-    entityId: '10000000-0000-0000-0000-000000000004',
-    description: 'Marked lead Devon Miller (CloudScale SaaS) as WON (₹8,000).',
-    beforeState: { status: 'NEGOTIATION' },
-    afterState: { status: 'WON' },
-    createdAt: '2026-08-20T10:00:00Z'
-  },
-  {
-    id: 'e0000000-0000-0000-0000-000000000003',
-    userName: 'Robert Sterling',
-    userRole: 'Accountant',
-    actionType: 'PAYMENT_RECORDED',
-    entityType: 'Payment',
-    entityId: '70000000-0000-0000-0000-000000000002',
-    description: 'Logged ₹11,000 Stripe payment for invoice INV-2026-003.',
-    createdAt: '2026-07-24T11:20:00Z'
-  }
-];
-
-export const INITIAL_ISSUES: ProjectIssue[] = [
-  {
-    id: 'f0000000-0000-0000-0000-000000000010',
-    projectId: 'omnilog-demo',
-    projectName: 'Autonomous Freight Dispatch & Fleet Telemetry AI',
-    clientId: '20000000-0000-0000-0000-000000000007',
-    clientName: 'Omnilog Freight Systems',
-    ticketNumber: 'ISSUE-2026-081',
-    title: 'GPS telematics webhook retry on carrier API timeout',
-    description: 'When Geotab fleet API undergoes scheduled maintenance, webhook payload drops without retry. Need exponential backoff retry queue.',
-    issueType: 'Bug',
-    priority: 'High',
-    status: 'IN PROGRESS',
-    reporterName: 'Marcus Chen',
-    reporterEmail: 'marcus.chen@omnilog.io',
-    reporterPhone: '+1 (312) 880-9214',
-    adminNotes: 'Implementing Redis BullMQ retry queue with 5 attempts.',
-    assignedTo: 'Natalia Varnan',
-    createdAt: '2026-08-20T10:15:00Z',
-    updatedAt: '2026-08-21T14:30:00Z'
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000011',
-    projectId: 'omnilog-demo',
-    projectName: 'Autonomous Freight Dispatch & Fleet Telemetry AI',
-    clientId: '20000000-0000-0000-0000-000000000007',
-    clientName: 'Omnilog Freight Systems',
-    ticketNumber: 'ISSUE-2026-082',
-    title: 'Automated Rate Negotiation Voice latency tuned down to 420ms',
-    description: 'Outbound rate negotiation voicebot response lag was 1.8s. Tuned VAD (Voice Activity Detection) threshold and streamed chunk generation.',
-    issueType: 'Performance',
-    priority: 'Critical',
-    status: 'RESOLVED',
-    reporterName: 'Marcus Chen',
-    reporterEmail: 'marcus.chen@omnilog.io',
-    reporterPhone: '+1 (312) 880-9214',
-    adminNotes: 'Switched to Groq Llama 3 70B inference endpoint with ElevenLabs Turbo v2.5 streaming.',
-    resolutionNotes: 'Latency benchmark achieved 418ms roundtrip. Driver field test passed successfully.',
-    assignedTo: 'Abhinav',
-    resolvedAt: '2026-08-23T16:00:00Z',
-    createdAt: '2026-08-21T09:00:00Z',
-    updatedAt: '2026-08-23T16:00:00Z'
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000001',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    ticketNumber: 'ISSUE-2026-001',
-    title: 'Voice stream echo during LiveKit WebRTC reconnect',
-    description: 'When switching between Wi-Fi and 5G cellular, the agent audio produces a 1.2s delayed duplicate echo. Steps: start call on mobile Safari, toggle Wi-Fi off.',
-    issueType: 'Bug',
-    priority: 'High',
-    status: 'IN PROGRESS',
-    reporterName: 'Sarah Jenkins',
-    reporterEmail: 'sjenkins@apexlogistics.io',
-    reporterPhone: '+1 (555) 382-9012',
-    adminNotes: 'Assigned to Natalia to adjust WebRTC echo cancellation constraints.',
-    resolutionNotes: 'Implementing buffer flush on iceconnectionstatechange event.',
-    assignedTo: 'Natalia Varnan',
-    createdAt: '2026-08-18T10:30:00Z',
-    updatedAt: '2026-08-19T14:20:00Z'
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000002',
-    projectId: '30000000-0000-0000-0000-000000000001',
-    projectName: 'AI Voice Agent & Support Pipeline',
-    clientId: '20000000-0000-0000-0000-000000000001',
-    clientName: 'Shrawello Systems',
-    ticketNumber: 'ISSUE-2026-002',
-    title: 'Custom voice personality tone needs to be more formal',
-    description: 'Our executive board requested that the customer support tone avoids casual greetings like "Hey there" and instead uses "Good morning/afternoon, thank you for calling Shrawello".',
-    issueType: 'Content Change',
-    priority: 'Medium',
-    status: 'RESOLVED',
-    reporterName: 'Sarah Jenkins',
-    reporterEmail: 'sjenkins@apexlogistics.io',
-    reporterPhone: '+1 (555) 382-9012',
-    adminNotes: 'Prompt modified in ElevenLabs dynamic system instructions.',
-    resolutionNotes: 'Updated system prompt and greeting fallback in production agent.',
-    assignedTo: 'Abhinav',
-    resolvedAt: '2026-08-19T16:00:00Z',
-    createdAt: '2026-08-17T11:00:00Z',
-    updatedAt: '2026-08-19T16:00:00Z'
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000003',
-    projectId: '30000000-0000-0000-0000-000000000002',
-    projectName: 'Development Basics & Workflow Hub',
-    clientId: '20000000-0000-0000-0000-000000000002',
-    clientName: 'Aether Capital',
-    ticketNumber: 'ISSUE-2026-003',
-    title: 'SEC 10-K parsing timeout on reports exceeding 200 pages',
-    description: 'When ingesting large annual filings with heavy tables, the background worker times out after 60 seconds.',
-    issueType: 'Performance',
-    priority: 'Critical',
-    status: 'REPORTED',
-    reporterName: 'Marcus Sterling',
-    reporterEmail: 'm.sterling@vanguardft.co.uk',
-    adminNotes: 'Need to chunk PDF tables into Redis background queue.',
-    assignedTo: 'Natalia Varnan',
-    createdAt: '2026-08-20T09:15:00Z',
-    updatedAt: '2026-08-20T09:15:00Z'
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000004',
-    projectId: '30000000-0000-0000-0000-000000000004',
-    projectName: 'OmniChannel WhatsApp & Voice AI Bot',
-    clientId: '20000000-0000-0000-0000-000000000004',
-    clientName: 'Zomira Retail Hub',
-    ticketNumber: 'ISSUE-2026-101',
-    title: 'WhatsApp Webhook timeouts during flash sale traffic spikes',
-    description: 'During our Saturday 8 PM flash sale, incoming customer inquiries were queued for over 45 seconds before the bot answered. Need to increase concurrency worker threshold.',
-    issueType: 'Bug',
-    priority: 'High',
-    status: 'IN PROGRESS',
-    reporterName: 'Rohan Deshmukh',
-    reporterEmail: 'rohan@zomiraretail.com',
-    reporterPhone: '+91 98201 44882',
-    adminNotes: 'Scaling FastAPI webhook workers from 2 to 8 instances on AWS ECS.',
-    resolutionNotes: 'Configured Redis queue with horizontal autoscaling for Meta webhook endpoints.',
-    assignedTo: 'Natalia Varnan',
-    createdAt: '2026-08-21T18:30:00Z',
-    updatedAt: '2026-08-22T10:15:00Z'
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000005',
-    projectId: '30000000-0000-0000-0000-000000000004',
-    projectName: 'OmniChannel WhatsApp & Voice AI Bot',
-    clientId: '20000000-0000-0000-0000-000000000004',
-    clientName: 'Zomira Retail Hub',
-    ticketNumber: 'ISSUE-2026-102',
-    title: 'Update welcome greeting copy for festive season',
-    description: 'Please change the initial greeting message to include our Diwali promotion code "FESTIVE25" and link to the festive catalog.',
-    issueType: 'Content Change',
-    priority: 'Medium',
-    status: 'RESOLVED',
-    reporterName: 'Rohan Deshmukh',
-    reporterEmail: 'rohan@zomiraretail.com',
-    reporterPhone: '+91 98201 44882',
-    adminNotes: 'Prompt updated in conversational intent model.',
-    resolutionNotes: 'Updated greeting template in Meta Business Manager and synced with agent system prompt.',
-    assignedTo: 'Abhinav',
-    resolvedAt: '2026-08-23T12:00:00Z',
-    createdAt: '2026-08-22T09:00:00Z',
-    updatedAt: '2026-08-23T12:00:00Z'
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000006',
-    projectId: '30000000-0000-0000-0000-000000000005',
-    projectName: 'Fintech Wealth Management Dashboard',
-    clientId: '20000000-0000-0000-0000-000000000005',
-    clientName: 'NeoFin Wealth Partners',
-    ticketNumber: 'ISSUE-2026-103',
-    title: 'Mutual fund NAV chart tooltip flickers on mobile touch screens',
-    description: 'When dragging finger across the 1-year historical return graph on iOS Safari, the value tooltip flickers rapidly and jumps position.',
-    issueType: 'UI/UX Polish',
-    priority: 'Medium',
-    status: 'REPORTED',
-    reporterName: 'Pooja Singhania',
-    reporterEmail: 'pooja.s@neofinwealth.in',
-    reporterPhone: '+91 97110 55991',
-    adminNotes: 'Add debounced touch move listener to Recharts responsive container.',
-    createdAt: '2026-08-24T11:45:00Z',
-    updatedAt: '2026-08-24T11:45:00Z'
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000007',
-    projectId: '30000000-0000-0000-0000-000000000005',
-    projectName: 'Fintech Wealth Management Dashboard',
-    clientId: '20000000-0000-0000-0000-000000000005',
-    clientName: 'NeoFin Wealth Partners',
-    ticketNumber: 'ISSUE-2026-104',
-    title: 'Add two-factor SMS OTP retry countdown timer',
-    description: 'Clients requesting re-send of 2FA authentication SMS during login should see a 30-second countdown button instead of instant clicks.',
-    issueType: 'Feature Revision',
-    priority: 'High',
-    status: 'IN REVIEW',
-    reporterName: 'Aditya Rao',
-    reporterEmail: 'aditya.r@neofinwealth.in',
-    reporterPhone: '+91 98112 00412',
-    adminNotes: 'UX improvement for auth flow to prevent SMS gateway rate limiting.',
-    assignedTo: 'Taylor Vance',
-    createdAt: '2026-08-23T15:20:00Z',
-    updatedAt: '2026-08-24T09:30:00Z'
-  }
-];
+export const INITIAL_USERS: UserProfile[] = [DEFAULT_ADMIN_USER];
+export const INITIAL_LEADS: Lead[] = [];
+export const INITIAL_CLIENTS: Client[] = [];
+export const INITIAL_PROJECTS: Project[] = [];
+export const INITIAL_TASKS: Task[] = [];
+export const INITIAL_INVOICES: Invoice[] = [];
+export const INITIAL_PAYMENTS: Payment[] = [];
+export const INITIAL_EXPENSES: Expense[] = [];
+export const INITIAL_AGREEMENTS: Agreement[] = [];
+export const INITIAL_DOCUMENTS: DocumentItem[] = [];
+export const INITIAL_CREDENTIALS: CredentialVaultItem[] = [];
+export const INITIAL_EVENTS: CalendarEvent[] = [];
+export const INITIAL_NOTIFICATIONS: NotificationItem[] = [];
+export const INITIAL_AUDIT_LOGS: AuditLog[] = [];
+export const INITIAL_ISSUES: ProjectIssue[] = [];
+export const INITIAL_PARTNERS: Partner[] = [];
+export const INITIAL_PARTNER_REFERRALS: PartnerReferral[] = [];
+export const INITIAL_PARTNER_PAYOUTS: PartnerPayout[] = [];
 
 const STORAGE_PREFIX = 'agx_crm_';
+
+// Purge legacy mock data cache once on initial load
+const CLEAN_VERSION_KEY = 'agx_crm_prod_clean_v1';
+if (typeof window !== 'undefined' && !localStorage.getItem(CLEAN_VERSION_KEY)) {
+  const keysToClean = [
+    'leads', 'clients', 'projects', 'tasks', 'invoices', 'payments',
+    'expenses', 'agreements', 'documents', 'credentials', 'events',
+    'notifications', 'audit_logs', 'issues', 'team_members'
+  ];
+  keysToClean.forEach(k => localStorage.removeItem(STORAGE_PREFIX + k));
+  localStorage.setItem(CLEAN_VERSION_KEY, 'true');
+}
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -1251,14 +64,20 @@ function loadFromStorage<T>(key: string, fallback: T): T {
     const parsed = JSON.parse(item);
     if (Array.isArray(fallback)) {
       if (!Array.isArray(parsed)) return fallback;
+      const cleaned = parsed.filter((entry: any) => {
+        if (!entry || typeof entry !== 'object') return false;
+        const id = String(entry.id || '');
+        if (/^[1-9a-d]0000000-0000-0000-0000-/.test(id)) return false;
+        return true;
+      });
       if (key === 'projects') {
-        return parsed.map((p: any) => ({
+        return cleaned.map((p: any) => ({
           ...p,
           portalToken: p.portalToken || `prj_sec_${(p.name || 'proj').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8)}_${p.id.slice(0, 6)}`,
           portalEnabled: p.portalEnabled !== undefined ? p.portalEnabled : true
         })) as unknown as T;
       }
-      return parsed as unknown as T;
+      return cleaned as unknown as T;
     }
     if (fallback && typeof fallback === 'object') {
       return ((parsed && typeof parsed === 'object') ? { ...fallback, ...parsed } : fallback) as T;
@@ -1293,7 +112,10 @@ export function generateUUID(): string {
 // Global hook & store state
 export function useCrmStore() {
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => 
-    loadFromStorage('current_user', INITIAL_USERS[0])
+    authService.getStaffSession() || loadFromStorage('current_user', DEFAULT_ADMIN_USER)
+  );
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => 
+    Boolean(authService.getStaffSession())
   );
   const [teamMembers, setTeamMembers] = useState<UserProfile[]>(() => 
     loadFromStorage('team_members', INITIAL_USERS)
@@ -1312,6 +134,9 @@ export function useCrmStore() {
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => loadFromStorage('notifications', INITIAL_NOTIFICATIONS));
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => loadFromStorage('audit_logs', INITIAL_AUDIT_LOGS));
   const [issues, setIssues] = useState<ProjectIssue[]>(() => loadFromStorage('issues', INITIAL_ISSUES));
+  const [partners, setPartners] = useState<Partner[]>(() => loadFromStorage('partners', INITIAL_PARTNERS));
+  const [partnerReferrals, setPartnerReferrals] = useState<PartnerReferral[]>(() => loadFromStorage('partner_referrals', INITIAL_PARTNER_REFERRALS));
+  const [partnerPayouts, setPartnerPayouts] = useState<PartnerPayout[]>(() => loadFromStorage('partner_payouts', INITIAL_PARTNER_PAYOUTS));
 
   // Connection & sync state
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(true);
@@ -1337,6 +162,9 @@ export function useCrmStore() {
   useEffect(() => saveToStorage('notifications', notifications), [notifications]);
   useEffect(() => saveToStorage('audit_logs', auditLogs), [auditLogs]);
   useEffect(() => saveToStorage('issues', issues), [issues]);
+  useEffect(() => saveToStorage('partners', partners), [partners]);
+  useEffect(() => saveToStorage('partner_referrals', partnerReferrals), [partnerReferrals]);
+  useEffect(() => saveToStorage('partner_payouts', partnerPayouts), [partnerPayouts]);
 
   // Cloud Data Loader
   const refreshFromCloud = useCallback(async (silent = false) => {
@@ -1344,34 +172,26 @@ export function useCrmStore() {
       if (!silent) setIsSyncing(true);
       const data = await crmService.fetchAllData();
 
-      // Guard: Only replace operational state if cloud actually returned records.
-      // If cloud database is empty / unseeded, retain local/mock data to prevent empty screen.
-      const hasCloudData = 
-        (data.projects?.length || 0) > 0 || 
-        (data.leads?.length || 0) > 0 || 
-        (data.clients?.length || 0) > 0;
-
-      if (hasCloudData) {
-        if (data.profiles !== undefined) setTeamMembers(data.profiles.length > 0 ? data.profiles : INITIAL_USERS);
-        if (data.leads !== undefined) setLeads(data.leads);
-        if (data.clients !== undefined) setClients(data.clients);
-        if (data.projects !== undefined) setProjects(data.projects);
-        if (data.tasks !== undefined) setTasks(data.tasks);
-        if (data.invoices !== undefined) setInvoices(data.invoices);
-        if (data.payments !== undefined) setPayments(data.payments);
-        if (data.expenses !== undefined) setExpenses(data.expenses);
-        if (data.agreements !== undefined) setAgreements(data.agreements);
-        if (data.documents !== undefined) setDocuments(data.documents);
-        if (data.credentials !== undefined) setCredentials(data.credentials);
-        if (data.events !== undefined) setEvents(data.events);
-        if (data.notifications !== undefined) setNotifications(data.notifications);
-        if (data.auditLogs !== undefined) setAuditLogs(data.auditLogs);
-      } else {
-        console.log('[crmStore] Cloud database is unseeded or empty. Retaining current operational dataset.');
-      }
+      if (data.profiles !== undefined) setTeamMembers(data.profiles.length > 0 ? data.profiles : INITIAL_USERS);
+      if (data.leads !== undefined) setLeads(data.leads);
+      if (data.clients !== undefined) setClients(data.clients);
+      if (data.projects !== undefined) setProjects(data.projects);
+      if (data.tasks !== undefined) setTasks(data.tasks);
+      if (data.invoices !== undefined) setInvoices(data.invoices);
+      if (data.payments !== undefined) setPayments(data.payments);
+      if (data.expenses !== undefined) setExpenses(data.expenses);
+      if (data.agreements !== undefined) setAgreements(data.agreements);
+      if (data.documents !== undefined) setDocuments(data.documents);
+      if (data.credentials !== undefined) setCredentials(data.credentials);
+      if (data.events !== undefined) setEvents(data.events);
+      if (data.notifications !== undefined) setNotifications(data.notifications);
+      if (data.auditLogs !== undefined) setAuditLogs(data.auditLogs);
+      if ((data as any).partners !== undefined) setPartners((data as any).partners);
+      if ((data as any).partnerReferrals !== undefined) setPartnerReferrals((data as any).partnerReferrals);
+      if ((data as any).partnerPayouts !== undefined) setPartnerPayouts((data as any).partnerPayouts);
 
       const cloudIssues = await crmService.fetchAllIssues();
-      if (cloudIssues && cloudIssues.length > 0) {
+      if (cloudIssues !== undefined) {
         setIssues(cloudIssues);
       }
 
@@ -1420,12 +240,16 @@ export function useCrmStore() {
   };
 
   const loginUser = (user: UserProfile) => {
+    authService.setStaffSession(user);
     setCurrentUser(user);
+    setIsAuthenticated(true);
     toast.success('Authentication Successful', `Welcome back, ${user.fullName}`);
   };
 
   const logoutUser = () => {
-    setCurrentUser(INITIAL_USERS[0]);
+    authService.clearStaffSession();
+    setCurrentUser(DEFAULT_ADMIN_USER);
+    setIsAuthenticated(false);
     toast.info('Signed Out', 'Active session ended.');
   };
 
@@ -1574,6 +398,9 @@ export function useCrmStore() {
       totalPaid: 0,
       outstandingAmount: dealVal,
       source: lead.source,
+      partnerId: lead.partnerId,
+      partnerName: lead.partnerName,
+      partnerCode: lead.partnerCode,
       notes: `Converted from won lead. Initial deal size: ₹${dealVal.toLocaleString('en-IN')}`,
       status: 'Active'
     };
@@ -2118,6 +945,49 @@ export function useCrmStore() {
       }));
     }
 
+    // Reconcile Partner Commission & Milestone tracking (track until full payment)
+    setPartnerReferrals(prev => prev.map(ref => {
+      if (ref.clientId === payment.clientId || (targetProjId && ref.projectId === targetProjId)) {
+        const newTotalPaid = ref.totalPaid + payment.amount;
+        const newPendingPayment = Math.max(0, ref.dealValue - newTotalPaid);
+        const newPaymentStatus = newTotalPaid >= ref.dealValue ? 'Fully Paid' : 'Partially Paid';
+        const newCommissionEarned = Math.round(newTotalPaid * ref.commissionRate);
+        const commissionDelta = newCommissionEarned - ref.commissionEarned;
+
+        // Update partner earnings in state
+        setPartners(pPrev => pPrev.map(p => {
+          if (p.id === ref.partnerId) {
+            const updatedTotalEarnings = p.totalEarnings + commissionDelta;
+            const updatedPendingEarnings = Math.max(0, updatedTotalEarnings - p.paidEarnings);
+            return {
+              ...p,
+              totalEarnings: updatedTotalEarnings,
+              pendingEarnings: updatedPendingEarnings,
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return p;
+        }));
+
+        crmService.updatePartnerReferral(ref.id, {
+          totalPaid: newTotalPaid,
+          pendingPayment: newPendingPayment,
+          paymentStatus: newPaymentStatus,
+          commissionEarned: newCommissionEarned
+        }).catch(err => console.warn('Partner referral sync err:', err));
+
+        return {
+          ...ref,
+          totalPaid: newTotalPaid,
+          pendingPayment: newPendingPayment,
+          paymentStatus: newPaymentStatus,
+          commissionEarned: newCommissionEarned,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return ref;
+    }));
+
     logAudit('PAYMENT_RECORDED', 'Payment', newPayment.id, `Recorded payment of ₹${newPayment.amount.toLocaleString('en-IN')} from ${newPayment.clientName}`);
     toast.success('Payment Received 💰', `₹${newPayment.amount.toLocaleString('en-IN')} logged via ${newPayment.paymentMethod}`);
 
@@ -2641,26 +1511,103 @@ export function useCrmStore() {
   const canManageUsers = hasPermission('settings') || ['Super Admin', 'Admin'].includes(currentUser.role);
 
   const resetToSampleData = () => {
-    setLeads(INITIAL_LEADS);
-    setClients(INITIAL_CLIENTS);
-    setProjects(INITIAL_PROJECTS);
-    setAgreements(INITIAL_AGREEMENTS);
-    setPayments(INITIAL_PAYMENTS);
-    setIssues(INITIAL_ISSUES);
-    setTasks(INITIAL_TASKS);
-    setInvoices(INITIAL_INVOICES);
-    setExpenses(INITIAL_EXPENSES);
-    setDocuments(INITIAL_DOCUMENTS);
-    setCredentials(INITIAL_CREDENTIALS);
-    setEvents(INITIAL_EVENTS);
-    setNotifications(INITIAL_NOTIFICATIONS);
-    setAuditLogs(INITIAL_AUDIT_LOGS);
-    setTeamMembers(INITIAL_USERS);
-    toast.success('Mock Data Restored 🔄', 'Reset all records to fresh sample projects, agreements, and client issues.');
+    refreshFromCloud(false);
+  };
+
+  // --- Partner Program Handlers ---
+  const createPartner = (partner: Omit<Partner, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const tempId = generateUUID();
+    const newPartner: Partner = {
+      ...partner,
+      id: tempId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setPartners(prev => [newPartner, ...prev]);
+    logAudit('CREATE', 'Partner', tempId, `Created partner ${newPartner.name} (${newPartner.referralCode})`);
+    toast.success('Partner Created', `Partner "${newPartner.name}" onboarded successfully.`);
+
+    crmService.createPartner(partner).then(saved => {
+      setPartners(prev => prev.map(p => p.id === tempId ? saved : p));
+    }).catch(err => console.warn('Supabase create partner err:', err));
+  };
+
+  const updatePartner = (id: string, updates: Partial<Partner>) => {
+    setPartners(prev => prev.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p));
+    toast.success('Partner Updated', 'Partner profile and commission settings saved.');
+    crmService.updatePartner(id, updates).catch(err => console.warn('Supabase update partner err:', err));
+  };
+
+  const deletePartner = (id: string) => {
+    const partner = partners.find(p => p.id === id);
+    setPartners(prev => prev.filter(p => p.id !== id));
+    logAudit('DELETE', 'Partner', id, `Removed partner ${partner?.name || id}`);
+    toast.warning('Partner Deleted', 'Partner removed from active roster.');
+    crmService.deletePartner(id).catch(err => console.warn('Supabase delete partner err:', err));
+  };
+
+  const addPartnerReferral = (referral: Omit<PartnerReferral, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const tempId = generateUUID();
+    const newReferral: PartnerReferral = {
+      ...referral,
+      id: tempId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setPartnerReferrals(prev => [newReferral, ...prev]);
+    toast.success('Referral Registered', `Referral client "${newReferral.clientName}" registered into pipeline.`);
+
+    crmService.createPartnerReferral(referral).then(saved => {
+      setPartnerReferrals(prev => prev.map(r => r.id === tempId ? saved : r));
+    }).catch(err => console.warn('Supabase create referral err:', err));
+  };
+
+  const updatePartnerReferral = (id: string, updates: Partial<PartnerReferral>) => {
+    setPartnerReferrals(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r));
+    crmService.updatePartnerReferral(id, updates).catch(err => console.warn('Supabase update referral err:', err));
+  };
+
+  const deletePartnerReferral = (id: string) => {
+    setPartnerReferrals(prev => prev.filter(r => r.id !== id));
+    toast.warning('Referral Removed', 'Referral link removed.');
+    crmService.deletePartnerReferral(id).catch(err => console.warn('Supabase delete referral err:', err));
+  };
+
+  const recordPartnerPayout = (payout: Omit<PartnerPayout, 'id' | 'createdAt'>) => {
+    const tempId = generateUUID();
+    const newPayout: PartnerPayout = {
+      ...payout,
+      id: tempId,
+      createdAt: new Date().toISOString()
+    };
+    setPartnerPayouts(prev => [newPayout, ...prev]);
+
+    // Deduct from partner pending earnings and increase paid earnings
+    setPartners(prev => prev.map(p => {
+      if (p.id === payout.partnerId) {
+        const newPaid = p.paidEarnings + payout.amount;
+        const newPending = Math.max(0, p.totalEarnings - newPaid);
+        return {
+          ...p,
+          paidEarnings: newPaid,
+          pendingEarnings: newPending,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return p;
+    }));
+
+    logAudit('CREATE', 'Partner', tempId, `Disbursed partner payout of ₹${payout.amount.toLocaleString('en-IN')} via ${payout.paymentMethod}`);
+    toast.success('Commission Paid Out', `₹${payout.amount.toLocaleString('en-IN')} logged as paid to partner.`);
+
+    crmService.createPartnerPayout(payout).then(saved => {
+      setPartnerPayouts(prev => prev.map(p => p.id === tempId ? saved : p));
+    }).catch(err => console.warn('Supabase record payout err:', err));
   };
 
   return {
     currentUser,
+    isAuthenticated,
     teamMembers,
     resetToSampleData,
     switchRole,
@@ -2740,6 +1687,17 @@ export function useCrmStore() {
     getProjectPortalUrl,
     regenerateProjectPortalToken,
     toggleProjectPortal,
+    // Partner Program Store & Handlers
+    partners,
+    partnerReferrals,
+    partnerPayouts,
+    createPartner,
+    updatePartner,
+    deletePartner,
+    addPartnerReferral,
+    updatePartnerReferral,
+    deletePartnerReferral,
+    recordPartnerPayout,
     isSupabaseConnected,
     isLoading,
     isSyncing,
@@ -2762,3 +1720,4 @@ export function useCrmStore() {
     canManageUsers
   };
 }
+

@@ -109,15 +109,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ store, onNavigate,
         }
       });
 
-      // Default baseline weights for aesthetic presentation if no tasks completed yet
-      const fallbackWeights = [3, 7, 5, 8, 6, 9, 4];
-      const hasRealActivity = realDailyCounts.some(c => c > 0);
-      const maxVal = Math.max(...(hasRealActivity ? realDailyCounts : fallbackWeights), 10);
+      const maxVal = Math.max(...realDailyCounts, 5);
 
       return daysOfWeek.map((day, idx) => {
         const isToday = idx === todayDayIdx;
-        const count = hasRealActivity ? (realDailyCounts[idx] || (isToday ? 1 : 0)) : fallbackWeights[idx];
-        const heightPct = Math.min(100, Math.max(18, Math.round((count / maxVal) * 100)));
+        const count = realDailyCounts[idx];
+        const heightPct = count > 0 ? Math.min(100, Math.max(18, Math.round((count / maxVal) * 100))) : 8;
         return {
           label: day,
           height: `${heightPct}%`,
@@ -142,14 +139,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ store, onNavigate,
         }
       });
 
-      const fallbackWeekly = [12, 18, 14, 22];
-      const hasRealWeekly = realWeeklyCounts.some(c => c > 0);
-      const maxWeekly = Math.max(...(hasRealWeekly ? realWeeklyCounts : fallbackWeekly), 25);
+      const maxWeekly = Math.max(...realWeeklyCounts, 5);
 
       return weeks.map((week, idx) => {
         const isCurrent = idx === currentWeekIdx;
-        const count = hasRealWeekly ? (realWeeklyCounts[idx] || (isCurrent ? 2 : 0)) : fallbackWeekly[idx];
-        const heightPct = Math.min(100, Math.max(20, Math.round((count / maxWeekly) * 100)));
+        const count = realWeeklyCounts[idx];
+        const heightPct = count > 0 ? Math.min(100, Math.max(18, Math.round((count / maxWeekly) * 100))) : 8;
         return {
           label: week,
           height: `${heightPct}%`,
@@ -173,15 +168,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ store, onNavigate,
       }
     });
 
-    const hasRealMonthly = realMonthlyCounts.some(c => c > 0);
-    const maxMonthly = Math.max(...(hasRealMonthly ? realMonthlyCounts : [45]), 50);
+    const maxMonthly = Math.max(...realMonthlyCounts, 10);
 
     return months.map((month, idx) => {
       const isCurrent = idx === currentMonthIdx;
       const isPastOrCurrent = idx <= currentMonthIdx;
-      const fallback = isPastOrCurrent ? Math.max(15, Math.round(28 + ((idx * 23) % 45))) : 0;
-      const count = hasRealMonthly ? realMonthlyCounts[idx] : fallback;
-      const heightPct = isPastOrCurrent ? Math.min(100, Math.max(15, Math.round((count / maxMonthly) * 100))) : 8;
+      const count = realMonthlyCounts[idx];
+      const heightPct = count > 0 ? Math.min(100, Math.max(15, Math.round((count / maxMonthly) * 100))) : 8;
       return {
         label: month,
         height: `${heightPct}%`,

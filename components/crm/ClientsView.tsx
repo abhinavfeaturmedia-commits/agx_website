@@ -850,7 +850,14 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                               {client.company.substring(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <div className="font-extrabold text-gray-900 text-xs group-hover:text-black">{client.company}</div>
+                              <div className="font-extrabold text-gray-900 text-xs group-hover:text-black flex items-center gap-1.5">
+                                <span>{client.company}</span>
+                                {client.partnerName && (
+                                  <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 text-[9px] font-bold border border-indigo-200" title={`Referred by ${client.partnerName} (${client.partnerCode || ''})`}>
+                                    🤝 {client.partnerName}
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-[11px] text-gray-400">{client.name} {client.address ? `• ${client.address}` : ''}</div>
                             </div>
                           </div>

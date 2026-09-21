@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { ArrowDown, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
 
@@ -7,6 +7,16 @@ interface HeroProps {
 }
 
 const Hero: React.FC<HeroProps> = ({ onGetStartedClick }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.defaultMuted = true;
+      videoRef.current.muted = true;
+      videoRef.current.play().catch(() => {});
+    }
+  }, []);
+
   const scrollToServices = () => {
     const elem = document.getElementById('services');
     if (elem) elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -15,17 +25,19 @@ const Hero: React.FC<HeroProps> = ({ onGetStartedClick }) => {
   return (
     <section className="relative min-h-screen w-full overflow-hidden flex flex-col items-center justify-center text-center px-6 pt-24 pb-14 md:pt-28 md:pb-16">
       {/* Background Video with Dark Fallback Gradient */}
-      <div className="absolute inset-0 bg-[#07090E] z-0">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#07090E]/80 via-[#07090E]/60 to-[#07090E] z-1" />
+      <div className="absolute inset-0 bg-[#07090E] z-0 pointer-events-none overflow-hidden">
         <video
+          ref={videoRef}
           autoPlay
           loop
           muted
           playsInline
-          className="w-full h-full object-cover opacity-50"
+          preload="auto"
+          className="w-full h-full object-cover opacity-85"
         >
           <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4" type="video/mp4" />
         </video>
+        <div className="absolute inset-0 bg-gradient-to-b from-[#07090E]/60 via-[#07090E]/20 to-[#07090E]/90 pointer-events-none" />
       </div>
 
       {/* Decorative Glow Elements */}
@@ -38,22 +50,24 @@ const Hero: React.FC<HeroProps> = ({ onGetStartedClick }) => {
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/80 text-[11px] font-mono tracking-wider uppercase mb-6 backdrop-blur-md"
+          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/80 text-[11px] font-mono tracking-wider uppercase mb-6 backdrop-blur-md"
         >
           <Sparkles size={12} className="text-[#CCFF00]" />
-          <span>Bespoke AI Operations Engineering • Zero Headcount Overhead</span>
+          <span>Custom CRM • Android Apps • AI Automations</span>
         </motion.div>
 
-        {/* High-Impact Outcome Headline (Hormozi Magic Headline) */}
+        {/* High-Impact Outcome Headline (Hormozi Option 2) */}
         <h1 
-          className="text-white font-extrabold text-3xl sm:text-5xl md:text-6xl lg:text-[4.25rem] leading-[1.08] tracking-tight max-w-5xl animate-fade-rise uppercase font-['Outfit']"
+          className="text-white font-extrabold text-3xl sm:text-5xl md:text-6xl lg:text-[4.25rem] leading-[1.08] tracking-tight max-w-5xl animate-fade-rise uppercase font-['Outfit'] drop-shadow-[0_4px_24px_rgba(0,0,0,0.85)]"
         >
-          SCALE OPERATIONS <span className="text-white/40">WITHOUT HIRING.</span><br />
-          WE INSTALL AI WORKFORCES THAT RECLAIM <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-[#CCFF00]">40+ HOURS/WEEK.</span>
+          SCALE YOUR OPERATIONS.<br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-white/90 to-[#CCFF00]">
+            WITHOUT HIRING MORE HEADCOUNT.
+          </span>
         </h1>
 
-        <p className="mt-5 text-sm sm:text-base md:text-lg text-white/70 max-w-xl font-light leading-relaxed animate-fade-rise-delay">
-          We replace manual copy-pasting, customer support backlog, and fragmented SaaS tools with autonomous AI agents and integrated data pipelines. <strong className="font-semibold text-white">100% Done-For-You — live in 14 days.</strong>
+        <p className="mt-5 text-sm sm:text-base md:text-lg text-white/85 max-w-xl font-light leading-relaxed animate-fade-rise-delay drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
+          We build custom CRMs, mobile Android apps, and AI automations that reclaim 40+ hours every week. <strong className="font-semibold text-white">100% Done-For-You — live in 14 days.</strong>
         </p>
 
         {/* Action Controls with Button-in-Button */}

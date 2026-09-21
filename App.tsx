@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Marquee from './components/Marquee';
 import Navbar from './components/Navbar';
@@ -17,13 +17,18 @@ import FAQ from './components/FAQ';
 import Footer from './components/Footer';
 import { GrandSlamStack } from './components/GrandSlamStack';
 import { ConsultationModal } from './components/ConsultationModal';
-import { AdminLogin } from './components/crm/AdminLogin';
-import { CrmLayout } from './components/crm/CrmLayout';
-import { ClientIssuePortal } from './components/portal/ClientIssuePortal';
 import { ErrorBoundary } from './components/crm/ErrorBoundary';
-import { UserRole } from './types/crm';
+import { UserRole, Partner } from './types/crm';
+import { authService } from './lib/authService';
 
-type AppView = 'website' | 'login' | 'crm' | 'portal';
+// Dynamic Code-Splitting: Lazy-load heavy CRM & Portal modules on demand
+const AdminLogin = lazy(() => import('./components/crm/AdminLogin').then(m => ({ default: m.AdminLogin })));
+const CrmLayout = lazy(() => import('./components/crm/CrmLayout').then(m => ({ default: m.CrmLayout })));
+const ClientIssuePortal = lazy(() => import('./components/portal/ClientIssuePortal').then(m => ({ default: m.ClientIssuePortal })));
+const PartnerAuth = lazy(() => import('./components/partner/PartnerAuth').then(m => ({ default: m.PartnerAuth })));
+const PartnerPortal = lazy(() => import('./components/partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
+
+type AppView = 'website' | 'login' | 'crm' | 'portal' | 'partner-auth' | 'partner-portal';
 
 interface ConsultationInitialData {
   service?: string;
@@ -31,20 +36,46 @@ interface ConsultationInitialData {
   email?: string;
 }
 
+const PortalLoadingSpinner: React.FC<{ label?: string }> = ({ label = 'Loading Secure Workspace...' }) => (
+  <div className="min-h-screen w-full bg-[#07090E] text-white flex flex-col items-center justify-center p-6">
+    <div className="flex items-center gap-3 mb-4">
+      <div className="w-10 h-10 rounded-xl bg-[#CCFF00] text-black font-black italic flex items-center justify-center text-xl shadow-[0_0_20px_rgba(204,255,0,0.3)] animate-pulse">
+        A
+      </div>
+      <span className="text-2xl font-black italic tracking-tighter text-white font-['Outfit']">
+        AG<span className="text-[#CCFF00]">X</span>
+      </span>
+    </div>
+    <div className="w-6 h-6 border-2 border-[#CCFF00] border-t-transparent rounded-full animate-spin mb-3" />
+    <span className="text-xs font-mono text-white/60 tracking-wider uppercase">{label}</span>
+  </div>
+);
+
 const App: React.FC = () => {
   const [isDark, setIsDark] = useState(true);
   const [isConsultationOpen, setIsConsultationOpen] = useState(false);
   const [consultationData, setConsultationData] = useState<ConsultationInitialData>({});
+
+  const [activePartner, setActivePartner] = useState<Partner | null>(() => authService.getCurrentPartner());
+  const [partnerAuthMode, setPartnerAuthMode] = useState<'login' | 'register'>('login');
 
   const [currentView, setCurrentView] = useState<AppView>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
       const hash = window.location.hash;
       const search = window.location.search;
-      if (path.startsWith('/portal') || path.startsWith('/client-portal') || hash.startsWith('#portal') || (search.includes('token=') && !path.startsWith('/admin'))) {
+      if (path.startsWith('/portal') || path.startsWith('/client-portal') || hash.startsWith('#portal') || (search.includes('token=') && !path.startsWith('/admin') && !path.startsWith('/partner'))) {
         return 'portal';
       }
-      if (path.startsWith('/admin/dashboard') || hash === '#crm') return 'crm';
+      if (path.startsWith('/partner/portal') || hash === '#partner-portal' || hash === '#partner-dashboard') {
+        return authService.getCurrentPartner() ? 'partner-portal' : 'partner-auth';
+      }
+      if (path.startsWith('/partner') || hash === '#partner-login' || hash === '#partner-register' || hash === '#partner-auth') {
+        return 'partner-auth';
+      }
+      if (path.startsWith('/admin/dashboard') || hash === '#crm') {
+        return authService.getStaffSession() ? 'crm' : 'login';
+      }
       if (path.startsWith('/admin') || hash === '#admin') return 'login';
     }
     return 'website';
@@ -108,6 +139,28 @@ const App: React.FC = () => {
     }
   };
 
+  const navigateToPartnerAuth = (mode: 'login' | 'register' = 'login') => {
+    setPartnerAuthMode(mode);
+    setCurrentView('partner-auth');
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', mode === 'register' ? '/partner/register' : '/partner/login');
+    }
+  };
+
+  const navigateToPartnerPortal = (partner?: Partner) => {
+    const targetPartner = partner || activePartner || authService.getCurrentPartner();
+    if (targetPartner) {
+      setActivePartner(targetPartner);
+      authService.setPartnerSession(targetPartner);
+      setCurrentView('partner-portal');
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/partner/portal');
+      }
+    } else {
+      navigateToPartnerAuth('login');
+    }
+  };
+
   const navigateToWebsite = () => {
     setCurrentView('website');
     if (typeof window !== 'undefined') {
@@ -137,10 +190,14 @@ const App: React.FC = () => {
       } else {
         setActivePortalToken('');
       }
-      if (path.startsWith('/portal') || path.startsWith('/client-portal') || hash.startsWith('#portal') || (search.includes('token=') && !path.startsWith('/admin'))) {
+      if (path.startsWith('/portal') || path.startsWith('/client-portal') || hash.startsWith('#portal') || (search.includes('token=') && !path.startsWith('/admin') && !path.startsWith('/partner'))) {
         setCurrentView('portal');
+      } else if (path.startsWith('/partner/portal') || hash === '#partner-portal' || hash === '#partner-dashboard') {
+        setCurrentView(authService.getCurrentPartner() ? 'partner-portal' : 'partner-auth');
+      } else if (path.startsWith('/partner') || hash === '#partner-login' || hash === '#partner-register' || hash === '#partner-auth') {
+        setCurrentView('partner-auth');
       } else if (path.startsWith('/admin/dashboard') || hash === '#crm') {
-        setCurrentView('crm');
+        setCurrentView(authService.getStaffSession() ? 'crm' : 'login');
       } else if (path.startsWith('/admin') || hash === '#admin') {
         setCurrentView('login');
       } else {
@@ -151,26 +208,135 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // If in Client Portal mode (accessed via secret token or demo mode)
-  if (currentView === 'portal') {
+  // Capture ?ref= partner referral links on page landing
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const refParam = urlParams.get('ref') || urlParams.get('partner') || urlParams.get('affiliate');
+      if (refParam && refParam.trim()) {
+        const cleanRef = refParam.trim().toUpperCase();
+        try {
+          sessionStorage.setItem('agx_partner_ref', cleanRef);
+          localStorage.setItem('agx_partner_ref', cleanRef);
+        } catch (_) {}
+      }
+    }
+  }, []);
+
+  // Handle Supabase Auth state changes (e.g. Google OAuth redirect callback)
+  useEffect(() => {
+    const unsubscribe = authService.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        if (typeof window !== 'undefined') {
+          const path = window.location.pathname;
+          const hash = window.location.hash;
+          if (path.startsWith('/partner') || hash.startsWith('#partner')) {
+            const syncedPartner = await authService.syncPartnerFromSupabaseUser(session.user);
+            if (syncedPartner) {
+              setActivePartner(syncedPartner);
+              setCurrentView('partner-portal');
+              window.history.replaceState(null, '', '/partner/portal');
+            }
+          }
+        }
+      }
+    });
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
+  // If in Partner Portal mode, enforce authenticated partner session route guard
+  if (currentView === 'partner-portal') {
+    const currentPartner = activePartner || authService.getCurrentPartner();
+    if (!currentPartner) {
+      return (
+        <ErrorBoundary fallbackRoute={navigateToWebsite}>
+          <Suspense fallback={<PortalLoadingSpinner label="Opening Partner Access Gate..." />}>
+            <PartnerAuth
+              initialMode="login"
+              onLoginSuccess={(p) => navigateToPartnerPortal(p)}
+              onBackToWebsite={navigateToWebsite}
+              onNavigateToStaffLogin={navigateToLogin}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      );
+    }
+
     return (
       <ErrorBoundary fallbackRoute={navigateToWebsite}>
-        <ClientIssuePortal 
-          onBackToWebsite={navigateToWebsite} 
-          tokenOverride={activePortalToken} 
-        />
+        <Suspense fallback={<PortalLoadingSpinner label="Opening Partner Portal..." />}>
+          <PartnerPortal
+            initialPartner={currentPartner}
+            onBackToWebsite={navigateToWebsite}
+            onLogout={() => {
+              authService.clearPartnerSession();
+              setActivePartner(null);
+              navigateToPartnerAuth('login');
+            }}
+          />
+        </Suspense>
       </ErrorBoundary>
     );
   }
 
-  // If in CRM mode, render the full CrmLayout
-  if (currentView === 'crm') {
+  // If in Partner Auth mode (login or register)
+  if (currentView === 'partner-auth') {
     return (
       <ErrorBoundary fallbackRoute={navigateToWebsite}>
-        <CrmLayout
-          onLogout={navigateToLogin}
-          onBackToWebsite={navigateToWebsite}
-        />
+        <Suspense fallback={<PortalLoadingSpinner label="Opening Partner Access Gate..." />}>
+          <PartnerAuth
+            initialMode={partnerAuthMode}
+            onLoginSuccess={(p) => navigateToPartnerPortal(p)}
+            onBackToWebsite={navigateToWebsite}
+            onNavigateToStaffLogin={navigateToLogin}
+          />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  // If in Client Portal mode (accessed via secret token or demo mode)
+  if (currentView === 'portal') {
+    return (
+      <ErrorBoundary fallbackRoute={navigateToWebsite}>
+        <Suspense fallback={<PortalLoadingSpinner label="Authenticating Project Ticket Portal..." />}>
+          <ClientIssuePortal 
+            onBackToWebsite={navigateToWebsite} 
+            tokenOverride={activePortalToken} 
+          />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  // If in CRM mode, enforce authenticated staff session route guard
+  if (currentView === 'crm') {
+    const staffSession = authService.getStaffSession();
+    if (!staffSession) {
+      return (
+        <ErrorBoundary fallbackRoute={navigateToWebsite}>
+          <Suspense fallback={<PortalLoadingSpinner label="Redirecting to Staff Gateway..." />}>
+            <AdminLogin
+              onLoginSuccess={navigateToCrm}
+              onBackToWebsite={navigateToWebsite}
+              onNavigateToPortal={navigateToPortal}
+              onNavigateToPartnerPortal={() => navigateToPartnerPortal()}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      );
+    }
+
+    return (
+      <ErrorBoundary fallbackRoute={navigateToWebsite}>
+        <Suspense fallback={<PortalLoadingSpinner label="Decrypting Workspace OS..." />}>
+          <CrmLayout
+            onLogout={navigateToLogin}
+            onBackToWebsite={navigateToWebsite}
+          />
+        </Suspense>
       </ErrorBoundary>
     );
   }
@@ -179,11 +345,14 @@ const App: React.FC = () => {
   if (currentView === 'login') {
     return (
       <ErrorBoundary fallbackRoute={navigateToWebsite}>
-        <AdminLogin
-          onLoginSuccess={navigateToCrm}
-          onBackToWebsite={navigateToWebsite}
-          onNavigateToPortal={navigateToPortal}
-        />
+        <Suspense fallback={<PortalLoadingSpinner label="Opening Staff Gateway..." />}>
+          <AdminLogin
+            onLoginSuccess={navigateToCrm}
+            onBackToWebsite={navigateToWebsite}
+            onNavigateToPortal={navigateToPortal}
+            onNavigateToPartnerPortal={() => navigateToPartnerPortal()}
+          />
+        </Suspense>
       </ErrorBoundary>
     );
   }
@@ -197,6 +366,7 @@ const App: React.FC = () => {
           toggleTheme={toggleTheme}
           onAdminLoginClick={navigateToLogin}
           onClientPortalClick={() => navigateToPortal()}
+          onPartnerPortalClick={() => navigateToPartnerPortal()}
           onConsultationClick={() => handleOpenConsultation()}
         />
         <AnimatePresence mode="wait">
@@ -256,13 +426,18 @@ const App: React.FC = () => {
                 )
               } 
             />
-            <PartnerProgram />
+            <PartnerProgram 
+              onBecomePartnerClick={() => navigateToPartnerAuth('register')}
+              onPartnerLoginClick={() => navigateToPartnerAuth('login')}
+            />
             <FAQ />
           </motion.main>
         </AnimatePresence>
         <Footer 
           onAdminLoginClick={navigateToLogin} 
           onClientPortalClick={() => navigateToPortal()}
+          onPartnerPortalClick={() => navigateToPartnerPortal()}
+          onBecomePartnerClick={() => navigateToPartnerAuth('register')}
           onProcessAuditClick={(email) => 
             handleOpenConsultation('Process Audit (Footer Inbound)', 'Inbound process audit request via footer input', email)
           } 

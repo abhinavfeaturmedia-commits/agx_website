@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Lock, Sparkles, Menu, X, ArrowRight, Phone, MessageSquare } from 'lucide-react';
+import { Lock, Sparkles, Menu, X, ArrowRight, Phone, MessageSquare, Handshake } from 'lucide-react';
 
 interface NavbarProps {
   isDark?: boolean;
@@ -8,6 +8,7 @@ interface NavbarProps {
   onAdminLoginClick?: () => void;
   onConsultationClick?: () => void;
   onClientPortalClick?: () => void;
+  onPartnerPortalClick?: () => void;
 }
 
 const NAV_ITEMS = [
@@ -24,7 +25,8 @@ const Navbar: React.FC<NavbarProps> = ({
   toggleTheme,
   onAdminLoginClick,
   onConsultationClick,
-  onClientPortalClick
+  onClientPortalClick,
+  onPartnerPortalClick
 }) => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -97,6 +99,17 @@ const Navbar: React.FC<NavbarProps> = ({
         <div className="flex gap-2.5 sm:gap-3.5 items-center">
           {/* Subtle Portals Capsule */}
           <div className="hidden sm:flex items-center p-0.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+            {onPartnerPortalClick && (
+              <button
+                onClick={() => onPartnerPortalClick()}
+                className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 px-3 py-1 rounded-full hover:bg-white/10 transition-all cursor-pointer"
+                title="Access Partner Referral & Commission Portal"
+              >
+                <Handshake size={12} />
+                <span>Partners</span>
+              </button>
+            )}
+
             {onClientPortalClick && (
               <button
                 onClick={() => onClientPortalClick && onClientPortalClick()}
@@ -185,6 +198,22 @@ const Navbar: React.FC<NavbarProps> = ({
               </div>
 
               <div className="pt-3 border-t border-white/10 flex flex-col gap-2.5">
+                {onPartnerPortalClick && (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onPartnerPortalClick();
+                    }}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-[#CCFF00]/10 border border-[#CCFF00]/20 text-white font-semibold text-xs text-left"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Handshake size={14} className="text-[#CCFF00]" />
+                      Partner Referral & Commission Portal
+                    </span>
+                    <ArrowRight size={13} className="text-white/40" />
+                  </button>
+                )}
+
                 {onClientPortalClick && (
                   <button
                     onClick={() => {
