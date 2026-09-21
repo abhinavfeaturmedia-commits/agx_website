@@ -247,9 +247,11 @@ export const authService = {
   // Google OAuth Sign In / Sign Up
   async signInWithGoogle(redirectToPath: string = '/partner/portal') {
     try {
-      const redirectUrl = typeof window !== 'undefined' 
-        ? `${window.location.origin}${redirectToPath}`
-        : undefined;
+      const origin = typeof window !== 'undefined' && window.location.origin
+        ? window.location.origin.replace(/\/$/, '')
+        : 'https://agxperience.netlify.app';
+      const path = redirectToPath.startsWith('/') ? redirectToPath : `/${redirectToPath}`;
+      const redirectUrl = `${origin}${path}`;
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
