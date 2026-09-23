@@ -418,6 +418,46 @@ CREATE TABLE IF NOT EXISTS public.partner_payouts (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 21. Quotations & Commercial Proposals Table
+CREATE TABLE IF NOT EXISTS public.quotations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    quotation_number TEXT UNIQUE NOT NULL,
+    lead_id UUID REFERENCES public.leads(id) ON DELETE SET NULL,
+    lead_name TEXT,
+    client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL,
+    client_name TEXT NOT NULL,
+    project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
+    project_name TEXT,
+    issue_date DATE NOT NULL,
+    valid_until DATE NOT NULL,
+    items JSONB DEFAULT '[]'::jsonb,
+    subtotal NUMERIC DEFAULT 0,
+    discount_amount NUMERIC DEFAULT 0,
+    is_gst BOOLEAN DEFAULT TRUE,
+    gst_type TEXT DEFAULT 'IGST',
+    tax_rate NUMERIC DEFAULT 18,
+    tax NUMERIC DEFAULT 0,
+    cgst NUMERIC DEFAULT 0,
+    sgst NUMERIC DEFAULT 0,
+    igst NUMERIC DEFAULT 0,
+    total NUMERIC DEFAULT 0,
+    status TEXT DEFAULT 'Draft', -- 'Draft', 'Sent', 'Accepted', 'Declined', 'Expired', 'Converted'
+    converted_invoice_id UUID REFERENCES public.invoices(id) ON DELETE SET NULL,
+    converted_at TIMESTAMP WITH TIME ZONE,
+    client_gstin TEXT,
+    hsn_sac_code TEXT DEFAULT '998313',
+    notes TEXT,
+    terms_conditions TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Evolutionary columns on invoices for quotations linkage & discounts
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS quotation_id UUID REFERENCES public.quotations(id) ON DELETE SET NULL;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS quotation_number TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS discount_amount NUMERIC DEFAULT 0;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS terms_conditions TEXT;
+
 -- Enable RLS and setup permissive policies for CRM Client App
 DO $$ 
 DECLARE
@@ -427,7 +467,7 @@ DECLARE
         'project_milestones', 'tasks', 'invoices', 'payments', 'expenses',
         'agreements', 'documents', 'credentials_vault', 'calendar_events',
         'notifications', 'audit_logs', 'project_issues',
-        'partners', 'partner_referrals', 'partner_payouts'
+        'partners', 'partner_referrals', 'partner_payouts', 'quotations'
     ];
 BEGIN
     FOREACH tbl IN ARRAY tables

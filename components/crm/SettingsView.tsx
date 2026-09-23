@@ -12,6 +12,7 @@ import { UserRole, UserProfile, CrmModuleKey, ModulePermissions, ROLE_DEFAULT_PE
 import { useCrmStore } from '../../lib/crmStore';
 import { exportService } from '../../lib/exportService';
 import { toast } from '../../lib/toastStore';
+import { McpSettingsSection } from './McpSettingsSection';
 
 interface SettingsViewProps {
   store: ReturnType<typeof useCrmStore>;
@@ -54,7 +55,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
     issues, partners, partnerReferrals, partnerPayouts
   } = store;
 
-  const [activeSubTab, setActiveSubTab] = useState<'Team' | 'RBAC' | 'Database'>('Team');
+  const [activeSubTab, setActiveSubTab] = useState<'Team' | 'RBAC' | 'Database' | 'MCP'>('Team');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('All');
@@ -388,15 +389,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
       {/* Row 2: Navigation Sub-Tabs & View Switcher */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
         <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto">
-          {(['Team', 'RBAC', 'Database'] as const).map((tab) => (
+          {(['Team', 'RBAC', 'Database', 'MCP'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveSubTab(tab)}
-              className={`py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              className={`py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 activeSubTab === tab ? 'bg-black text-white shadow-xs' : 'text-gray-500 hover:text-black'
               }`}
             >
-              {tab === 'Team' ? `Staff & Team (${teamMembers.length})` : tab === 'RBAC' ? 'Role Permissions Matrix' : 'Supabase Cloud Infrastructure'}
+              {tab === 'Team' ? `Staff & Team (${teamMembers.length})` : 
+               tab === 'RBAC' ? 'Role Permissions Matrix' : 
+               tab === 'Database' ? 'Supabase Infrastructure' : 
+               'AI & MCP Connectors'}
+              {tab === 'MCP' && (
+                <span className="w-2 h-2 rounded-full bg-[#CCFF00] inline-block animate-pulse" />
+              )}
             </button>
           ))}
         </div>
@@ -794,6 +801,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
             </div>
           </div>
         </div>
+      )}
+
+      {/* 4. MCP & AI Connectors Tab */}
+      {activeSubTab === 'MCP' && (
+        <McpSettingsSection store={store} />
       )}
 
       {/* ================= MODALS ================= */}

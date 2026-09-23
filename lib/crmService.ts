@@ -6,7 +6,8 @@ import {
   CredentialVaultItem, CalendarEvent, NotificationItem, AuditLog, Priority,
   UserProfile, UserRole, ExpenseCategory, AgreementStatus, InvoiceStatus,
   ProjectIssue, IssueStatus, IssueType, IssuePriority,
-  Partner, PartnerReferral, PartnerPayout
+  Partner, PartnerReferral, PartnerPayout,
+  Quotation, QuotationItem, QuotationStatus
 } from '../types/crm';
 
 // --- Database Row Types ---
@@ -144,21 +145,58 @@ export interface DbTask {
   updated_at: string;
 }
 
+export interface DbQuotation {
+  id: string;
+  quotation_number: string;
+  lead_id: string | null;
+  lead_name: string | null;
+  client_id: string | null;
+  client_name: string;
+  project_id: string | null;
+  project_name: string | null;
+  issue_date: string;
+  valid_until: string;
+  items: any;
+  subtotal: number;
+  discount_amount?: number | null;
+  is_gst?: boolean | null;
+  gst_type?: string | null;
+  tax_rate?: number | null;
+  tax: number;
+  cgst?: number | null;
+  sgst?: number | null;
+  igst?: number | null;
+  total: number;
+  status: string;
+  converted_invoice_id?: string | null;
+  converted_at?: string | null;
+  client_gstin?: string | null;
+  hsn_sac_code?: string | null;
+  notes: string | null;
+  terms_conditions?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DbInvoice {
   id: string;
   invoice_number: string;
   client_id: string | null;
   client_name: string;
   project_id: string | null;
+  quotation_id?: string | null;
+  quotation_number?: string | null;
   issue_date: string;
   due_date: string;
   items: any;
   subtotal: number;
+  discount_amount?: number | null;
   tax: number;
   total: number;
   paid_amount: number;
   status: string;
   notes: string | null;
+  terms_conditions?: string | null;
   is_gst?: boolean | null;
   gst_type?: string | null;
   tax_rate?: number | null;
@@ -528,6 +566,51 @@ export function mapTaskFromDb(row: DbTask, clients: Client[] = [], projects: Pro
   };
 }
 
+export function mapQuotationFromDb(row: DbQuotation, leads: Lead[] = [], clients: Client[] = [], projects: Project[] = []): Quotation {
+  const lead = leads.find(l => l.id === row.lead_id);
+  const client = clients.find(c => c.id === row.client_id);
+  const project = projects.find(p => p.id === row.project_id);
+  let parsedItems: QuotationItem[] = [];
+  if (Array.isArray(row.items)) {
+    parsedItems = row.items;
+  } else if (typeof row.items === 'string') {
+    try { parsedItems = JSON.parse(row.items); } catch (e) { parsedItems = []; }
+  }
+  const isGst = row.is_gst !== false;
+  return {
+    id: row.id,
+    quotationNumber: row.quotation_number,
+    leadId: row.lead_id || undefined,
+    leadName: row.lead_name || (lead ? (lead.company || lead.name) : undefined),
+    clientId: row.client_id || undefined,
+    clientName: row.client_name || (client ? client.company : 'Prospective Client'),
+    projectId: row.project_id || undefined,
+    projectName: project?.name || undefined,
+    issueDate: sanitizeDateString(row.issue_date) || '',
+    validUntil: sanitizeDateString(row.valid_until) || '',
+    items: parsedItems,
+    subtotal: Number(row.subtotal) || 0,
+    discountAmount: Number(row.discount_amount) || 0,
+    isGst,
+    gstType: (row.gst_type as any) || (isGst ? 'IGST' : undefined),
+    taxRate: row.tax_rate !== null && row.tax_rate !== undefined ? Number(row.tax_rate) : (isGst ? 18 : 0),
+    tax: Number(row.tax) || 0,
+    cgst: Number(row.cgst) || 0,
+    sgst: Number(row.sgst) || 0,
+    igst: Number(row.igst) || 0,
+    total: Number(row.total) || 0,
+    status: (row.status as QuotationStatus) || 'Draft',
+    convertedInvoiceId: row.converted_invoice_id || undefined,
+    convertedAt: row.converted_at || undefined,
+    clientGstin: row.client_gstin || undefined,
+    hsnSacCode: row.hsn_sac_code || (isGst ? '998313' : undefined),
+    notes: row.notes || undefined,
+    termsConditions: row.terms_conditions || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 export function mapInvoiceFromDb(row: DbInvoice, projects: Project[] = []): Invoice {
   const project = projects.find(p => p.id === row.project_id);
   let parsedItems: InvoiceItem[] = [];
@@ -544,10 +627,13 @@ export function mapInvoiceFromDb(row: DbInvoice, projects: Project[] = []): Invo
     clientName: row.client_name,
     projectId: row.project_id || undefined,
     projectName: project?.name || undefined,
+    quotationId: row.quotation_id || undefined,
+    quotationNumber: row.quotation_number || undefined,
     issueDate: sanitizeDateString(row.issue_date) || '',
     dueDate: sanitizeDateString(row.due_date) || '',
     items: parsedItems,
     subtotal: Number(row.subtotal) || 0,
+    discountAmount: Number(row.discount_amount) || 0,
     isGst,
     gstType: (row.gst_type as any) || (isGst ? 'IGST' : undefined),
     taxRate: row.tax_rate !== null && row.tax_rate !== undefined ? Number(row.tax_rate) : (isGst ? 18 : 0),
@@ -561,6 +647,7 @@ export function mapInvoiceFromDb(row: DbInvoice, projects: Project[] = []): Invo
     paidAmount: Number(row.paid_amount) || 0,
     status: (row.status as InvoiceStatus) || 'Draft',
     notes: row.notes || undefined,
+    termsConditions: row.terms_conditions || undefined,
     createdAt: row.created_at
   };
 }
@@ -870,7 +957,8 @@ export const crmService = {
       auditLogsRes,
       partnersRes,
       referralsRes,
-      payoutsRes
+      payoutsRes,
+      quotationsRes
     ] = await Promise.all([
       supabase.from('profiles').select('*').order('created_at', { ascending: true }),
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
@@ -890,7 +978,8 @@ export const crmService = {
       supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100),
       supabase.from('partners').select('*').order('created_at', { ascending: false }),
       supabase.from('partner_referrals').select('*').order('created_at', { ascending: false }),
-      supabase.from('partner_payouts').select('*').order('created_at', { ascending: false })
+      supabase.from('partner_payouts').select('*').order('created_at', { ascending: false }),
+      supabase.from('quotations').select('*').order('created_at', { ascending: false })
     ]);
 
     // Verify whether critical entity queries failed (e.g. paused DB, network offline, missing tables)
@@ -908,24 +997,25 @@ export const crmService = {
       throw new Error(`Supabase query failed: ${failedQueries[0].res.error?.message || 'Network / Schema Error'}`);
     }
 
-    const leadActivities = (leadActivitiesRes.data || []).map(mapLeadActivityFromDb);
-    const milestones = (milestonesRes.data || []).map(mapMilestoneFromDb);
-    const clients = (clientsRes.data || []).map(mapClientFromDb);
-    const projects = (projectsRes.data || []).map(p => mapProjectFromDb(p, milestones));
-    const invoices = (invoicesRes.data || []).map(i => mapInvoiceFromDb(i, projects));
-    const leads = (leadsRes.data || []).map(l => mapLeadFromDb(l, leadActivities));
-    const tasks = (tasksRes.data || []).map(t => mapTaskFromDb(t, clients, projects, leads));
-    const payments = (paymentsRes.data || []).map(p => mapPaymentFromDb(p, clients, projects, invoices));
-    const expenses = (expensesRes.data || []).map(e => mapExpenseFromDb(e, clients, projects));
-    const agreements = (agreementsRes.data || []).map(a => mapAgreementFromDb(a, clients, projects, leads));
-    const documents = (documentsRes.data || []).map(d => mapDocumentFromDb(d, clients, projects, leads));
-    const credentials = (credentialsRes.data || []).map(c => mapCredentialFromDb(c, clients, projects));
-    const events = (eventsRes.data || []).map(e => mapCalendarEventFromDb(e, leads));
-    const notifications = (notificationsRes.data || []).map(mapNotificationFromDb);
-    const auditLogs = (auditLogsRes.data || []).map(mapAuditLogFromDb);
-    const partners = ((partnersRes as any)?.data || []).map(mapPartnerFromDb);
-    const partnerReferrals = ((referralsRes as any)?.data || []).map((r: any) => mapPartnerReferralFromDb(r, partners));
-    const partnerPayouts = ((payoutsRes as any)?.data || []).map((p: any) => mapPartnerPayoutFromDb(p, partners));
+    const leadActivities = leadActivitiesRes.error ? undefined : (leadActivitiesRes.data || []).map(mapLeadActivityFromDb);
+    const milestones = milestonesRes.error ? undefined : (milestonesRes.data || []).map(mapMilestoneFromDb);
+    const clients = clientsRes.error ? undefined : (clientsRes.data || []).map(mapClientFromDb);
+    const projects = projectsRes.error ? undefined : (projectsRes.data || []).map(p => mapProjectFromDb(p, milestones || []));
+    const invoices = invoicesRes.error ? undefined : (invoicesRes.data || []).map(i => mapInvoiceFromDb(i, projects || []));
+    const leads = leadsRes.error ? undefined : (leadsRes.data || []).map(l => mapLeadFromDb(l, leadActivities || []));
+    const tasks = tasksRes.error ? undefined : (tasksRes.data || []).map(t => mapTaskFromDb(t, clients || [], projects || [], leads || []));
+    const payments = paymentsRes.error ? undefined : (paymentsRes.data || []).map(p => mapPaymentFromDb(p, clients || [], projects || [], invoices || []));
+    const expenses = expensesRes.error ? undefined : (expensesRes.data || []).map(e => mapExpenseFromDb(e, clients || [], projects || []));
+    const agreements = agreementsRes.error ? undefined : (agreementsRes.data || []).map(a => mapAgreementFromDb(a, clients || [], projects || [], leads || []));
+    const documents = documentsRes.error ? undefined : (documentsRes.data || []).map(d => mapDocumentFromDb(d, clients || [], projects || [], leads || []));
+    const credentials = credentialsRes.error ? undefined : (credentialsRes.data || []).map(c => mapCredentialFromDb(c, clients || [], projects || []));
+    const events = eventsRes.error ? undefined : (eventsRes.data || []).map(e => mapCalendarEventFromDb(e, leads || []));
+    const notifications = notificationsRes.error ? undefined : (notificationsRes.data || []).map(mapNotificationFromDb);
+    const auditLogs = auditLogsRes.error ? undefined : (auditLogsRes.data || []).map(mapAuditLogFromDb);
+    const partners = (partnersRes as any)?.error ? undefined : ((partnersRes as any)?.data || []).map(mapPartnerFromDb);
+    const partnerReferrals = (referralsRes as any)?.error ? undefined : ((referralsRes as any)?.data || []).map((r: any) => mapPartnerReferralFromDb(r, partners || []));
+    const partnerPayouts = (payoutsRes as any)?.error ? undefined : ((payoutsRes as any)?.data || []).map((p: any) => mapPartnerPayoutFromDb(p, partners || []));
+    const quotations = (quotationsRes as any)?.error ? undefined : ((quotationsRes as any)?.data || []).map((q: any) => mapQuotationFromDb(q, leads || [], clients || [], projects || []));
 
     return {
       profiles: (profilesRes.data || []).map(mapProfileFromDb),
@@ -935,6 +1025,7 @@ export const crmService = {
       projects,
       tasks,
       invoices,
+      quotations,
       payments,
       expenses,
       agreements,
@@ -1252,6 +1343,82 @@ export const crmService = {
     if (error) throw error;
   },
 
+  // --- Quotations CRUD ---
+  async createQuotation(quotation: Omit<Quotation, 'id' | 'createdAt' | 'updatedAt'>): Promise<Quotation> {
+    const isGst = quotation.isGst !== false;
+    const { data, error } = await supabase.from('quotations').insert([{
+      quotation_number: quotation.quotationNumber,
+      lead_id: quotation.leadId || null,
+      lead_name: quotation.leadName || null,
+      client_id: quotation.clientId || null,
+      client_name: quotation.clientName,
+      project_id: quotation.projectId || null,
+      project_name: quotation.projectName || null,
+      issue_date: quotation.issueDate,
+      valid_until: quotation.validUntil,
+      items: quotation.items,
+      subtotal: quotation.subtotal,
+      discount_amount: quotation.discountAmount || 0,
+      is_gst: isGst,
+      gst_type: isGst ? (quotation.gstType || 'IGST') : null,
+      tax_rate: isGst ? (quotation.taxRate ?? 18) : 0,
+      tax: quotation.tax,
+      cgst: quotation.cgst || 0,
+      sgst: quotation.sgst || 0,
+      igst: quotation.igst || 0,
+      total: quotation.total,
+      status: quotation.status,
+      converted_invoice_id: quotation.convertedInvoiceId || null,
+      converted_at: quotation.convertedAt || null,
+      client_gstin: quotation.clientGstin || null,
+      hsn_sac_code: quotation.hsnSacCode || (isGst ? '998313' : null),
+      notes: quotation.notes || null,
+      terms_conditions: quotation.termsConditions || null
+    }]).select().single();
+
+    if (error) throw error;
+    return mapQuotationFromDb(data);
+  },
+
+  async updateQuotation(id: string, updates: Partial<Quotation>): Promise<void> {
+    const payload: any = { updated_at: new Date().toISOString() };
+    if (updates.quotationNumber !== undefined) payload.quotation_number = updates.quotationNumber;
+    if (updates.leadId !== undefined) payload.lead_id = updates.leadId || null;
+    if (updates.leadName !== undefined) payload.lead_name = updates.leadName || null;
+    if (updates.clientId !== undefined) payload.client_id = updates.clientId || null;
+    if (updates.clientName !== undefined) payload.client_name = updates.clientName;
+    if (updates.projectId !== undefined) payload.project_id = updates.projectId || null;
+    if (updates.projectName !== undefined) payload.project_name = updates.projectName || null;
+    if (updates.issueDate !== undefined) payload.issue_date = updates.issueDate;
+    if (updates.validUntil !== undefined) payload.valid_until = updates.validUntil;
+    if (updates.items !== undefined) payload.items = updates.items;
+    if (updates.subtotal !== undefined) payload.subtotal = updates.subtotal;
+    if (updates.discountAmount !== undefined) payload.discount_amount = updates.discountAmount;
+    if (updates.isGst !== undefined) payload.is_gst = updates.isGst;
+    if (updates.gstType !== undefined) payload.gst_type = updates.gstType;
+    if (updates.taxRate !== undefined) payload.tax_rate = updates.taxRate;
+    if (updates.tax !== undefined) payload.tax = updates.tax;
+    if (updates.cgst !== undefined) payload.cgst = updates.cgst;
+    if (updates.sgst !== undefined) payload.sgst = updates.sgst;
+    if (updates.igst !== undefined) payload.igst = updates.igst;
+    if (updates.total !== undefined) payload.total = updates.total;
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.convertedInvoiceId !== undefined) payload.converted_invoice_id = updates.convertedInvoiceId || null;
+    if (updates.convertedAt !== undefined) payload.converted_at = updates.convertedAt || null;
+    if (updates.clientGstin !== undefined) payload.client_gstin = updates.clientGstin || null;
+    if (updates.hsnSacCode !== undefined) payload.hsn_sac_code = updates.hsnSacCode || null;
+    if (updates.notes !== undefined) payload.notes = updates.notes || null;
+    if (updates.termsConditions !== undefined) payload.terms_conditions = updates.termsConditions || null;
+
+    const { error } = await supabase.from('quotations').update(payload).eq('id', id);
+    if (error) throw error;
+  },
+
+  async deleteQuotation(id: string): Promise<void> {
+    const { error } = await supabase.from('quotations').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   // --- Invoices CRUD ---
   async createInvoice(invoice: Omit<Invoice, 'id' | 'createdAt'>): Promise<Invoice> {
     const isGst = invoice.isGst !== false;
@@ -1260,10 +1427,13 @@ export const crmService = {
       client_id: invoice.clientId || null,
       client_name: invoice.clientName,
       project_id: invoice.projectId || null,
+      quotation_id: invoice.quotationId || null,
+      quotation_number: invoice.quotationNumber || null,
       issue_date: invoice.issueDate,
       due_date: invoice.dueDate,
       items: invoice.items,
       subtotal: invoice.subtotal,
+      discount_amount: invoice.discountAmount || 0,
       is_gst: isGst,
       gst_type: isGst ? (invoice.gstType || 'IGST') : null,
       tax_rate: isGst ? (invoice.taxRate ?? 18) : 0,
@@ -1276,7 +1446,8 @@ export const crmService = {
       total: invoice.total,
       paid_amount: invoice.paidAmount,
       status: invoice.status,
-      notes: invoice.notes || null
+      notes: invoice.notes || null,
+      terms_conditions: invoice.termsConditions || null
     }]).select().single();
 
     if (error) throw error;
@@ -1304,10 +1475,13 @@ export const crmService = {
     if (updates.clientName !== undefined) payload.client_name = updates.clientName;
     if (updates.clientId !== undefined) payload.client_id = updates.clientId;
     if (updates.projectId !== undefined) payload.project_id = updates.projectId;
+    if (updates.quotationId !== undefined) payload.quotation_id = updates.quotationId;
+    if (updates.quotationNumber !== undefined) payload.quotation_number = updates.quotationNumber;
     if (updates.issueDate !== undefined) payload.issue_date = updates.issueDate;
     if (updates.dueDate !== undefined) payload.due_date = updates.dueDate;
     if (updates.items !== undefined) payload.items = updates.items;
     if (updates.subtotal !== undefined) payload.subtotal = updates.subtotal;
+    if (updates.discountAmount !== undefined) payload.discount_amount = updates.discountAmount;
     if (updates.isGst !== undefined) payload.is_gst = updates.isGst;
     if (updates.gstType !== undefined) payload.gst_type = updates.gstType;
     if (updates.taxRate !== undefined) payload.tax_rate = updates.taxRate;
@@ -1321,6 +1495,7 @@ export const crmService = {
     if (updates.paidAmount !== undefined) payload.paid_amount = updates.paidAmount;
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.notes !== undefined) payload.notes = updates.notes;
+    if (updates.termsConditions !== undefined) payload.terms_conditions = updates.termsConditions;
 
     const { error } = await supabase.from('invoices').update(payload).eq('id', id);
     if (error) throw error;

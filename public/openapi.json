@@ -1,0 +1,414 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "AGX CRM Cloud AI API",
+    "description": "24/7 Cloud API for managing AGX CRM leads, clients, projects, tasks, calendar events, and finance directly through conversational AI on ChatGPT, Claude, and Gemini.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://agxperience.netlify.app",
+      "description": "Production Netlify Cloud Server (24/7 Available)"
+    },
+    {
+      "url": "http://localhost:3001",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/tools/search_leads": {
+      "post": {
+        "summary": "Search leads in AGX CRM",
+        "operationId": "searchLeads",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": { "type": "string", "description": "Search term" },
+                  "status": { "type": "string", "description": "NEW, CONTACTED, QUALIFIED, PROPOSAL SENT, NEGOTIATION, WON, LOST" },
+                  "priority": { "type": "string", "description": "Low, Medium, High, Urgent" },
+                  "limit": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "List of matching leads" }
+        }
+      }
+    },
+    "/api/tools/create_lead": {
+      "post": {
+        "summary": "Create a new lead in AGX CRM",
+        "operationId": "createLead",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "company": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "email": { "type": "string" },
+                  "interested_service": { "type": "string" },
+                  "estimated_deal_value": { "type": "number" },
+                  "priority": { "type": "string", "enum": ["Low", "Medium", "High", "Urgent"] },
+                  "next_follow_up": { "type": "string" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Lead created successfully" }
+        }
+      }
+    },
+    "/api/tools/update_lead": {
+      "post": {
+        "summary": "Update lead pipeline status or details",
+        "operationId": "updateLead",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "status": { "type": "string", "enum": ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL SENT", "NEGOTIATION", "WON", "LOST"] },
+                  "estimated_deal_value": { "type": "number" },
+                  "priority": { "type": "string" },
+                  "next_follow_up": { "type": "string" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Lead updated successfully" }
+        }
+      }
+    },
+    "/api/tools/log_lead_activity": {
+      "post": {
+        "summary": "Log a call, meeting, or chat note for a lead",
+        "operationId": "logLeadActivity",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["activity_type", "notes"],
+                "properties": {
+                  "lead_id": { "type": "string" },
+                  "lead_name": { "type": "string" },
+                  "activity_type": { "type": "string", "enum": ["Call", "WhatsApp", "Email", "Meeting", "Note"] },
+                  "notes": { "type": "string" },
+                  "set_next_follow_up": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Activity logged" }
+        }
+      }
+    },
+    "/api/tools/search_clients": {
+      "post": {
+        "summary": "Search active clients",
+        "operationId": "searchClients",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": { "type": "string" },
+                  "status": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "List of clients" }
+        }
+      }
+    },
+    "/api/tools/create_client": {
+      "post": {
+        "summary": "Create a new client profile",
+        "operationId": "createClient",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "company"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "company": { "type": "string" },
+                  "email": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "total_value": { "type": "number" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Client created" }
+        }
+      }
+    },
+    "/api/tools/list_projects": {
+      "post": {
+        "summary": "List client projects",
+        "operationId": "listProjects",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string" },
+                  "client_name": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "List of projects" }
+        }
+      }
+    },
+    "/api/tools/create_project": {
+      "post": {
+        "summary": "Create a new project",
+        "operationId": "createProject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "client_name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "client_name": { "type": "string" },
+                  "service_type": { "type": "string" },
+                  "project_value": { "type": "number" },
+                  "due_date": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Project created" }
+        }
+      }
+    },
+    "/api/tools/get_tasks": {
+      "post": {
+        "summary": "Get tasks with filters",
+        "operationId": "getTasks",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string" },
+                  "priority": { "type": "string" },
+                  "due_today": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "List of tasks" }
+        }
+      }
+    },
+    "/api/tools/create_task": {
+      "post": {
+        "summary": "Create a new task",
+        "operationId": "createTask",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "description": { "type": "string" },
+                  "assigned_to": { "type": "string" },
+                  "priority": { "type": "string" },
+                  "due_date": { "type": "string" },
+                  "project_name": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Task created" }
+        }
+      }
+    },
+    "/api/tools/update_task": {
+      "post": {
+        "summary": "Update task status or details",
+        "operationId": "updateTask",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "title": { "type": "string" },
+                  "status": { "type": "string" },
+                  "assigned_to": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Task updated" }
+        }
+      }
+    },
+    "/api/tools/get_financial_summary": {
+      "post": {
+        "summary": "Get business financial health & metrics",
+        "operationId": "getFinancialSummary",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Financial metrics" }
+        }
+      }
+    },
+    "/api/tools/record_payment": {
+      "post": {
+        "summary": "Record payment against an invoice",
+        "operationId": "recordPayment",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount"],
+                "properties": {
+                  "invoice_number": { "type": "string" },
+                  "amount": { "type": "number" },
+                  "payment_method": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment recorded" }
+        }
+      }
+    },
+    "/api/tools/get_upcoming_events": {
+      "post": {
+        "summary": "Get upcoming meetings and follow-ups",
+        "operationId": "getUpcomingEvents",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "days_ahead": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Upcoming events" }
+        }
+      }
+    },
+    "/api/tools/schedule_event": {
+      "post": {
+        "summary": "Schedule a calendar event or meeting",
+        "operationId": "scheduleEvent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "start_time"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "start_time": { "type": "string" },
+                  "meeting_url": { "type": "string" },
+                  "client_name": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Event scheduled" }
+        }
+      }
+    }
+  }
+}

@@ -329,6 +329,49 @@ export interface InvoiceItem {
   hsnSac?: string;
 }
 
+export type QuotationItem = InvoiceItem;
+
+export type QuotationStatus = 'Draft' | 'Sent' | 'Accepted' | 'Declined' | 'Expired' | 'Converted';
+
+export interface Quotation {
+  id: string;
+  quotationNumber: string;
+  leadId?: string;
+  leadName?: string;
+  clientId?: string;
+  clientName: string;
+  recipientName?: string;
+  companyName?: string;
+  company?: string;
+  serviceTitle?: string;
+  title?: string;
+  targetType?: 'lead' | 'client' | 'Lead' | 'Client' | string;
+  projectId?: string;
+  projectName?: string;
+  issueDate: string;
+  validUntil: string;
+  items: QuotationItem[];
+  subtotal: number;
+  discountAmount?: number;
+  isGst?: boolean;
+  gstType?: GstType;
+  taxRate?: number;
+  tax: number;
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
+  total: number;
+  status: QuotationStatus;
+  convertedInvoiceId?: string;
+  convertedAt?: string;
+  clientGstin?: string;
+  hsnSacCode?: string;
+  notes?: string;
+  termsConditions?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export type InvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Partially Paid' | 'Overdue';
 
 export interface Invoice {
@@ -338,10 +381,13 @@ export interface Invoice {
   clientName: string;
   projectId?: string;
   projectName?: string;
+  quotationId?: string;
+  quotationNumber?: string;
   issueDate: string;
   dueDate: string;
   items: InvoiceItem[];
   subtotal: number;
+  discountAmount?: number;
   isGst?: boolean;
   gstType?: GstType;
   taxRate?: number;
@@ -355,6 +401,7 @@ export interface Invoice {
   paidAmount: number;
   status: InvoiceStatus;
   notes?: string;
+  termsConditions?: string;
   createdAt: string;
 }
 
@@ -499,8 +546,8 @@ export interface AuditLog {
   id: string;
   userName: string;
   userRole: UserRole;
-  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE' | 'REVEAL_SECRET' | 'CONVERT_LEAD' | 'PAYMENT_RECORDED';
-  entityType: 'User' | 'Lead' | 'Client' | 'Project' | 'Task' | 'Invoice' | 'Payment' | 'Expense' | 'Credential' | 'Agreement' | 'Issue' | 'Partner';
+  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE' | 'REVEAL_SECRET' | 'CONVERT_LEAD' | 'PAYMENT_RECORDED' | 'CONVERT_TO_INVOICE';
+  entityType: 'User' | 'Lead' | 'Client' | 'Project' | 'Task' | 'Invoice' | 'Payment' | 'Expense' | 'Credential' | 'Agreement' | 'Issue' | 'Partner' | 'Quotation';
   entityId?: string;
   description: string;
   beforeState?: any;

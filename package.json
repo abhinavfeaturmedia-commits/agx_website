@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "mcp:build": "npm --prefix mcp-server run build",
+    "mcp:start": "npm --prefix mcp-server start",
+    "mcp:http": "npm --prefix mcp-server run start:http",
+    "mcp:test": "npm --prefix mcp-server run test:tools"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

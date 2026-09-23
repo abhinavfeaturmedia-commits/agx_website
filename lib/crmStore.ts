@@ -10,7 +10,8 @@ import {
   CredentialVaultItem, CalendarEvent, NotificationItem, AuditLog, Priority,
   InvoiceStatus, ExpenseCategory, AgreementStatus, CrmModuleKey, ModulePermissions, ROLE_DEFAULT_PERMISSIONS,
   ProjectIssue, IssueStatus, IssueType, IssuePriority,
-  Partner, PartnerReferral, PartnerPayout
+  Partner, PartnerReferral, PartnerPayout,
+  Quotation, QuotationItem, QuotationStatus
 } from '../types/crm';
 
 export const DEFAULT_ADMIN_USER: UserProfile = {
@@ -30,6 +31,7 @@ export const INITIAL_CLIENTS: Client[] = [];
 export const INITIAL_PROJECTS: Project[] = [];
 export const INITIAL_TASKS: Task[] = [];
 export const INITIAL_INVOICES: Invoice[] = [];
+export const INITIAL_QUOTATIONS: Quotation[] = [];
 export const INITIAL_PAYMENTS: Payment[] = [];
 export const INITIAL_EXPENSES: Expense[] = [];
 export const INITIAL_AGREEMENTS: Agreement[] = [];
@@ -125,6 +127,7 @@ export function useCrmStore() {
   const [projects, setProjects] = useState<Project[]>(() => loadFromStorage('projects', INITIAL_PROJECTS));
   const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage('tasks', INITIAL_TASKS));
   const [invoices, setInvoices] = useState<Invoice[]>(() => loadFromStorage('invoices', INITIAL_INVOICES));
+  const [quotations, setQuotations] = useState<Quotation[]>(() => loadFromStorage('quotations', INITIAL_QUOTATIONS));
   const [payments, setPayments] = useState<Payment[]>(() => loadFromStorage('payments', INITIAL_PAYMENTS));
   const [expenses, setExpenses] = useState<Expense[]>(() => loadFromStorage('expenses', INITIAL_EXPENSES));
   const [agreements, setAgreements] = useState<Agreement[]>(() => loadFromStorage('agreements', INITIAL_AGREEMENTS));
@@ -153,6 +156,7 @@ export function useCrmStore() {
   useEffect(() => saveToStorage('projects', projects), [projects]);
   useEffect(() => saveToStorage('tasks', tasks), [tasks]);
   useEffect(() => saveToStorage('invoices', invoices), [invoices]);
+  useEffect(() => saveToStorage('quotations', quotations), [quotations]);
   useEffect(() => saveToStorage('payments', payments), [payments]);
   useEffect(() => saveToStorage('expenses', expenses), [expenses]);
   useEffect(() => saveToStorage('agreements', agreements), [agreements]);
@@ -177,8 +181,37 @@ export function useCrmStore() {
       if (data.clients !== undefined) setClients(data.clients);
       if (data.projects !== undefined) setProjects(data.projects);
       if (data.tasks !== undefined) setTasks(data.tasks);
-      if (data.invoices !== undefined) setInvoices(data.invoices);
-      if (data.payments !== undefined) setPayments(data.payments);
+
+      // Resilient Smart Merge for Invoices: keep pending local items until verified in cloud
+      if (data.invoices !== undefined) {
+        setInvoices(prevLocal => {
+          const cloudIds = new Set(data.invoices!.map(i => i.id));
+          const cloudNumbers = new Set(data.invoices!.map(i => i.invoiceNumber));
+          const localPending = prevLocal.filter(l => !cloudIds.has(l.id) && !cloudNumbers.has(l.invoiceNumber));
+          return [...data.invoices!, ...localPending];
+        });
+      }
+
+      // Resilient Smart Merge for Quotations: keep pending local items until verified in cloud
+      if ((data as any).quotations !== undefined) {
+        const cloudQuotes = (data as any).quotations as Quotation[];
+        setQuotations(prevLocal => {
+          const cloudIds = new Set(cloudQuotes.map(q => q.id));
+          const cloudNumbers = new Set(cloudQuotes.map(q => q.quotationNumber));
+          const localPending = prevLocal.filter(l => !cloudIds.has(l.id) && !cloudNumbers.has(l.quotationNumber));
+          return [...cloudQuotes, ...localPending];
+        });
+      }
+
+      // Resilient Smart Merge for Payments
+      if (data.payments !== undefined) {
+        setPayments(prevLocal => {
+          const cloudIds = new Set(data.payments!.map(p => p.id));
+          const localPending = prevLocal.filter(l => !cloudIds.has(l.id));
+          return [...data.payments!, ...localPending];
+        });
+      }
+
       if (data.expenses !== undefined) setExpenses(data.expenses);
       if (data.agreements !== undefined) setAgreements(data.agreements);
       if (data.documents !== undefined) setDocuments(data.documents);
@@ -905,6 +938,121 @@ export function useCrmStore() {
     crmService.deleteTask(taskId).catch(err => console.warn('Supabase delete task error:', err));
   };
 
+  // --- Quotation Actions ---
+  const addQuotation = (quotation: Omit<Quotation, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const tempId = generateUUID();
+    const newQuote: Quotation = {
+      ...quotation,
+      id: tempId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setQuotations(prev => [newQuote, ...prev]);
+    logAudit('CREATE', 'Quotation', newQuote.id, `Created quotation ${newQuote.quotationNumber} for ${newQuote.clientName} (₹${newQuote.total.toLocaleString('en-IN')})`);
+    toast.success('Quotation Created', `${newQuote.quotationNumber} generated for ${newQuote.clientName}`);
+
+    crmService.createQuotation(quotation).then(savedQuote => {
+      setQuotations(prev => prev.map(q => (q.id === tempId || q.quotationNumber === savedQuote.quotationNumber) ? savedQuote : q));
+    }).catch(err => console.warn('Supabase add quotation error:', err));
+  };
+
+  const updateQuotation = (quotationId: string, updates: Partial<Quotation>) => {
+    setQuotations(prev => prev.map(q => q.id === quotationId ? { ...q, ...updates, updatedAt: new Date().toISOString() } : q));
+    toast.success('Quotation Updated', 'Quotation changes saved.');
+    crmService.updateQuotation(quotationId, updates).catch(err => console.warn('Supabase update quotation error:', err));
+  };
+
+  const deleteQuotation = (quotationId: string) => {
+    const quote = quotations.find(q => q.id === quotationId);
+    setQuotations(prev => prev.filter(q => q.id !== quotationId));
+    logAudit('DELETE', 'Quotation', quotationId, `Deleted quotation: ${quote?.quotationNumber || quotationId}`);
+    toast.warning('Quotation Deleted', `${quote?.quotationNumber || 'Quotation'} removed.`);
+    crmService.deleteQuotation(quotationId).catch(err => console.warn('Supabase delete quotation error:', err));
+  };
+
+  const convertQuotationToInvoice = (quotationId: string): Invoice | null => {
+    const quote = quotations.find(q => q.id === quotationId);
+    if (!quote) return null;
+
+    if (quote.status === 'Converted' && quote.convertedInvoiceId) {
+      const existing = invoices.find(i => i.id === quote.convertedInvoiceId);
+      if (existing) {
+        toast.info('Already Converted', `Quotation is already linked to invoice ${existing.invoiceNumber}`);
+        return existing;
+      }
+    }
+
+    const invTempId = generateUUID();
+    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`;
+
+    const newInvoice: Invoice = {
+      id: invTempId,
+      invoiceNumber,
+      clientId: quote.clientId || '',
+      clientName: quote.clientName,
+      projectId: quote.projectId,
+      projectName: quote.projectName,
+      quotationId: quote.id,
+      quotationNumber: quote.quotationNumber,
+      issueDate: new Date().toISOString().split('T')[0],
+      dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      items: quote.items.map(it => ({ ...it })),
+      subtotal: quote.subtotal,
+      discountAmount: quote.discountAmount || 0,
+      isGst: quote.isGst !== false,
+      gstType: quote.gstType || 'IGST',
+      taxRate: quote.taxRate ?? 18,
+      tax: quote.tax,
+      cgst: quote.cgst || 0,
+      sgst: quote.sgst || 0,
+      igst: quote.igst || 0,
+      clientGstin: quote.clientGstin,
+      hsnSacCode: quote.hsnSacCode || '998313',
+      total: quote.total,
+      paidAmount: 0,
+      status: 'Sent',
+      notes: quote.notes ? `${quote.notes}\n[Converted from Quotation ${quote.quotationNumber}]` : `Converted from Quotation ${quote.quotationNumber}`,
+      termsConditions: quote.termsConditions,
+      createdAt: new Date().toISOString()
+    };
+
+    setInvoices(prev => [newInvoice, ...prev]);
+
+    const nowIso = new Date().toISOString();
+    setQuotations(prev => prev.map(q => q.id === quotationId ? {
+      ...q,
+      status: 'Converted',
+      convertedInvoiceId: invTempId,
+      convertedAt: nowIso,
+      updatedAt: nowIso
+    } : q));
+
+    if (newInvoice.clientId && !newInvoice.projectId) {
+      setClients(prev => prev.map(c => {
+        if (c.id === newInvoice.clientId) {
+          const newTotal = c.totalValue + newInvoice.total;
+          const newOutstanding = c.outstandingAmount + newInvoice.total;
+          return { ...c, totalValue: newTotal, outstandingAmount: newOutstanding, updatedAt: nowIso };
+        }
+        return c;
+      }));
+    }
+
+    logAudit('CONVERT_TO_INVOICE', 'Quotation', quotationId, `Converted quote ${quote.quotationNumber} to invoice ${invoiceNumber} (₹${quote.total.toLocaleString('en-IN')})`);
+    toast.success('Converted to Invoice! 🚀', `Invoice ${invoiceNumber} generated from Quote ${quote.quotationNumber}`);
+
+    crmService.createInvoice(newInvoice).then(savedInvoice => {
+      setInvoices(prev => prev.map(i => (i.id === invTempId || i.invoiceNumber === savedInvoice.invoiceNumber) ? savedInvoice : i));
+      crmService.updateQuotation(quotationId, {
+        status: 'Converted',
+        convertedInvoiceId: savedInvoice.id,
+        convertedAt: nowIso
+      }).catch(err => console.warn('Supabase quote convert update error:', err));
+    }).catch(err => console.warn('Supabase invoice create from quote error:', err));
+
+    return newInvoice;
+  };
+
   // --- Finance Actions ---
   const addInvoice = (invoice: Omit<Invoice, 'id' | 'createdAt'>) => {
     const tempId = generateUUID();
@@ -927,11 +1075,27 @@ export function useCrmStore() {
       }));
     }
 
+    if (newInvoice.quotationId) {
+      const nowIso = new Date().toISOString();
+      setQuotations(prev => prev.map(q => q.id === newInvoice.quotationId ? {
+        ...q,
+        status: 'Converted',
+        convertedInvoiceId: tempId,
+        convertedAt: nowIso,
+        updatedAt: nowIso
+      } : q));
+      crmService.updateQuotation(newInvoice.quotationId, {
+        status: 'Converted',
+        convertedInvoiceId: tempId,
+        convertedAt: nowIso
+      }).catch(err => console.warn('Supabase quote convert link err:', err));
+    }
+
     logAudit('CREATE', 'Invoice', newInvoice.id, `Generated invoice ${newInvoice.invoiceNumber} for ${newInvoice.clientName} (₹${newInvoice.total.toLocaleString('en-IN')})`);
     toast.success('Invoice Generated', `${newInvoice.invoiceNumber} created for ₹${newInvoice.total.toLocaleString('en-IN')}`);
 
     crmService.createInvoice(invoice).then(savedInvoice => {
-      setInvoices(prev => prev.map(i => i.id === tempId ? savedInvoice : i));
+      setInvoices(prev => prev.map(i => (i.id === tempId || i.invoiceNumber === savedInvoice.invoiceNumber) ? savedInvoice : i));
     }).catch(err => console.warn('Supabase add invoice error:', err));
   };
 
@@ -1208,7 +1372,7 @@ export function useCrmStore() {
     toast.success('Invoice Generated', `${invoiceNumber} created for milestone "${milestone.title}"`);
 
     crmService.createInvoice(newInvoice).then(savedInvoice => {
-      setInvoices(prev => prev.map(i => i.id === invTempId ? savedInvoice : i));
+      setInvoices(prev => prev.map(i => (i.id === invTempId || i.invoiceNumber === savedInvoice.invoiceNumber) ? savedInvoice : i));
       updateMilestone(projectId, milestoneId, { isBilled: true, invoiceId: savedInvoice.id });
       crmService.updateMilestoneInvoiced(milestoneId, true, savedInvoice.id);
     }).catch(err => console.warn('Supabase add invoice error:', err));
@@ -1816,6 +1980,16 @@ export function useCrmStore() {
     getProjectPortalUrl,
     regenerateProjectPortalToken,
     toggleProjectPortal,
+    // Quotation Store & Handlers
+    quotations,
+    addQuotation,
+    updateQuotation,
+    deleteQuotation,
+    convertQuotationToInvoice,
+    totalQuotedValue: quotations.reduce((sum, q) => sum + (q.total || 0), 0),
+    acceptedQuotationsCount: quotations.filter(q => q.status === 'Accepted' || q.status === 'Converted').length,
+    pendingQuotationsCount: quotations.filter(q => q.status === 'Draft' || q.status === 'Sent').length,
+    quotationConversionRate: quotations.length > 0 ? Math.round((quotations.filter(q => q.status === 'Accepted' || q.status === 'Converted').length / quotations.length) * 100) : 0,
     // Partner Program Store & Handlers
     partners,
     partnerReferrals,

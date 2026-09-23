@@ -5,12 +5,14 @@ import {
   Briefcase, CheckSquare, FileText, Key, Clock, MoreVertical, X,
   Shield, Calendar, ArrowRight, ExternalLink, Edit3, Trash2, Download,
   TrendingUp, Layers, CheckCircle2, AlertCircle, ArrowUpRight, Sparkles,
-  MessageSquare, UserCheck, CreditCard, ShieldCheck, Lock
+  MessageSquare, UserCheck, CreditCard, ShieldCheck, Lock, Tag
 } from 'lucide-react';
-import { Client } from '../../types/crm';
+import { Client, Quotation, QuotationStatus } from '../../types/crm';
 import { useCrmStore } from '../../lib/crmStore';
 import { exportService } from '../../lib/exportService';
 import { toast } from '../../lib/toastStore';
+import { QuotationModal } from './QuotationModal';
+import { QuotationPreviewModal } from './QuotationPreviewModal';
 
 interface ClientsViewProps {
   store: ReturnType<typeof useCrmStore>;
@@ -34,7 +36,8 @@ const getMonogramGradient = (name: string) => {
 export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, initialSelectedId }) => {
   const {
     clients, addClient, updateClient, deleteClient, projects, invoices, payments, agreements,
-    documents, tasks, credentials, teamMembers, leads, currentUser, events, addCalendarEvent
+    documents, tasks, credentials, teamMembers, leads, currentUser, events, addCalendarEvent,
+    quotations, convertQuotationToInvoice, updateQuotation
   } = store;
 
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
@@ -55,6 +58,10 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+
+  // Quotation Modals State in Clients
+  const [clientQuotationModalClient, setClientQuotationModalClient] = useState<Client | null>(null);
+  const [previewQuotation, setPreviewQuotation] = useState<Quotation | null>(null);
 
   // Auto-open client 360 drawer if navigated with ID or quick create
   useEffect(() => {
@@ -386,9 +393,24 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
     ? (clients.find(c => c.id === selectedClient.id) || selectedClient)
     : null;
 
-  // Selected client's linked entities
+  // Selected client's linked entities with resilient ID & name matching
   const clientProjects = currentClient ? projects.filter(p => p.clientId === currentClient.id || p.clientName === currentClient.company) : [];
-  const clientInvoices = currentClient ? invoices.filter(i => i.clientId === currentClient.id || i.clientName === currentClient.company) : [];
+  const clientInvoices = currentClient ? invoices.filter(i => {
+    if (i.clientId && i.clientId === currentClient.id) return true;
+    const invClient = (i.clientName || '').trim().toLowerCase();
+    const cCompany = (currentClient.company || '').trim().toLowerCase();
+    const cName = (currentClient.name || '').trim().toLowerCase();
+    return (cCompany && invClient === cCompany) || (cName && invClient === cName);
+  }) : [];
+  const clientQuotes = currentClient ? (quotations || []).filter(q => {
+    if (q.clientId && q.clientId === currentClient.id) return true;
+    const qClient = (q.clientName || '').trim().toLowerCase();
+    const qComp = (q.companyName || q.company || '').trim().toLowerCase();
+    const cCompany = (currentClient.company || '').trim().toLowerCase();
+    const cName = (currentClient.name || '').trim().toLowerCase();
+    return (cCompany && (qClient === cCompany || qComp === cCompany)) ||
+           (cName && (qClient === cName || (q.leadName && q.leadName.trim().toLowerCase() === cName)));
+  }) : [];
   const clientPayments = currentClient ? payments.filter(p => p.clientId === currentClient.id || p.clientName === currentClient.company) : [];
   const clientAgreements = currentClient ? agreements.filter(a => a.clientId === currentClient.id || a.clientName === currentClient.company) : [];
   const clientDocs = currentClient ? documents.filter(d => d.clientId === currentClient.id || d.clientName === currentClient.company) : [];
@@ -1054,7 +1076,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                 <div className="flex items-center gap-1.5 overflow-x-auto py-2.5 border-b border-gray-100 my-2 text-xs scrollbar-none">
                   {[
                     { id: 'Overview & Health', label: 'Overview & Health', badge: `${clientHealth.score}%`, badgeColor: clientHealth.bgBadge },
-                    { id: 'Commercials & Invoices', label: 'Commercials & Invoices', count: clientInvoices.length + clientPayments.length + clientAgreements.length },
+                    { id: 'Commercials & Invoices', label: 'Commercials & Invoices', count: clientInvoices.length + clientQuotes.length + clientPayments.length + clientAgreements.length },
                     { id: 'Operations & Sprints', label: 'Operations & Sprints', count: clientProjects.length + clientTasks.length },
                     { id: 'Documents & Specs', label: 'Documents & Specs', count: clientDocs.length },
                     { id: 'Vault Credentials', label: 'Vault Credentials', count: clientCreds.length },
@@ -1254,8 +1276,79 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                   {/* Super-Tab 2: Commercials & Invoices */}
                   {active360Tab === 'Commercials & Invoices' && (
                     <div className="space-y-6">
-                      {/* Section A: Invoices */}
+                      {/* Section 0: Quotations & Scope Estimates */}
                       <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Tag size={15} className="text-emerald-600" />
+                                <span className="font-bold text-gray-900 text-sm">Quotations & Estimates ({clientQuotes.length})</span>
+                              </div>
+                              <button
+                                onClick={() => setClientQuotationModalClient(currentClient)}
+                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer btn-press"
+                              >
+                                <Plus size={13} /> New Quotation
+                              </button>
+                            </div>
+
+                            {clientQuotes.length === 0 ? (
+                              <div className="text-center py-6 bg-gray-50 rounded-2xl text-gray-400 border border-dashed border-gray-200">
+                                No quotations generated for this account yet.
+                              </div>
+                            ) : (
+                              clientQuotes.map(q => (
+                                <div
+                                  key={q.id}
+                                  className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-gray-100/80 transition-all flex items-center justify-between gap-3"
+                                >
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-bold text-gray-900">{q.quotationNumber}</h4>
+                                      <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${
+                                        q.status === 'Accepted' ? 'bg-emerald-100 text-emerald-800' :
+                                        q.status === 'Converted' ? 'bg-indigo-100 text-indigo-800' :
+                                        q.status === 'Declined' ? 'bg-rose-100 text-rose-800' :
+                                        q.status === 'Sent' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                                      }`}>
+                                        {q.status}
+                                      </span>
+                                    </div>
+                                    <span className="text-gray-500 text-[11px] block mt-0.5">
+                                      {q.serviceTitle} • Total: <strong className="text-gray-900 font-semibold tabular-nums">₹{q.total.toLocaleString('en-IN')}</strong> (Valid till {q.validUntil})
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {q.status !== 'Converted' && (
+                                      <button
+                                        onClick={async () => {
+                                          try {
+                                            const newInv = await convertQuotationToInvoice(q.id);
+                                            toast.success('Quotation Converted', `Created Invoice ${newInv.invoiceNumber}`);
+                                            setSelectedClient(null);
+                                            onNavigate('finance', newInv.id);
+                                          } catch (err: any) {
+                                            toast.error('Conversion Failed', err.message || 'Error converting quote');
+                                          }
+                                        }}
+                                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
+                                      >
+                                        Convert to Invoice
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => setPreviewQuotation(q)}
+                                      className="px-2.5 py-1 bg-black text-white hover:bg-gray-800 rounded-lg text-[10px] font-bold cursor-pointer btn-press"
+                                    >
+                                      PDF
+                                    </button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                      {/* Section A: Invoices */}
+                      <div className="space-y-3 pt-4 border-t border-gray-100">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <CreditCard size={15} className="text-gray-600" />
@@ -1281,7 +1374,21 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                               className="p-4 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-gray-100/80 transition-all cursor-pointer group flex items-center justify-between"
                             >
                               <div>
-                                <h4 className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{i.invoiceNumber}</h4>
+                                <div className="flex items-center gap-1.5">
+                                  <h4 className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{i.invoiceNumber}</h4>
+                                  {i.quotationNumber && (
+                                    <span
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const q = (quotations || []).find(quote => quote.id === i.quotationId || quote.quotationNumber === i.quotationNumber);
+                                        if (q) setPreviewQuotation(q);
+                                      }}
+                                      className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded hover:bg-indigo-100"
+                                    >
+                                      Quote {i.quotationNumber}
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-gray-400 text-[11px]">Due: {i.dueDate} • Total: <strong className="text-gray-700 font-semibold tabular-nums">₹{i.total.toLocaleString('en-IN')}</strong></span>
                               </div>
                               <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -2027,6 +2134,38 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
           </motion.div>
         </div>
       )}
+
+      {/* Quotation Preview Modal */}
+      <QuotationPreviewModal
+        quotation={previewQuotation}
+        onClose={() => setPreviewQuotation(null)}
+        onConvertToInvoice={async (qId) => {
+          try {
+            const inv = await convertQuotationToInvoice(qId);
+            toast.success('Quotation Converted', `Created Invoice ${inv.invoiceNumber}`);
+            setPreviewQuotation(null);
+            setSelectedClient(null);
+            onNavigate('finance', inv.id);
+          } catch (err: any) {
+            toast.error('Conversion Failed', err.message || 'Failed to convert quotation');
+          }
+        }}
+        onUpdateStatus={(qId, st) => {
+          updateQuotation(qId, { status: st });
+          toast.success('Status Updated', `Quotation marked as ${st}`);
+          if (previewQuotation && previewQuotation.id === qId) {
+            setPreviewQuotation({ ...previewQuotation, status: st });
+          }
+        }}
+      />
+
+      {/* Quotation Creation Modal for Client */}
+      <QuotationModal
+        isOpen={!!clientQuotationModalClient}
+        onClose={() => setClientQuotationModalClient(null)}
+        store={store}
+        initialClientId={clientQuotationModalClient?.id}
+      />
     </div>
   );
 };

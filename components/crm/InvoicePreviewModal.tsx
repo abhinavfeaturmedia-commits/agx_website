@@ -148,6 +148,13 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ invoic
                 {invoice.status}
               </span>
               <div className="text-sm font-extrabold text-gray-900 tabular-nums">#{invoice.invoiceNumber}</div>
+              {invoice.quotationNumber && (
+                <div className="mt-0.5">
+                  <span className="inline-block text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                    Quote #{invoice.quotationNumber}
+                  </span>
+                </div>
+              )}
               <div className="text-[11px] text-gray-500 mt-0.5 tabular-nums">Issue: {invoice.issueDate}</div>
               <div className="text-[11px] text-gray-500 tabular-nums">Due: {invoice.dueDate}</div>
             </div>
@@ -186,7 +193,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ invoic
                 {(invoice.items && invoice.items.length > 0 ? invoice.items : [{ description: 'AI Development & Software Delivery Services', quantity: 1, unitPrice: invoice.subtotal || invoice.total, total: invoice.subtotal || invoice.total }]).map((item: any, idx: number) => (
                   <tr key={idx} className="hover:bg-gray-50/50">
                     <td className="py-3 px-4 font-semibold text-gray-900">{item.description}</td>
-                    <td className="py-3 px-3 text-center text-gray-500 font-mono text-[11px]">{hsnCode}</td>
+                    <td className="py-3 px-3 text-center text-gray-500 font-mono text-[11px]">{item.hsnSac || hsnCode}</td>
                     <td className="py-3 px-3 text-center text-gray-700">{item.quantity || 1}</td>
                     <td className="py-3 px-3 text-right font-mono text-gray-700">₹{(item.unitPrice || 0).toLocaleString('en-IN')}</td>
                     <td className="py-3 px-4 text-right font-bold font-mono text-gray-900">₹{(item.total || 0).toLocaleString('en-IN')}</td>
@@ -203,6 +210,12 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ invoic
                 <span>Subtotal (Taxable Value):</span>
                 <span className="font-mono font-bold text-gray-900">₹{(invoice.subtotal || 0).toLocaleString('en-IN')}</span>
               </div>
+              {Boolean(invoice.discountAmount && invoice.discountAmount > 0) && (
+                <div className="flex justify-between text-emerald-700 font-medium">
+                  <span>Discount Applied:</span>
+                  <span className="font-mono">- ₹{(invoice.discountAmount || 0).toLocaleString('en-IN')}</span>
+                </div>
+              )}
               {isGst && gstType === 'CGST_SGST' ? (
                 <>
                   <div className="flex justify-between text-gray-600">
@@ -234,6 +247,13 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ invoic
               </div>
             </div>
           </div>
+
+          {invoice.termsConditions && (
+            <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-[11px] mb-4 text-gray-600 whitespace-pre-line">
+              <strong className="text-gray-900 block mb-1">Terms & Conditions:</strong>
+              {invoice.termsConditions}
+            </div>
+          )}
 
           {/* Banking & Remittance Instructions with Dynamic UPI QR Code */}
           <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 text-[11px] mb-4 flex flex-col sm:flex-row items-center justify-between gap-4">

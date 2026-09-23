@@ -5,13 +5,18 @@ import {
   CreditCard, CheckCircle2, ArrowUpRight, ArrowDownRight, X,
   PieChart, Shield, Calculator, Download, Edit3, Trash2, Printer,
   Receipt, Building, Briefcase, Filter, Layers, DollarSign,
-  AlertCircle, CheckCircle, Clock, Percent, ArrowRight
+  AlertCircle, CheckCircle, Clock, Percent, ArrowRight, RefreshCw, Send, Sparkles, Tag
 } from 'lucide-react';
-import { Invoice, Payment, Expense, InvoiceStatus, PaymentStatus, ExpenseCategory, GstType } from '../../types/crm';
+import {
+  Invoice, Payment, Expense, InvoiceStatus, PaymentStatus, ExpenseCategory, GstType,
+  Quotation, QuotationItem, QuotationStatus
+} from '../../types/crm';
 import { useCrmStore } from '../../lib/crmStore';
 import { exportService } from '../../lib/exportService';
 import { toast } from '../../lib/toastStore';
 import { InvoicePreviewModal } from './InvoicePreviewModal';
+import { QuotationPreviewModal } from './QuotationPreviewModal';
+import { QuotationModal } from './QuotationModal';
 
 interface FinanceViewProps {
   store: ReturnType<typeof useCrmStore>;
@@ -32,11 +37,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
     invoices, addInvoice, updateInvoice, deleteInvoice,
     payments, recordPayment, deletePayment,
     expenses, addExpense, deleteExpense,
-    clients, projects, totalRevenue, directExpensesTotal, partnerPayoutsTotal, totalExpenses, netProfit, profitMargin,
+    quotations, addQuotation, updateQuotation, deleteQuotation, convertQuotationToInvoice,
+    totalQuotedValue, acceptedQuotationsCount, pendingQuotationsCount, quotationConversionRate,
+    clients, leads, projects, totalRevenue, directExpensesTotal, partnerPayoutsTotal, totalExpenses, netProfit, profitMargin,
     outstandingInvoicesTotal, currentUser, canAccessFinance
   } = store;
 
-  const [activeTab, setActiveTab] = useState<'Overview' | 'Invoices' | 'Payments' | 'Expenses' | 'Profit & Loss'>('Overview');
+  const [activeTab, setActiveTab] = useState<'Overview' | 'Quotations' | 'Invoices' | 'Payments' | 'Expenses' | 'Profit & Loss'>('Overview');
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,11 +54,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string>('All');
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('All');
 
+  // Quotation Filter States
+  const [selectedQuotationStatus, setSelectedQuotationStatus] = useState<string>('All');
+  const [selectedQuotationTarget, setSelectedQuotationTarget] = useState<'All' | 'Client' | 'Lead'>('All');
+
   // Modals
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
+
+  // Quotation Modals & State
+  const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
+  const [previewQuotation, setPreviewQuotation] = useState<Quotation | null>(null);
+  const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
+  const [quotationToDelete, setQuotationToDelete] = useState<Quotation | null>(null);
 
   // Edit & Delete states
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
@@ -59,11 +76,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
   const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
 
-  // Auto-open invoice if navigated with ID or quick create
+  // Auto-open invoice or quotation if navigated with ID or quick create
   useEffect(() => {
     if (initialSelectedId === 'new') {
       setActiveTab('Invoices');
       setIsInvoiceModalOpen(true);
+      onNavigate('finance', undefined);
+    } else if (initialSelectedId === 'new-quotation') {
+      setActiveTab('Quotations');
+      setIsQuotationModalOpen(true);
+      onNavigate('finance', undefined);
+    } else if (initialSelectedId?.startsWith('quote:') || initialSelectedId?.startsWith('QT-')) {
+      const qTarget = initialSelectedId.replace('quote:', '');
+      const qMatch = quotations.find(q => q.id === qTarget || q.quotationNumber === qTarget);
+      if (qMatch) {
+        setActiveTab('Quotations');
+        setPreviewQuotation(qMatch);
+      }
       onNavigate('finance', undefined);
     } else if (initialSelectedId) {
       const invMatch = invoices.find(i => i.id === initialSelectedId);
@@ -73,11 +102,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
       }
       onNavigate('finance', undefined);
     }
-  }, [initialSelectedId]);
+  }, [initialSelectedId, quotations, invoices]);
 
   // New Invoice Form State
   const [newInvoice, setNewInvoice] = useState({
     invoiceNumber: `INV-${new Date().getFullYear()}-00${invoices.length + 1}`,
+    quotationId: undefined as string | undefined,
+    quotationNumber: undefined as string | undefined,
+    discountAmount: 0,
     clientId: clients[0]?.id || '',
     clientName: clients[0]?.company || '',
     projectId: projects[0]?.id || '',
@@ -196,6 +228,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
     });
   }, [invoices, searchQuery, selectedInvoiceStatus, selectedClientFilter, selectedInvoiceTypeFilter]);
 
+  // Filtered Quotations
+  const filteredQuotations = useMemo(() => {
+    return quotations.filter(q => {
+      const query = searchQuery.toLowerCase().trim();
+      const matchesSearch = !query ||
+        q.quotationNumber.toLowerCase().includes(query) ||
+        q.recipientName.toLowerCase().includes(query) ||
+        (q.companyName && q.companyName.toLowerCase().includes(query)) ||
+        (q.serviceTitle && q.serviceTitle.toLowerCase().includes(query));
+
+      const matchesStatus = selectedQuotationStatus === 'All' || q.status === selectedQuotationStatus;
+      const matchesTarget = selectedQuotationTarget === 'All' ||
+        (selectedQuotationTarget === 'Client' && q.targetType === 'Client') ||
+        (selectedQuotationTarget === 'Lead' && q.targetType === 'Lead');
+
+      return matchesSearch && matchesStatus && matchesTarget;
+    });
+  }, [quotations, searchQuery, selectedQuotationStatus, selectedQuotationTarget]);
+
   // Filtered Payments
   const filteredPayments = useMemo(() => {
     return payments.filter(pay => {
@@ -241,16 +292,40 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
     );
   }
 
+  // Quotation Handlers
+  const handleConvertQuotation = async (quotationOrId: Quotation | string) => {
+    const qId = typeof quotationOrId === 'string' ? quotationOrId : quotationOrId.id;
+    const targetQ = typeof quotationOrId === 'string' ? quotations.find(q => q.id === qId) : quotationOrId;
+    try {
+      const createdInvoice = await convertQuotationToInvoice(qId);
+      toast.success('Quotation Converted', `Quotation ${targetQ?.quotationNumber || ''} successfully converted to Invoice ${createdInvoice.invoiceNumber}`);
+      setActiveTab('Invoices');
+      setPreviewInvoice(createdInvoice);
+    } catch (err: any) {
+      toast.error('Conversion Failed', err.message || 'Unable to convert quotation');
+    }
+  };
+
+  const handleUpdateQuotationStatus = (quotationId: string, status: QuotationStatus) => {
+    updateQuotation(quotationId, { status });
+    toast.success('Quotation Updated', `Status changed to ${status}`);
+    if (previewQuotation && previewQuotation.id === quotationId) {
+      setPreviewQuotation({ ...previewQuotation, status });
+    }
+  };
+
   // Invoice Handlers
   const handleCreateInvoice = (e: React.FormEvent) => {
     e.preventDefault();
     const cl = clients.find(c => c.id === newInvoice.clientId);
     const pr = projects.find(p => p.id === newInvoice.projectId);
     const subtotal = newInvoice.itemQty * newInvoice.itemPrice;
+    const discount = newInvoice.discountAmount || 0;
+    const taxableAmount = Math.max(0, subtotal - discount);
     const isGst = newInvoice.isGst;
     const taxRate = isGst ? (newInvoice.taxRate ?? 18) : 0;
-    const tax = isGst ? Math.round(subtotal * (taxRate / 100)) : 0;
-    const total = subtotal + tax;
+    const tax = isGst ? Math.round(taxableAmount * (taxRate / 100)) : 0;
+    const total = taxableAmount + tax;
     const gstType = newInvoice.gstType || 'IGST';
     const cgst = isGst && gstType === 'CGST_SGST' ? Math.round(tax / 2) : 0;
     const sgst = isGst && gstType === 'CGST_SGST' ? Math.round(tax / 2) : 0;
@@ -258,6 +333,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
 
     addInvoice({
       invoiceNumber: newInvoice.invoiceNumber,
+      quotationId: newInvoice.quotationId,
+      quotationNumber: newInvoice.quotationNumber,
       clientId: newInvoice.clientId,
       clientName: cl ? cl.company : newInvoice.clientName,
       projectId: newInvoice.projectId,
@@ -272,6 +349,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
         hsnSac: isGst ? (newInvoice.hsnSacCode || '998313') : undefined
       }],
       subtotal,
+      discountAmount: discount,
       isGst,
       gstType: isGst ? gstType : undefined,
       taxRate,
@@ -405,6 +483,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
             <Plus size={14} /> Record Payment
           </button>
           <button
+            onClick={() => { setEditingQuotation(null); setIsQuotationModalOpen(true); }}
+            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+          >
+            <Plus size={14} /> Create Quotation
+          </button>
+          <button
             onClick={() => setIsInvoiceModalOpen(true)}
             className="px-4 py-2 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-bold text-xs flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
           >
@@ -470,7 +554,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
           <div className="double-bezel-inner bg-gradient-to-br from-[#0E131F] to-[#080B12] text-white p-5 flex items-start justify-between relative overflow-hidden">
             <div className="relative z-10">
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Net Operating Profit</span>
-              <span className="text-2xl font-black text-[#CCFF00] mt-1 block tabular-nums">
+              <span className="text-2xl font-black text-sharp-lime mt-1 block tabular-nums text-[#CCFF00]">
                 ₹{netProfit.toLocaleString('en-IN')}
               </span>
               <span className="text-xs text-emerald-400 font-bold flex items-center gap-1 mt-1 tabular-nums">
@@ -485,16 +569,30 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
       </div>
 
       {/* Row 2: Tabs Navigation */}
-      <div className="flex items-center gap-1 bg-white p-1 rounded-2xl border border-gray-100 w-fit text-xs">
-        {(['Overview', 'Invoices', 'Payments', 'Expenses', 'Profit & Loss'] as const).map((tab) => (
+      <div className="flex items-center gap-1 bg-white p-1 rounded-2xl border border-gray-100 w-fit text-xs overflow-x-auto max-w-full">
+        {(['Overview', 'Quotations', 'Invoices', 'Payments', 'Expenses', 'Profit & Loss'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${
+            className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === tab ? 'bg-black text-white shadow-xs' : 'text-gray-500 hover:text-black'
             }`}
           >
-            {tab}
+            <span>{tab}</span>
+            {tab === 'Quotations' && quotations.length > 0 && (
+              <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                activeTab === tab ? 'bg-[#CCFF00] text-black' : 'bg-indigo-50 text-indigo-700'
+              }`}>
+                {quotations.length}
+              </span>
+            )}
+            {tab === 'Invoices' && invoices.length > 0 && (
+              <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                activeTab === tab ? 'bg-[#CCFF00] text-black' : 'bg-gray-100 text-gray-700'
+              }`}>
+                {invoices.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -648,6 +746,275 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
         </div>
       )}
 
+      {/* TAB: QUOTATIONS */}
+      {activeTab === 'Quotations' && (
+        <div className="space-y-6">
+          {/* Row of 4 KPI Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="double-bezel-outer card-tactile">
+              <div className="double-bezel-inner p-5 flex items-start justify-between">
+                <div>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Total Quoted Pipeline</span>
+                  <span className="text-2xl font-black text-gray-900 mt-1 block tabular-nums">
+                    ₹{totalQuotedValue.toLocaleString('en-IN')}
+                  </span>
+                  <span className="text-xs text-indigo-600 font-bold flex items-center gap-1 mt-1 tabular-nums">
+                    <FileText size={13} /> {quotations.length} Active Quotes
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shadow-xs">
+                  <Tag size={18} />
+                </div>
+              </div>
+            </div>
+
+            <div className="double-bezel-outer card-tactile">
+              <div className="double-bezel-inner p-5 flex items-start justify-between">
+                <div>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Accepted & Won</span>
+                  <span className="text-2xl font-black text-emerald-600 mt-1 block tabular-nums">
+                    {acceptedQuotationsCount} Quotes Won
+                  </span>
+                  <span className="text-xs text-emerald-700 font-bold flex items-center gap-1 mt-1 tabular-nums">
+                    <CheckCircle2 size={13} /> {quotations.filter(q => q.status === 'Converted').length} Converted to Invoices
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shadow-xs">
+                  <CheckCircle size={18} />
+                </div>
+              </div>
+            </div>
+
+            <div className="double-bezel-outer card-tactile">
+              <div className="double-bezel-inner p-5 flex items-start justify-between">
+                <div>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Pending / Under Review</span>
+                  <span className="text-2xl font-black text-amber-600 mt-1 block tabular-nums">
+                    {pendingQuotationsCount} In Negotiation
+                  </span>
+                  <span className="text-xs text-amber-700 font-bold flex items-center gap-1 mt-1 tabular-nums">
+                    <Clock size={13} /> {quotations.filter(q => q.status === 'Sent').length} Sent to Clients
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold shadow-xs">
+                  <Clock size={18} />
+                </div>
+              </div>
+            </div>
+
+            <div className="double-bezel-outer card-tactile">
+              <div className="double-bezel-inner bg-gradient-to-br from-[#0E131F] to-[#080B12] text-white p-5 flex items-start justify-between relative overflow-hidden">
+                <div className="relative z-10">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Proposal Win Rate</span>
+                  <span className="text-2xl font-black text-[#CCFF00] mt-1 block tabular-nums">
+                    {quotationConversionRate}% Conversion
+                  </span>
+                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1 mt-1 tabular-nums">
+                    <TrendingUp size={13} /> Commercial Conversion
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-white/10 text-[#CCFF00] flex items-center justify-center relative z-10 font-bold shadow-xs">
+                  <Sparkles size={18} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quotations Main Table Card */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden space-y-3 p-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pb-3 border-b border-gray-100">
+              <div className="relative w-full sm:w-80">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search quote #, client, lead, service..."
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-4 py-2 text-xs outline-none focus:border-black"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+                <select
+                  value={selectedQuotationTarget}
+                  onChange={(e) => setSelectedQuotationTarget(e.target.value as any)}
+                  className="bg-gray-50 border border-gray-200 text-xs font-semibold text-gray-700 rounded-xl px-3 py-2 outline-none cursor-pointer"
+                >
+                  <option value="All">All Targets (Clients & Leads)</option>
+                  <option value="Client">Client Accounts Only</option>
+                  <option value="Lead">Pipeline Leads Only</option>
+                </select>
+
+                <select
+                  value={selectedQuotationStatus}
+                  onChange={(e) => setSelectedQuotationStatus(e.target.value)}
+                  className="bg-gray-50 border border-gray-200 text-xs font-semibold text-gray-700 rounded-xl px-3 py-2 outline-none cursor-pointer"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Sent">Sent</option>
+                  <option value="Accepted">Accepted</option>
+                  <option value="Declined">Declined</option>
+                  <option value="Converted">Converted to Invoice</option>
+                </select>
+
+                <button
+                  onClick={() => exportService.exportToCsv('agx_quotations', filteredQuotations.map(q => ({
+                    QuotationNo: q.quotationNumber,
+                    TargetType: q.targetType,
+                    Recipient: q.recipientName,
+                    Company: q.companyName || 'N/A',
+                    Service: q.serviceTitle,
+                    IssueDate: q.issueDate,
+                    ValidUntil: q.validUntil,
+                    SubtotalINR: q.subtotal,
+                    DiscountINR: q.discountAmount || 0,
+                    TaxINR: q.tax,
+                    TotalINR: q.total,
+                    Status: q.status
+                  })))}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-100 cursor-pointer"
+                >
+                  <Download size={13} /> Export CSV
+                </button>
+
+                <button
+                  onClick={() => { setEditingQuotation(null); setIsQuotationModalOpen(true); }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black text-white hover:bg-gray-800 text-xs font-bold cursor-pointer transition-colors shadow-xs"
+                >
+                  <Plus size={14} className="text-[#CCFF00]" /> New Quotation
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 border-b border-gray-100 text-gray-400 font-bold uppercase text-[10px] tracking-wider">
+                  <tr>
+                    <th className="py-3.5 px-4">Quotation #</th>
+                    <th className="py-3.5 px-3">Target & Counterparty</th>
+                    <th className="py-3.5 px-3">Service Scope</th>
+                    <th className="py-3.5 px-3">Validity</th>
+                    <th className="py-3.5 px-3">Subtotal</th>
+                    <th className="py-3.5 px-3">Tax</th>
+                    <th className="py-3.5 px-3">Total Value</th>
+                    <th className="py-3.5 px-3">Status</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-gray-700">
+                  {filteredQuotations.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-12 text-center text-gray-400 text-xs">
+                        No quotations found matching the search criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredQuotations.map((quote) => {
+                      const validityDate = new Date(quote.validUntil);
+                      const isExpired = quote.status !== 'Converted' && quote.status !== 'Accepted' && validityDate < new Date();
+                      const daysLeft = Math.ceil((validityDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+
+                      return (
+                        <tr key={quote.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="py-3.5 px-4">
+                            <span
+                              onClick={() => setPreviewQuotation(quote)}
+                              className="font-extrabold text-gray-900 hover:text-indigo-600 cursor-pointer block"
+                            >
+                              {quote.quotationNumber}
+                            </span>
+                            <span className="text-[10px] text-gray-400">Issued: {quote.issueDate}</span>
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-gray-900">{quote.companyName || quote.recipientName}</span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
+                                quote.targetType === 'Client' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}>
+                                {quote.targetType}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-gray-400">Attn: {quote.recipientName}</div>
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <div className="font-semibold text-gray-900 max-w-xs truncate">{quote.serviceTitle}</div>
+                            <div className="text-[10px] text-gray-400">{quote.items.length} line {quote.items.length === 1 ? 'item' : 'items'}</div>
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <div className="text-gray-700 font-medium">{quote.validUntil}</div>
+                            {isExpired ? (
+                              <span className="text-[9px] font-bold text-rose-600 block">Expired</span>
+                            ) : quote.status !== 'Converted' ? (
+                              <span className="text-[9px] font-medium text-gray-400 block">{daysLeft} days left</span>
+                            ) : null}
+                          </td>
+                          <td className="py-3.5 px-3 text-gray-600">
+                            <div>₹{quote.subtotal.toLocaleString('en-IN')}</div>
+                            {quote.discountAmount ? (
+                              <div className="text-[10px] text-emerald-600">-₹{quote.discountAmount.toLocaleString('en-IN')} disc.</div>
+                            ) : null}
+                          </td>
+                          <td className="py-3.5 px-3 text-gray-600 font-medium">
+                            {quote.tax > 0 ? `₹${quote.tax.toLocaleString('en-IN')} (${quote.taxRate}%)` : '0% Tax'}
+                          </td>
+                          <td className="py-3.5 px-3 font-extrabold text-gray-900">
+                            ₹{quote.total.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                              quote.status === 'Accepted' ? 'bg-emerald-100 text-emerald-800' :
+                              quote.status === 'Converted' ? 'bg-indigo-100 text-indigo-800' :
+                              quote.status === 'Declined' ? 'bg-rose-100 text-rose-800' :
+                              quote.status === 'Sent' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {quote.status === 'Converted' ? 'Converted ✓' : quote.status}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {quote.status !== 'Converted' && (
+                                <button
+                                  onClick={() => handleConvertQuotation(quote)}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                                  title="Convert directly to Invoice"
+                                >
+                                  <RefreshCw size={11} /> Convert to Invoice
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setPreviewQuotation(quote)}
+                                className="px-2.5 py-1 rounded-lg bg-black hover:bg-gray-800 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <Printer size={11} /> PDF
+                              </button>
+                              <button
+                                onClick={() => { setEditingQuotation(quote); setIsQuotationModalOpen(true); }}
+                                className="p-1 text-gray-400 hover:text-black rounded cursor-pointer"
+                                title="Edit Quotation"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button
+                                onClick={() => setQuotationToDelete(quote)}
+                                className="p-1 text-gray-400 hover:text-rose-600 rounded cursor-pointer"
+                                title="Delete Quotation"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TAB 2: INVOICES */}
       {activeTab === 'Invoices' && (
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden space-y-3 p-4">
@@ -691,11 +1058,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
                 onClick={() => exportService.exportToCsv('agx_invoices', filteredInvoices.map(i => ({
                   InvoiceNo: i.invoiceNumber,
                   Type: i.isGst !== false ? `GST (${i.gstType || 'IGST'})` : 'Non-GST',
+                  QuotationRef: i.quotationNumber || 'Direct',
                   Client: i.clientName,
                   Project: i.projectName || 'Internal',
                   IssueDate: i.issueDate,
                   DueDate: i.dueDate,
                   SubtotalINR: i.subtotal,
+                  DiscountINR: i.discountAmount || 0,
                   TaxINR: i.tax,
                   TotalINR: i.total,
                   Status: i.status
@@ -732,7 +1101,24 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
                 ) : (
                   filteredInvoices.map((inv) => (
                     <tr key={inv.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-extrabold text-gray-900">{inv.invoiceNumber}</td>
+                      <td className="py-3.5 px-4 font-extrabold text-gray-900">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{inv.invoiceNumber}</span>
+                          {inv.quotationNumber && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const q = quotations.find(quote => quote.id === inv.quotationId || quote.quotationNumber === inv.quotationNumber);
+                                if (q) setPreviewQuotation(q);
+                              }}
+                              className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-indigo-100 flex items-center gap-0.5"
+                              title="View linked quotation"
+                            >
+                              <Tag size={9} /> Quote {inv.quotationNumber}
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-3.5 px-3">
                         <div
                           onClick={() => inv.clientId && onNavigate('clients', inv.clientId)}
@@ -752,7 +1138,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
                         </span>
                       </td>
                       <td className="py-3.5 px-3 text-gray-600 font-medium">{inv.dueDate}</td>
-                      <td className="py-3.5 px-3 text-gray-600">₹{inv.subtotal?.toLocaleString('en-IN')}</td>
+                      <td className="py-3.5 px-3 text-gray-600">
+                        <div>₹{inv.subtotal?.toLocaleString('en-IN')}</div>
+                        {inv.discountAmount ? (
+                          <div className="text-[10px] text-emerald-600">-₹{inv.discountAmount.toLocaleString('en-IN')} disc.</div>
+                        ) : null}
+                      </td>
                       <td className="py-3.5 px-3 font-semibold text-gray-700">
                         {inv.isGst !== false ? `₹${(inv.tax || 0).toLocaleString('en-IN')}` : '₹0 (Exempt)'}
                       </td>
@@ -1115,6 +1506,64 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
               <button onClick={() => setIsInvoiceModalOpen(false)} className="p-1 text-gray-400 hover:text-black cursor-pointer"><X size={18} /></button>
             </div>
             <form onSubmit={handleCreateInvoice} className="space-y-4 text-xs">
+              {/* Optional Import from Accepted Quotation */}
+              {quotations.filter(q => q.status === 'Accepted' || q.status === 'Sent').length > 0 && (
+                <div className="p-3 bg-indigo-50/70 rounded-2xl border border-indigo-100 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-indigo-950 flex items-center gap-1.5 text-xs">
+                      <Sparkles size={13} className="text-indigo-600" />
+                      Import from Quotation
+                    </span>
+                    <span className="text-[10px] text-indigo-600 font-semibold">1-Click Auto-Fill</span>
+                  </div>
+                  <select
+                    onChange={(e) => {
+                      const quote = quotations.find(q => q.id === e.target.value);
+                      if (quote) {
+                        const cl = clients.find(c => c.id === quote.clientId);
+                        const firstItem = quote.items[0];
+                        setNewInvoice({
+                          ...newInvoice,
+                          quotationId: quote.id,
+                          quotationNumber: quote.quotationNumber,
+                          discountAmount: quote.discountAmount || 0,
+                          clientId: quote.clientId || newInvoice.clientId,
+                          clientName: cl ? cl.company : (quote.companyName || quote.recipientName),
+                          clientGstin: cl?.gstTaxId || '',
+                          itemDesc: firstItem ? firstItem.description : quote.serviceTitle,
+                          itemPrice: quote.subtotal,
+                          isGst: quote.taxRate > 0,
+                          taxRate: quote.taxRate || 18,
+                          notes: `Converted from Quotation ${quote.quotationNumber}. Scope: ${quote.serviceTitle}`
+                        });
+                        toast.success('Quotation Imported', `Loaded details from ${quote.quotationNumber}`);
+                      }
+                    }}
+                    defaultValue=""
+                    className="w-full bg-white border border-indigo-200 text-xs font-semibold text-gray-800 rounded-xl p-2 outline-none cursor-pointer"
+                  >
+                    <option value="" disabled>Select an active quotation to populate invoice...</option>
+                    {quotations.filter(q => q.status !== 'Converted').map(q => (
+                      <option key={q.id} value={q.id}>
+                        {q.quotationNumber} — {q.companyName || q.recipientName} (₹{q.total.toLocaleString('en-IN')}) [{q.status}]
+                      </option>
+                    ))}
+                  </select>
+                  {newInvoice.quotationNumber && (
+                    <div className="flex items-center justify-between text-[11px] text-indigo-700 font-bold bg-white/70 px-2.5 py-1 rounded-lg border border-indigo-100">
+                      <span>Linked Quote: {newInvoice.quotationNumber}</span>
+                      <button
+                        type="button"
+                        onClick={() => setNewInvoice({ ...newInvoice, quotationId: undefined, quotationNumber: undefined })}
+                        className="text-gray-400 hover:text-rose-600 text-[10px]"
+                      >
+                        Detach
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* GST vs Non-GST Selector */}
               <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200/80 space-y-2">
                 <label className="block font-bold text-gray-800 text-xs">Invoice Billing Format *</label>
@@ -1249,18 +1698,30 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
                 <input type="text" required value={newInvoice.itemDesc} onChange={(e) => setNewInvoice({ ...newInvoice, itemDesc: e.target.value })} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black" />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Subtotal Amount (₹) *</label>
+                  <label className="block font-bold text-gray-700 mb-1">Subtotal (₹) *</label>
                   <input type="number" required value={newInvoice.itemPrice} onChange={(e) => setNewInvoice({ ...newInvoice, itemPrice: Number(e.target.value) })} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black" />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Discount (₹)</label>
+                  <input type="number" min="0" value={newInvoice.discountAmount} onChange={(e) => setNewInvoice({ ...newInvoice, discountAmount: Number(e.target.value) })} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black" />
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Grand Total (₹)</label>
                   <div className="w-full bg-gray-100 border border-gray-200 rounded-xl p-2.5 font-black text-gray-900 flex justify-between items-center">
-                    <span>₹{Math.round(newInvoice.itemPrice * (1 + (newInvoice.isGst ? (newInvoice.taxRate || 0) : 0) / 100)).toLocaleString('en-IN')}</span>
-                    <span className="text-[10px] text-gray-500 font-normal">
-                      {newInvoice.isGst ? `incl. ₹${Math.round(newInvoice.itemPrice * (newInvoice.taxRate || 0) / 100).toLocaleString('en-IN')} GST` : '0% Tax'}
-                    </span>
+                    {(() => {
+                      const netSub = Math.max(0, newInvoice.itemPrice - (newInvoice.discountAmount || 0));
+                      const taxVal = newInvoice.isGst ? Math.round(netSub * ((newInvoice.taxRate || 0) / 100)) : 0;
+                      return (
+                        <>
+                          <span>₹{(netSub + taxVal).toLocaleString('en-IN')}</span>
+                          <span className="text-[10px] text-gray-500 font-normal">
+                            {newInvoice.isGst ? `incl. ₹${taxVal.toLocaleString('en-IN')} GST` : '0% Tax'}
+                          </span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1529,10 +1990,54 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
         </div>
       )}
 
+      {/* Delete Quotation Confirmation */}
+      {quotationToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-gray-100 text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3">
+              <Trash2 size={24} />
+            </div>
+            <h3 className="font-extrabold text-base text-gray-900 mb-1">Delete Quotation?</h3>
+            <p className="text-xs text-gray-500 mb-5">
+              Are you sure you want to permanently delete quotation <strong>{quotationToDelete.quotationNumber}</strong>?
+            </p>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setQuotationToDelete(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 font-bold text-xs text-gray-600 hover:bg-gray-50 cursor-pointer">Cancel</button>
+              <button
+                onClick={() => {
+                  deleteQuotation(quotationToDelete.id);
+                  setQuotationToDelete(null);
+                  toast.success('Quotation Deleted', `${quotationToDelete.quotationNumber} removed`);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* In-App Printable Invoice Preview Modal */}
       <InvoicePreviewModal
         invoice={previewInvoice}
         onClose={() => setPreviewInvoice(null)}
+      />
+
+      {/* In-App Printable Quotation Preview Modal */}
+      <QuotationPreviewModal
+        quotation={previewQuotation}
+        onClose={() => setPreviewQuotation(null)}
+        onConvertToInvoice={handleConvertQuotation}
+        onUpdateStatus={handleUpdateQuotationStatus}
+      />
+
+      {/* Quotation Create / Edit Modal */}
+      <QuotationModal
+        isOpen={isQuotationModalOpen || !!editingQuotation}
+        onClose={() => { setIsQuotationModalOpen(false); setEditingQuotation(null); }}
+        quotation={editingQuotation}
+        store={store}
       />
     </div>
   );

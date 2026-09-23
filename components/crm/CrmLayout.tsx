@@ -97,12 +97,13 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
     setSelectedEntityId(entityId);
   };
 
-  const handleQuickCreate = (type: 'lead' | 'client' | 'project' | 'task' | 'invoice' | 'event') => {
+  const handleQuickCreate = (type: 'lead' | 'client' | 'project' | 'task' | 'invoice' | 'quotation' | 'event') => {
     if (type === 'lead') { setActiveRoute('leads'); setSelectedEntityId('new'); }
     else if (type === 'client') { setActiveRoute('clients'); setSelectedEntityId('new'); }
     else if (type === 'project') { setActiveRoute('projects'); setSelectedEntityId('new'); }
     else if (type === 'task') { setActiveRoute('tasks'); setSelectedEntityId('new'); }
     else if (type === 'invoice') { setActiveRoute('finance'); setSelectedEntityId('new'); }
+    else if (type === 'quotation') { setActiveRoute('finance'); setSelectedEntityId('new-quotation'); }
     else if (type === 'event') { setActiveRoute('calendar'); setSelectedEntityId('new'); }
   };
 
@@ -551,6 +552,7 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
         teamMembers={store.teamMembers}
         partners={store.partners}
         issues={store.issues}
+        quotations={store.quotations}
         currentUser={store.currentUser}
         onNavigate={handleNavigate}
       />

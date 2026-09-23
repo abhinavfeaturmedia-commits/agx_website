@@ -7,12 +7,14 @@ import {
   X, AlertCircle, Edit3, Trash2, Download, MessageSquare, Send, Clock,
   User, TrendingUp, DollarSign, ChevronRight, ChevronLeft, Briefcase,
   ExternalLink, Layers, ArrowUpRight, Flame, ShieldAlert, ArrowUpDown,
-  FileText, CheckSquare, CheckCircle, PlusCircle, Check
+  FileText, CheckSquare, CheckCircle, PlusCircle, Check, Tag
 } from 'lucide-react';
-import { Lead, LeadStatus, Priority, LeadActivityType, AgreementType, CalendarEventType } from '../../types/crm';
+import { Lead, LeadStatus, Priority, LeadActivityType, AgreementType, CalendarEventType, Quotation, QuotationStatus } from '../../types/crm';
 import { useCrmStore } from '../../lib/crmStore';
 import { exportService } from '../../lib/exportService';
 import { toast } from '../../lib/toastStore';
+import { QuotationModal } from './QuotationModal';
+import { QuotationPreviewModal } from './QuotationPreviewModal';
 
 interface LeadsViewProps {
   store: ReturnType<typeof useCrmStore>;
@@ -175,7 +177,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
     leads, addLead, updateLead, updateLeadStatus, deleteLead,
     addLeadActivity, convertLeadToClient, addAgreement, currentUser, teamMembers,
     tasks, addTask, updateTaskStatus, events, addCalendarEvent, agreements,
-    partners
+    partners, quotations, convertQuotationToInvoice, updateQuotation
   } = store;
 
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('list');
@@ -195,6 +197,10 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
   const [leadToConvert, setLeadToConvert] = useState<Lead | null>(null);
   const [isConverting, setIsConverting] = useState(false);
+
+  // Quotation Modals in Leads
+  const [leadQuotationModalLead, setLeadQuotationModalLead] = useState<Lead | null>(null);
+  const [previewQuotation, setPreviewQuotation] = useState<Quotation | null>(null);
 
   // Lead-Linked Workflow Modals
   const [leadTaskModalLead, setLeadTaskModalLead] = useState<Lead | null>(null);
@@ -1592,6 +1598,12 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2.5">Workflow Shortcuts</span>
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
+                      onClick={() => setLeadQuotationModalLead(currentActiveLead)}
+                      className="px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl font-bold text-[11px] text-gray-700 flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                    >
+                      <Tag size={13} className="text-emerald-600" /> Create Quotation
+                    </button>
+                    <button
                       onClick={() => openLeadTaskModal(currentActiveLead)}
                       className="px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl font-bold text-[11px] text-gray-700 flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
                     >
@@ -1625,7 +1637,17 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
                   const activeLeadTasks = tasks.filter(t => t.leadId === currentActiveLead.id);
                   const activeLeadEvents = events.filter(e => e.relatedLeadId === currentActiveLead.id);
                   const activeLeadAgreements = agreements.filter(a => a.leadId === currentActiveLead.id);
-                  const totalLinked = activeLeadTasks.length + activeLeadEvents.length + activeLeadAgreements.length;
+                  const activeLeadQuotations = (quotations || []).filter(q => {
+                    if (q.leadId && q.leadId === currentActiveLead.id) return true;
+                    const lName = (currentActiveLead.name || '').trim().toLowerCase();
+                    const lComp = (currentActiveLead.company || '').trim().toLowerCase();
+                    const qLead = (q.leadName || '').trim().toLowerCase();
+                    const qClient = (q.clientName || '').trim().toLowerCase();
+                    const qComp = (q.companyName || q.company || '').trim().toLowerCase();
+                    return (lName && (qLead === lName || qClient === lName)) ||
+                           (lComp && (qComp === lComp || qClient === lComp));
+                  });
+                  const totalLinked = activeLeadTasks.length + activeLeadEvents.length + activeLeadAgreements.length + activeLeadQuotations.length;
 
                   return (
                     <div className="bg-white rounded-2xl border border-gray-200/80 p-4 space-y-4 shadow-2xs">
@@ -1636,7 +1658,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
                           </div>
                           <div>
                             <h4 className="font-extrabold text-sm text-gray-900 leading-none">Linked Workflows & Deliverables</h4>
-                            <span className="text-[10px] text-gray-400 font-semibold">Active tasks, calendar bookings & commercial proposals</span>
+                            <span className="text-[10px] text-gray-400 font-semibold">Active quotes, tasks, calendar bookings & commercial proposals</span>
                           </div>
                         </div>
                         <span className="text-[10px] font-extrabold px-2.5 py-0.5 bg-gray-100 text-gray-700 rounded-full border border-gray-200">
@@ -1824,6 +1846,62 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
                                     title="View Proposal Document"
                                   >
                                     <ExternalLink size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 4. Attached Quotations & Estimates Section */}
+                      <div className="space-y-2 pt-2 border-t border-gray-100">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-extrabold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                            <Tag size={13} className="text-emerald-600" />
+                            Quotations & Scope ({activeLeadQuotations.length})
+                          </span>
+                          <button
+                            onClick={() => setLeadQuotationModalLead(currentActiveLead)}
+                            className="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus size={11} /> New Quote
+                          </button>
+                        </div>
+
+                        {activeLeadQuotations.length === 0 ? (
+                          <div className="p-3 bg-gray-50/70 border border-dashed border-gray-200 rounded-xl text-center">
+                            <p className="text-[11px] text-gray-400">No quotation generated for this lead opportunity yet.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                            {activeLeadQuotations.map(quote => (
+                              <div
+                                key={quote.id}
+                                className="p-2.5 rounded-xl border border-gray-100 bg-gray-50/80 hover:bg-gray-100 transition-colors flex items-center justify-between gap-2"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-extrabold text-gray-900 text-xs">{quote.quotationNumber}</span>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                                      quote.status === 'Accepted' ? 'bg-emerald-100 text-emerald-800' :
+                                      quote.status === 'Converted' ? 'bg-indigo-100 text-indigo-800' :
+                                      quote.status === 'Declined' ? 'bg-rose-100 text-rose-800' :
+                                      quote.status === 'Sent' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                                    }`}>
+                                      {quote.status}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                                    ₹{quote.total.toLocaleString('en-IN')} • {quote.serviceTitle}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    onClick={() => setPreviewQuotation(quote)}
+                                    className="px-2 py-1 bg-black text-white hover:bg-gray-800 rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
+                                  >
+                                    PDF
                                   </button>
                                 </div>
                               </div>
@@ -2995,6 +3073,37 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
           </motion.div>
         </div>
       )}
+
+      {/* Quotation Preview Modal */}
+      <QuotationPreviewModal
+        quotation={previewQuotation}
+        onClose={() => setPreviewQuotation(null)}
+        onConvertToInvoice={async (qId) => {
+          try {
+            const inv = await convertQuotationToInvoice(qId);
+            toast.success('Quotation Converted', `Created Invoice ${inv.invoiceNumber}`);
+            setPreviewQuotation(null);
+            onNavigate('finance', inv.id);
+          } catch (err: any) {
+            toast.error('Conversion Failed', err.message || 'Failed to convert quotation');
+          }
+        }}
+        onUpdateStatus={(qId, st) => {
+          updateQuotation(qId, { status: st });
+          toast.success('Status Updated', `Quotation marked as ${st}`);
+          if (previewQuotation && previewQuotation.id === qId) {
+            setPreviewQuotation({ ...previewQuotation, status: st });
+          }
+        }}
+      />
+
+      {/* Quotation Creation Modal for Lead */}
+      <QuotationModal
+        isOpen={!!leadQuotationModalLead}
+        onClose={() => setLeadQuotationModalLead(null)}
+        store={store}
+        initialLeadId={leadQuotationModalLead?.id}
+      />
     </div>
   );
 };

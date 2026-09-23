@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, X, Users, Briefcase, CheckSquare, IndianRupee, Key, FileText, ArrowRight, UserCheck, Shield, Globe, AlertTriangle } from 'lucide-react';
-import { Lead, Client, Project, Task, Invoice, CredentialVaultItem, Agreement, DocumentItem, UserProfile, Partner, ProjectIssue } from '../../types/crm';
+import { Search, X, Users, Briefcase, CheckSquare, IndianRupee, Key, FileText, ArrowRight, UserCheck, Shield, Globe, AlertTriangle, Tag } from 'lucide-react';
+import { Lead, Client, Project, Task, Invoice, CredentialVaultItem, Agreement, DocumentItem, UserProfile, Partner, ProjectIssue, Quotation } from '../../types/crm';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -17,6 +17,7 @@ interface GlobalSearchModalProps {
   teamMembers?: UserProfile[];
   partners?: Partner[];
   issues?: ProjectIssue[];
+  quotations?: Quotation[];
   currentUser?: UserProfile;
   onNavigate: (route: string, entityId?: string) => void;
 }
@@ -35,6 +36,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   teamMembers = [],
   partners = [],
   issues = [],
+  quotations = [],
   currentUser,
   onNavigate
 }) => {
@@ -69,12 +71,20 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   const filteredIssues = q ? issues.filter(iss => iss.ticketNumber.toLowerCase().includes(q) || iss.title.toLowerCase().includes(q) || iss.reporterName.toLowerCase().includes(q) || iss.projectName.toLowerCase().includes(q)).slice(0, 3) : [];
   const filteredPartners = q ? partners.filter(p => p.name.toLowerCase().includes(q) || p.referralCode.toLowerCase().includes(q) || (p.company && p.company.toLowerCase().includes(q))).slice(0, 3) : [];
   const filteredInvoices = (q && canAccessFinance) ? invoices.filter(i => i.invoiceNumber.toLowerCase().includes(q) || i.clientName.toLowerCase().includes(q)).slice(0, 3) : [];
+  const filteredQuotations = (q && canAccessFinance && quotations) ? quotations.filter(quote =>
+    (quote.quotationNumber && quote.quotationNumber.toLowerCase().includes(q)) ||
+    (quote.clientName && quote.clientName.toLowerCase().includes(q)) ||
+    (quote.recipientName && quote.recipientName.toLowerCase().includes(q)) ||
+    (quote.companyName && quote.companyName.toLowerCase().includes(q)) ||
+    (quote.serviceTitle && quote.serviceTitle.toLowerCase().includes(q)) ||
+    (quote.projectName && quote.projectName.toLowerCase().includes(q))
+  ).slice(0, 3) : [];
   const filteredCredentials = (q && canAccessVault) ? credentials.filter(c => c.platformName.toLowerCase().includes(q) || (c.clientName && c.clientName.toLowerCase().includes(q))).slice(0, 3) : [];
   const filteredAgreements = (q && canAccessFinance) ? agreements.filter(a => a.name.toLowerCase().includes(q) || a.clientName.toLowerCase().includes(q) || a.agreementType.toLowerCase().includes(q)).slice(0, 3) : [];
   const filteredDocuments = q ? documents.filter(d => d.title.toLowerCase().includes(q) || (d.clientName && d.clientName.toLowerCase().includes(q)) || d.docType.toLowerCase().includes(q)).slice(0, 3) : [];
   const filteredStaff = q ? teamMembers.filter(m => m.fullName.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || m.role.toLowerCase().includes(q)).slice(0, 3) : [];
 
-  const totalResults = filteredLeads.length + filteredClients.length + filteredProjects.length + filteredTasks.length + filteredIssues.length + filteredPartners.length + filteredInvoices.length + filteredCredentials.length + filteredAgreements.length + filteredDocuments.length + filteredStaff.length;
+  const totalResults = filteredLeads.length + filteredClients.length + filteredProjects.length + filteredTasks.length + filteredIssues.length + filteredPartners.length + filteredInvoices.length + filteredQuotations.length + filteredCredentials.length + filteredAgreements.length + filteredDocuments.length + filteredStaff.length;
 
   const handleSelect = (route: string, entityId?: string) => {
     onNavigate(route, entityId);
@@ -247,6 +257,32 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                         <div className="text-xs text-white/50">₹{i.total.toLocaleString()} • Due: {i.dueDate}</div>
                       </div>
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-lime-500/20 text-lime-300">{i.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Quotations */}
+            {filteredQuotations.length > 0 && (
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-white/40 mb-2 flex items-center gap-1.5 px-2">
+                  <FileText size={13} className="text-amber-400" /> Quotations & Estimates
+                </div>
+                <div className="space-y-1">
+                  {filteredQuotations.map(q => (
+                    <div
+                      key={q.id}
+                      onClick={() => handleSelect('finance', `quote:${q.id}`)}
+                      className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 cursor-pointer group transition-colors"
+                    >
+                      <div>
+                        <div className="text-sm font-medium text-white group-hover:text-[#CCFF00] transition-colors">
+                          {q.quotationNumber} • {q.clientName || q.recipientName} {(q.companyName || q.company) ? `(${q.companyName || q.company})` : ''}
+                        </div>
+                        <div className="text-xs text-white/50">{q.serviceTitle || q.title || q.projectName || q.items[0]?.description || 'Commercial Scope'} • ₹{q.total.toLocaleString()} • Valid till: {q.validUntil}</div>
+                      </div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">{q.status}</span>
                     </div>
                   ))}
                 </div>
