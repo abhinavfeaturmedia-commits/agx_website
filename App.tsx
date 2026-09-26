@@ -18,6 +18,7 @@ import Footer from './components/Footer';
 import { GrandSlamStack } from './components/GrandSlamStack';
 import { ConsultationModal } from './components/ConsultationModal';
 import { ErrorBoundary } from './components/crm/ErrorBoundary';
+import { ToastNotification } from './components/crm/ToastNotification';
 import { UserRole, Partner } from './types/crm';
 import { authService } from './lib/authService';
 import { CrmStoreProvider } from './lib/crmStore';
@@ -260,6 +261,17 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Listen for live partner profile updates across tabs and portal components
+  useEffect(() => {
+    const handlePartnerUpdated = (e: any) => {
+      if (e?.detail) {
+        setActivePartner(e.detail);
+      }
+    };
+    window.addEventListener('agx_crm_partner_updated', handlePartnerUpdated);
+    return () => window.removeEventListener('agx_crm_partner_updated', handlePartnerUpdated);
+  }, []);
+
   const renderContent = () => {
     // If in Partner Portal mode, enforce authenticated partner session route guard
     if (currentView === 'partner-portal') {
@@ -284,6 +296,7 @@ const App: React.FC = () => {
         <Suspense fallback={<PortalLoadingSpinner label="Opening Partner Portal..." />}>
           <PartnerPortal
             initialPartner={currentPartner}
+            onPartnerUpdated={(p) => setActivePartner(p)}
             onBackToWebsite={navigateToWebsite}
             onLogout={() => {
               authService.clearPartnerSession();
@@ -479,6 +492,7 @@ const App: React.FC = () => {
   return (
     <CrmStoreProvider>
       {renderContent()}
+      <ToastNotification />
     </CrmStoreProvider>
   );
 };

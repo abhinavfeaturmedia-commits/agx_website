@@ -361,6 +361,7 @@ export interface DbPartner {
   pending_earnings: number;
   notes: string | null;
   last_login_at?: string | null;
+  password_hash?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -856,6 +857,8 @@ export function mapPartnerFromDb(row: DbPartner): Partner {
     pendingEarnings: Number(row.pending_earnings) || 0,
     notes: row.notes || undefined,
     lastLoginAt: row.last_login_at || row.updated_at || row.created_at,
+    hasPassword: Boolean(row.password_hash || (row.payout_details as any)?.passwordHash),
+    passwordHash: row.password_hash || (row.payout_details as any)?.passwordHash || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };

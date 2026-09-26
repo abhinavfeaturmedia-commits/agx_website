@@ -36,6 +36,13 @@
   .cursor-none {
     cursor: none;
   }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Shravya Tours Inspired Typography Strategy for Admin CRM */

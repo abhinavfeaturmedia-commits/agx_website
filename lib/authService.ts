@@ -312,6 +312,8 @@ export const authService = {
           pendingEarnings: Number(partnerRow.pending_earnings) || 0,
           notes: partnerRow.notes,
           lastLoginAt: nowIso,
+          hasPassword: Boolean(partnerRow.password_hash || (partnerRow.payout_details as any)?.passwordHash),
+          passwordHash: partnerRow.password_hash || (partnerRow.payout_details as any)?.passwordHash || undefined,
           createdAt: partnerRow.created_at,
           updatedAt: partnerRow.updated_at
         };
@@ -510,6 +512,8 @@ export const authService = {
           pendingEarnings: Number(partnerRow.pending_earnings) || 0,
           notes: partnerRow.notes,
           lastLoginAt: nowIso,
+          hasPassword: Boolean(partnerRow.password_hash || (partnerRow.payout_details as any)?.passwordHash),
+          passwordHash: partnerRow.password_hash || (partnerRow.payout_details as any)?.passwordHash || undefined,
           createdAt: partnerRow.created_at,
           updatedAt: partnerRow.updated_at
         };
@@ -686,55 +690,66 @@ export const authService = {
     }
   },
 
-  // Update Partner Password with verification
+  // Update Partner Password with verification or initial creation
   async updatePartnerPassword(
     partnerId: string,
     email: string,
-    currentPassword: string,
+    currentPassword: string | null | undefined,
     newPassword: string
   ): Promise<{ success: boolean; error: Error | null }> {
     try {
       const trimmedEmail = email.trim().toLowerCase();
-      const trimmedCurrent = currentPassword.trim();
+      const trimmedCurrent = currentPassword ? currentPassword.trim() : '';
       const trimmedNew = newPassword.trim();
 
-      if (!trimmedCurrent || !trimmedNew) {
-        return { success: false, error: new Error('Both current password and new password are required.') };
+      if (!trimmedNew) {
+        return { success: false, error: new Error('New password is required.') };
       }
 
       if (trimmedNew.length < 6) {
         return { success: false, error: new Error('New password must be at least 6 characters long.') };
       }
 
-      if (trimmedCurrent === trimmedNew) {
-        return { success: false, error: new Error('New password must be different from your current password.') };
-      }
-
-      // 1. Fetch partner record to verify current password
+      // 1. Fetch partner record to inspect current password state
       const { data: partnerRow } = await supabase
         .from('partners')
         .select('*')
         .or(`id.eq.${partnerId},email.ilike.${trimmedEmail}`)
         .maybeSingle();
 
-      let isCurrentValid = false;
+      const hasExistingPassword = Boolean(
+        partnerRow?.password_hash || (partnerRow?.payout_details as any)?.passwordHash
+      );
 
-      // Check via Supabase Auth first
-      const { data: authData } = await supabase.auth.signInWithPassword({
-        email: trimmedEmail,
-        password: trimmedCurrent
-      }).catch(() => ({ data: null, error: true }));
+      // If partner already has a password, current password is strictly required and must match
+      if (hasExistingPassword) {
+        if (!trimmedCurrent) {
+          return { success: false, error: new Error('Please enter your current password.') };
+        }
 
-      if (authData?.user) {
-        isCurrentValid = true;
-      } else if (partnerRow?.password_hash && partnerRow.password_hash === trimmedCurrent) {
-        isCurrentValid = true;
-      } else if (partnerRow?.payout_details && typeof partnerRow.payout_details === 'object' && partnerRow.payout_details.passwordHash === trimmedCurrent) {
-        isCurrentValid = true;
-      }
+        if (trimmedCurrent === trimmedNew) {
+          return { success: false, error: new Error('New password must be different from your current password.') };
+        }
 
-      if (!isCurrentValid) {
-        return { success: false, error: new Error('Current password is incorrect. Please verify and try again.') };
+        let isCurrentValid = false;
+
+        // Check via Supabase Auth first
+        const { data: authData } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password: trimmedCurrent
+        }).catch(() => ({ data: null, error: true }));
+
+        if (authData?.user) {
+          isCurrentValid = true;
+        } else if (partnerRow?.password_hash && partnerRow.password_hash === trimmedCurrent) {
+          isCurrentValid = true;
+        } else if (partnerRow?.payout_details && typeof partnerRow.payout_details === 'object' && partnerRow.payout_details.passwordHash === trimmedCurrent) {
+          isCurrentValid = true;
+        }
+
+        if (!isCurrentValid) {
+          return { success: false, error: new Error('Current password is incorrect. Please verify and try again.') };
+        }
       }
 
       // 2. Update Supabase Auth user password if session exists

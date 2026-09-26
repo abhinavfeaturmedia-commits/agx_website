@@ -12,19 +12,22 @@ import { Partner, PartnerReferral, PartnerPayout, PartnerPayoutDetails } from '.
 import { useCrmStore } from '../../lib/crmStore';
 import { authService } from '../../lib/authService';
 import { toast } from '../../lib/toastStore';
+import { supabase } from '../../lib/supabase';
+import { mapPartnerFromDb } from '../../lib/crmService';
 import { BorderBeam } from 'border-beam';
 import { ThinkingOrb } from 'thinking-orbs';
 import { BotAvatar } from 'bot-avatars';
-import { MetalBadge } from 'metal-fx';
 
 interface PartnerPortalProps {
   initialPartner?: Partner | null;
+  onPartnerUpdated?: (partner: Partner) => void;
   onBackToWebsite: () => void;
   onLogout: () => void;
 }
 
 export const PartnerPortal: React.FC<PartnerPortalProps> = ({
   initialPartner,
+  onPartnerUpdated,
   onBackToWebsite,
   onLogout
 }) => {
@@ -102,6 +105,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     partner.payoutDetails?.notifyOnWhatsApp ?? true
   );
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState<string | null>(null);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const [formValidationErrors, setFormValidationErrors] = useState<{ [key: string]: string }>({});
 
   // Password Management State
@@ -114,6 +119,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
+  // Track whether this partner account already has a password set (false for first-time Google OAuth accounts)
+  const [hasExistingPassword, setHasExistingPassword] = useState<boolean>(() => {
+    return Boolean(partner.hasPassword || partner.passwordHash || (partner.payoutDetails as any)?.passwordHash);
+  });
 
   // Real-time dynamic password strength meter
   const passwordStrength = useMemo(() => {
@@ -130,27 +140,53 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     return { score: 4, label: 'Strong', color: 'bg-[#CCFF00]', text: 'text-[#CCFF00]' };
   }, [newPassword]);
 
+  // Live cloud re-hydration on mount: fetch latest partner record from Supabase
   useEffect(() => {
-    if (activeSessionPartner) {
-      setPartner(activeSessionPartner);
-      setEditName(activeSessionPartner.name || '');
-      setEditCompany(activeSessionPartner.company || '');
-      setEditPhone(activeSessionPartner.phone || '');
-      setEditBio(activeSessionPartner.notes || '');
-      setEditPanTaxId(activeSessionPartner.payoutDetails?.panTaxId || '');
-      setEditPayoutMethod(activeSessionPartner.payoutMethod || 'UPI');
-      setEditUpiId(activeSessionPartner.payoutDetails?.upiId || '');
-      setEditBankName(activeSessionPartner.payoutDetails?.bankName || '');
-      setEditAccountNumber(activeSessionPartner.payoutDetails?.accountNumber || '');
-      setEditAccountName(activeSessionPartner.payoutDetails?.accountName || activeSessionPartner.name || '');
-      setEditIfsc(activeSessionPartner.payoutDetails?.ifsc || '');
-      setEditPaypalEmail(activeSessionPartner.payoutDetails?.paypalEmail || activeSessionPartner.email || '');
-      setEditSwiftCode(activeSessionPartner.payoutDetails?.swiftCode || '');
-      setEditWireDetails(activeSessionPartner.payoutDetails?.wireDetails || '');
-      setEditAutoPayoutThreshold(activeSessionPartner.payoutDetails?.autoPayoutThreshold || 1000);
-      setEditNotifyOnWhatsApp(activeSessionPartner.payoutDetails?.notifyOnWhatsApp ?? true);
+    const partnerId = partner?.id || activeSessionPartner?.id;
+    if (partnerId) {
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from('partners')
+            .select('*')
+            .eq('id', partnerId)
+            .maybeSingle();
+
+          if (data && !error) {
+            const freshPartner = mapPartnerFromDb(data);
+            setPartner(freshPartner);
+            authService.setPartnerSession(freshPartner);
+            if (onPartnerUpdated) onPartnerUpdated(freshPartner);
+
+            // Dynamically detect if partner has password set in database
+            const hasDbPassword = Boolean(
+              data.password_hash || (data.payout_details as any)?.passwordHash
+            );
+            setHasExistingPassword(hasDbPassword);
+
+            setEditName(freshPartner.name || '');
+            setEditCompany(freshPartner.company || '');
+            setEditPhone(freshPartner.phone || '');
+            setEditBio(freshPartner.notes || '');
+            setEditPanTaxId(freshPartner.payoutDetails?.panTaxId || '');
+            setEditPayoutMethod(freshPartner.payoutMethod || 'UPI');
+            setEditUpiId(freshPartner.payoutDetails?.upiId || '');
+            setEditBankName(freshPartner.payoutDetails?.bankName || '');
+            setEditAccountNumber(freshPartner.payoutDetails?.accountNumber || '');
+            setEditAccountName(freshPartner.payoutDetails?.accountName || freshPartner.name || '');
+            setEditIfsc(freshPartner.payoutDetails?.ifsc || '');
+            setEditPaypalEmail(freshPartner.payoutDetails?.paypalEmail || freshPartner.email || '');
+            setEditSwiftCode(freshPartner.payoutDetails?.swiftCode || '');
+            setEditWireDetails(freshPartner.payoutDetails?.wireDetails || '');
+            setEditAutoPayoutThreshold(freshPartner.payoutDetails?.autoPayoutThreshold || 1000);
+            setEditNotifyOnWhatsApp(freshPartner.payoutDetails?.notifyOnWhatsApp ?? true);
+          }
+        } catch (err) {
+          console.warn('Supabase partner fresh fetch notice:', err);
+        }
+      })();
     }
-  }, [activeSessionPartner]);
+  }, []);
 
   // Interactive Commission Simulator State
   const [simDealValue, setSimDealValue] = useState<number>(150000);
@@ -396,6 +432,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
 
     setFormValidationErrors({});
     setIsSavingSettings(true);
+    setProfileSaveError(null);
+    setProfileSaveSuccess(null);
 
     const updatedDetails: PartnerPayoutDetails = {
       upiId: editPayoutMethod === 'UPI' ? editUpiId.trim() : undefined,
@@ -424,6 +462,21 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     };
 
     try {
+      // 1. Direct await to Supabase database
+      const payload: any = {
+        name: updatedPartner.name,
+        company: updatedPartner.company,
+        phone: updatedPartner.phone,
+        notes: updatedPartner.notes,
+        payout_method: editPayoutMethod,
+        payout_details: updatedDetails,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: dbError } = await supabase.from('partners').update(payload).eq('id', partner.id);
+      if (dbError) throw dbError;
+
+      // 2. Synchronize in-memory CRM store
       store.updatePartner(partner.id, {
         name: updatedPartner.name,
         company: updatedPartner.company,
@@ -433,18 +486,34 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
         payoutDetails: updatedDetails
       });
 
+      // 3. Update localStorage session cache
       authService.setPartnerSession(updatedPartner);
+
+      // 4. Update local component state
       setPartner(updatedPartner);
-      toast.success('Partner Profile Saved! ✨', 'Your contact and payout coordinates have been updated.');
+
+      // 5. Notify parent App component
+      if (onPartnerUpdated) {
+        onPartnerUpdated(updatedPartner);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('agx_crm_partner_updated', { detail: updatedPartner }));
+      }
+
+      setProfileSaveSuccess('Partner profile and payout coordinates saved successfully to cloud! ✨');
+      toast.success('Partner Profile Saved! ✨', 'Your contact and payout coordinates have been updated in Supabase.');
+      setTimeout(() => setProfileSaveSuccess(null), 6000);
     } catch (err: any) {
       console.error('Error updating partner profile:', err);
-      toast.error('Save Failed', 'Unable to update coordinates. Please retry.');
+      const errMsg = err?.message || 'Unable to update coordinates in database. Please retry.';
+      setProfileSaveError(errMsg);
+      toast.error('Save Failed', errMsg);
     } finally {
       setIsSavingSettings(false);
     }
   };
 
-  // Partner Password Update Handler
+  // Partner Password Update Handler (contextually supports first-time password setup for Google OAuth accounts)
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
@@ -454,29 +523,33 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     const trimmedNew = newPassword.trim();
     const trimmedConfirm = confirmPassword.trim();
 
-    if (!trimmedCurrent) {
-      setPasswordError('Please enter your current password.');
-      toast.error('Validation Warning', 'Current password is required.');
-      return;
+    // If an existing password is set, current password is strictly required and cannot match new password
+    if (hasExistingPassword) {
+      if (!trimmedCurrent) {
+        setPasswordError('Please enter your current password.');
+        toast.error('Validation Warning', 'Current password is required.');
+        return;
+      }
+      if (trimmedNew === trimmedCurrent) {
+        setPasswordError('New password must be different from your current password.');
+        toast.error('Invalid Password', 'New password must differ from current.');
+        return;
+      }
     }
+
     if (!trimmedNew) {
-      setPasswordError('Please enter a new password.');
-      toast.error('Validation Warning', 'New password is required.');
+      setPasswordError('Please enter a password.');
+      toast.error('Validation Warning', 'Password is required.');
       return;
     }
     if (trimmedNew.length < 8) {
-      setPasswordError('New password must be at least 8 characters long.');
+      setPasswordError('Password must be at least 8 characters long.');
       toast.error('Weak Password', 'Password must be at least 8 characters.');
       return;
     }
-    if (trimmedNew === trimmedCurrent) {
-      setPasswordError('New password must be different from your current password.');
-      toast.error('Invalid Password', 'New password must differ from current.');
-      return;
-    }
     if (trimmedNew !== trimmedConfirm) {
-      setPasswordError('New password confirmation does not match. Please verify.');
-      toast.error('Mismatch', 'New passwords do not match.');
+      setPasswordError('Password confirmation does not match. Please verify.');
+      toast.error('Mismatch', 'Passwords do not match.');
       return;
     }
 
@@ -485,16 +558,25 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
       const res = await authService.updatePartnerPassword(
         partner.id,
         partner.email,
-        trimmedCurrent,
+        hasExistingPassword ? trimmedCurrent : null,
         trimmedNew
       );
 
       if (res.error) {
         setPasswordError(res.error.message);
-        toast.error('Update Failed', res.error.message);
+        toast.error('Operation Failed', res.error.message);
       } else {
-        setPasswordSuccess('Password successfully updated! Your credentials have been refreshed.');
-        toast.success('Password Updated 🔐', 'Your partner login password has been successfully updated.');
+        const successMsg = hasExistingPassword
+          ? 'Password successfully updated! Your credentials have been refreshed.'
+          : 'Password successfully created! You can now log in using your email and password.';
+        setPasswordSuccess(successMsg);
+        toast.success(
+          hasExistingPassword ? 'Password Updated 🔐' : 'Password Created 🎉',
+          hasExistingPassword
+            ? 'Your partner login password has been successfully updated.'
+            : 'Account password created. You can now use email & password to sign in!'
+        );
+        setHasExistingPassword(true);
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
@@ -594,10 +676,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
             <div className="absolute top-0 right-0 w-72 h-72 bg-[#CCFF00]/[0.04] rounded-full blur-3xl pointer-events-none" />
 
             <div>
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <MetalBadge>{`${partnerRatePercent}% Verified Partner Tier`}</MetalBadge>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                  <CheckCircle size={10} /> Active Contract
+              <div className="flex flex-wrap items-center gap-2.5 mb-3">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#CCFF00]/10 border border-[#CCFF00]/25 text-[#CCFF00] text-xs font-bold font-mono tracking-wide shadow-sm">
+                  <Sparkles size={12} className="text-[#CCFF00]" />
+                  <span>{partnerRatePercent}% Verified Partner Tier</span>
+                </div>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                  <CheckCircle size={11} /> Active Contract
                 </span>
               </div>
 
@@ -772,7 +857,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
         </section>
 
         {/* INTERACTIVE NAVIGATION TABS */}
-        <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
+        <section className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
             {[
               { id: 'referrals', label: 'Referred Clients & Deals', badge: myReferrals.length, icon: Users },
@@ -1304,11 +1389,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                 </div>
 
                 <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-xl sm:text-2xl font-black text-white font-['Outfit']">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h2 className="text-xl sm:text-2xl font-black text-white font-['Outfit'] tracking-tight">
                       {editName || partner.name}
                     </h2>
-                    <MetalBadge>{`${partnerRatePercent}% Commission Tier`}</MetalBadge>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#CCFF00]/10 border border-[#CCFF00]/25 text-[#CCFF00] text-xs font-bold font-mono shadow-sm">
+                      <Percent size={11} className="text-[#CCFF00]" />
+                      <span>{partnerRatePercent}% Commission Tier</span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-white/50 mt-1 flex-wrap">
                     <span>Code: <strong className="text-[#CCFF00] font-mono">{partner.referralCode}</strong></span>
@@ -1791,6 +1879,28 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                 </div>
               </div>
 
+              {/* Save Feedback Banners */}
+              {profileSaveError && (
+                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-rose-300 text-xs">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-400" />
+                  <div className="flex-1 font-medium">{profileSaveError}</div>
+                  <button
+                    type="button"
+                    onClick={() => setProfileSaveError(null)}
+                    className="text-white/40 hover:text-white text-xs underline cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              {profileSaveSuccess && (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3 text-emerald-300 text-xs shadow-lg shadow-emerald-500/10">
+                  <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+                  <div className="flex-1 font-medium">{profileSaveSuccess}</div>
+                </div>
+              )}
+
               {/* SAVE ACTION BAR */}
               <div className="flex items-center justify-between gap-4 pt-2">
                 <button
@@ -1845,20 +1955,48 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
             <div className="p-6 md:p-8 rounded-3xl bg-[#0B0F17] border border-white/10 shadow-2xl relative overflow-hidden">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/5">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                    hasExistingPassword 
+                      ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                      : 'bg-[#CCFF00]/10 border border-[#CCFF00]/20 text-[#CCFF00]'
+                  }`}>
                     <KeyRound size={18} />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white tracking-tight">Security & Authentication</h3>
-                    <p className="text-xs text-white/50">Update your partner account password and credential access.</p>
+                    <h3 className="text-base font-bold text-white tracking-tight">
+                      {hasExistingPassword ? 'Security & Authentication' : 'Create Account Password'}
+                    </h3>
+                    <p className="text-xs text-white/50">
+                      {hasExistingPassword 
+                        ? 'Update your partner account password and credential access.' 
+                        : 'Set a secure password to enable direct email & password login.'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono font-medium self-start sm:self-auto">
-                  <Shield size={12} />
-                  <span>Dual-Sync Encrypted</span>
-                </div>
+                {hasExistingPassword ? (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono font-medium self-start sm:self-auto">
+                    <Shield size={12} />
+                    <span>Dual-Sync Encrypted</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#CCFF00]/10 border border-[#CCFF00]/20 text-[#CCFF00] text-[11px] font-mono font-medium self-start sm:self-auto">
+                    <Sparkles size={12} />
+                    <span>Google OAuth • First-Time Setup</span>
+                  </div>
+                )}
               </div>
+
+              {/* Informational Callout for First-Time Setup */}
+              {!hasExistingPassword && (
+                <div className="mt-6 p-4 rounded-2xl bg-[#CCFF00]/5 border border-[#CCFF00]/20 flex items-start gap-3 text-white/80 text-xs">
+                  <Sparkles size={16} className="shrink-0 mt-0.5 text-[#CCFF00]" />
+                  <div>
+                    <span className="font-bold text-white">First-time password setup: </span>
+                    Your account was authenticated directly via Google OAuth without a password. Setting a password allows you to log in anytime using your email and password, in addition to Google One-Tap.
+                  </div>
+                </div>
+              )}
 
               {/* Password Feedback Banners */}
               {passwordError && (
@@ -1883,41 +2021,43 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
               )}
 
               <form onSubmit={handleUpdatePassword} className="mt-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  {/* CURRENT PASSWORD */}
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1.5">
-                      <Lock size={12} className="text-white/40" />
-                      <span>Current Password</span>
-                      <span className="text-[#CCFF00]">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showCurrentPassword ? 'text' : 'password'}
-                        value={currentPassword}
-                        onChange={e => {
-                          setCurrentPassword(e.target.value);
-                          if (passwordError) setPasswordError(null);
-                        }}
-                        placeholder="••••••••••••"
-                        className="w-full pl-4 pr-11 py-3 rounded-2xl bg-white/[0.03] border border-white/10 text-white placeholder-white/20 text-xs focus:outline-none focus:border-amber-400/50 transition-all font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer"
-                        aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showCurrentPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
+                <div className={`grid grid-cols-1 ${hasExistingPassword ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-5`}>
+                  {/* CURRENT PASSWORD (Only rendered if an existing password is already set) */}
+                  {hasExistingPassword && (
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1.5">
+                        <Lock size={12} className="text-white/40" />
+                        <span>Current Password</span>
+                        <span className="text-[#CCFF00]">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showCurrentPassword ? 'text' : 'password'}
+                          value={currentPassword}
+                          onChange={e => {
+                            setCurrentPassword(e.target.value);
+                            if (passwordError) setPasswordError(null);
+                          }}
+                          placeholder="••••••••••••"
+                          className="w-full pl-4 pr-11 py-3 rounded-2xl bg-white/[0.03] border border-white/10 text-white placeholder-white/20 text-xs focus:outline-none focus:border-amber-400/50 transition-all font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer"
+                          aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showCurrentPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* NEW PASSWORD */}
                   <div className="space-y-2">
                     <label className="text-[11px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1.5">
-                      <KeyRound size={12} className="text-amber-400" />
-                      <span>New Password</span>
+                      <KeyRound size={12} className={hasExistingPassword ? "text-amber-400" : "text-[#CCFF00]"} />
+                      <span>{hasExistingPassword ? 'New Password' : 'Create Password'}</span>
                       <span className="text-[#CCFF00]">*</span>
                     </label>
                     <div className="relative">
@@ -1968,7 +2108,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                   <div className="space-y-2">
                     <label className="text-[11px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1.5">
                       <CheckCheck size={12} className="text-emerald-400" />
-                      <span>Confirm New Password</span>
+                      <span>Confirm {hasExistingPassword ? 'New Password' : 'Password'}</span>
                       <span className="text-[#CCFF00]">*</span>
                     </label>
                     <div className="relative">
@@ -1979,7 +2119,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                           setConfirmPassword(e.target.value);
                           if (passwordError) setPasswordError(null);
                         }}
-                        placeholder="Re-enter new password"
+                        placeholder="Re-enter password"
                         className="w-full pl-4 pr-11 py-3 rounded-2xl bg-white/[0.03] border border-white/10 text-white placeholder-white/20 text-xs focus:outline-none focus:border-emerald-400/50 transition-all font-mono"
                       />
                       <button
@@ -2018,18 +2158,22 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
 
                   <button
                     type="submit"
-                    disabled={isUpdatingPassword || !currentPassword || !newPassword || !confirmPassword}
-                    className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-amber-500/15 flex items-center justify-center gap-2"
+                    disabled={isUpdatingPassword || (hasExistingPassword && !currentPassword) || !newPassword || !confirmPassword}
+                    className={`px-6 py-3 rounded-2xl disabled:opacity-40 text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 ${
+                      hasExistingPassword
+                        ? 'bg-amber-500 hover:bg-amber-400 shadow-amber-500/15'
+                        : 'bg-[#CCFF00] hover:bg-[#b8e600] shadow-[#CCFF00]/15'
+                    }`}
                   >
                     {isUpdatingPassword ? (
                       <>
-                        <ThinkingOrb state="connecting" size={20} theme="dark" aria-label="Updating password..." />
-                        <span>Updating Password...</span>
+                        <ThinkingOrb state="connecting" size={20} theme="dark" aria-label="Processing password..." />
+                        <span>{hasExistingPassword ? 'Updating Password...' : 'Creating Password...'}</span>
                       </>
                     ) : (
                       <>
                         <KeyRound size={15} />
-                        <span>Update Password</span>
+                        <span>{hasExistingPassword ? 'Update Password' : 'Create Password'}</span>
                       </>
                     )}
                   </button>

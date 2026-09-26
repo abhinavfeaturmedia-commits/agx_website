@@ -14,7 +14,6 @@ import { ToastNotification } from './ToastNotification';
 import { AuthModal } from './AuthModal';
 import { UserRole, CrmModuleKey } from '../../types/crm';
 import { BorderBeam } from 'border-beam';
-import { MetalBadge } from 'metal-fx';
 
 // Code-split heavy views to optimize bundle performance
 const LeadsView = lazy(() => import('./LeadsView').then(m => ({ default: m.LeadsView })));
@@ -372,7 +371,9 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
                         <strong className="text-gray-900 text-xs font-black block truncate">{currentUser?.fullName || 'Admin User'}</strong>
                         <span className="text-[11px] text-gray-400 block truncate">{currentUser?.email}</span>
                         <div className="flex items-center gap-1.5 mt-1">
-                          <MetalBadge>{currentUser?.role || 'Super Admin'}</MetalBadge>
+                          <span className="text-[10px] font-bold text-gray-800 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
+                            {currentUser?.role || 'Super Admin'}
+                          </span>
                           <span className="text-[9px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
                             {currentUser?.department || 'General'}
                           </span>

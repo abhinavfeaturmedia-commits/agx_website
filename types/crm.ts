@@ -624,6 +624,8 @@ export interface Partner {
   pendingEarnings: number;
   notes?: string;
   lastLoginAt?: string;
+  hasPassword?: boolean;
+  passwordHash?: string;
   createdAt: string;
   updatedAt?: string;
 }
