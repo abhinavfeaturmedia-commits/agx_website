@@ -395,6 +395,18 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
 
   // Selected client's linked entities with resilient ID & name matching
   const clientProjects = currentClient ? projects.filter(p => p.clientId === currentClient.id || p.clientName === currentClient.company) : [];
+  
+  const handleCopyClientPortalUrl = () => {
+    if (!currentClient || clientProjects.length === 0) {
+      toast.warning('No Active Project', 'Please add a project for this client to generate a portal link.');
+      return;
+    }
+    const primaryProj = clientProjects[0];
+    const portalUrl = store.getProjectPortalUrl(primaryProj);
+    navigator.clipboard.writeText(portalUrl);
+    toast.success('Client Portal Link Copied! 🔗', `Share this link with ${currentClient.company} to view roadmap, invoices, tickets & docs.`);
+  };
+
   const clientInvoices = currentClient ? invoices.filter(i => {
     if (i.clientId && i.clientId === currentClient.id) return true;
     const invClient = (i.clientName || '').trim().toLowerCase();
@@ -1028,6 +1040,15 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                         <span className={`text-[10px] font-bold ${clientHealth.textColor} leading-tight`}>{clientHealth.label}</span>
                       </div>
                     </div>
+
+                    <button
+                      onClick={handleCopyClientPortalUrl}
+                      title="Copy Client Portal Link"
+                      className="p-2 rounded-xl bg-gray-100 hover:bg-black hover:text-[#CCFF00] text-gray-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors btn-press"
+                    >
+                      <ExternalLink size={14} />
+                      <span className="hidden sm:inline">Portal Link</span>
+                    </button>
 
                     <button
                       onClick={() => setEditingClient(currentClient)}

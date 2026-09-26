@@ -365,6 +365,9 @@ export interface Quotation {
   convertedInvoiceId?: string;
   convertedAt?: string;
   clientGstin?: string;
+  clientEmail?: string;
+  clientAddress?: string;
+  contactPerson?: string;
   hsnSacCode?: string;
   notes?: string;
   termsConditions?: string;
@@ -379,6 +382,10 @@ export interface Invoice {
   invoiceNumber: string;
   clientId: string;
   clientName: string;
+  recipientName?: string;
+  contactPerson?: string;
+  clientEmail?: string;
+  clientAddress?: string;
   projectId?: string;
   projectName?: string;
   quotationId?: string;
@@ -592,6 +599,11 @@ export interface PartnerPayoutDetails {
   ifsc?: string;
   accountName?: string;
   paypalEmail?: string;
+  swiftCode?: string;
+  wireDetails?: string;
+  panTaxId?: string;
+  autoPayoutThreshold?: number;
+  notifyOnWhatsApp?: boolean;
   notes?: string;
 }
 

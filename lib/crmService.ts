@@ -39,6 +39,9 @@ export interface DbLead {
   last_contacted: string | null;
   notes: string | null;
   loss_reason?: string | null;
+  partner_id?: string | null;
+  partner_name?: string | null;
+  partner_code?: string | null;
   converted_client_id?: string | null;
   converted_project_id?: string | null;
   created_at: string;
@@ -56,6 +59,9 @@ export interface DbClient {
   industry: string | null;
   gst_tax_id: string | null;
   account_manager: string | null;
+  partner_id?: string | null;
+  partner_name?: string | null;
+  partner_code?: string | null;
   total_value: number;
   total_paid: number;
   outstanding_amount: number;
@@ -1041,8 +1047,8 @@ export const crmService = {
   },
 
   // --- Leads CRUD ---
-  async createLead(lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): Promise<Lead> {
-    const { data, error } = await supabase.from('leads').insert([{
+  async createLead(lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<Lead> {
+    const insertPayload: any = {
       name: lead.name,
       company: lead.company || null,
       phone: lead.phone || null,
@@ -1057,8 +1063,20 @@ export const crmService = {
       priority: lead.priority,
       status: lead.status,
       next_follow_up: lead.nextFollowUp || null,
-      notes: lead.notes || null
-    }]).select().single();
+      notes: lead.notes || null,
+      partner_id: lead.partnerId || null,
+      partner_name: lead.partnerName || null,
+      partner_code: lead.partnerCode || null,
+      loss_reason: lead.lossReason || null,
+      converted_client_id: lead.convertedClientId || null,
+      converted_project_id: lead.convertedProjectId || null
+    };
+
+    if (lead.id) {
+      insertPayload.id = lead.id;
+    }
+
+    const { data, error } = await supabase.from('leads').insert([insertPayload]).select().single();
 
     if (error) throw error;
     return mapLeadFromDb(data);
@@ -1082,6 +1100,9 @@ export const crmService = {
     if (updates.nextFollowUp !== undefined) payload.next_follow_up = updates.nextFollowUp;
     if (updates.notes !== undefined) payload.notes = updates.notes;
     if (updates.lossReason !== undefined) payload.loss_reason = updates.lossReason;
+    if (updates.partnerId !== undefined) payload.partner_id = updates.partnerId || null;
+    if (updates.partnerName !== undefined) payload.partner_name = updates.partnerName || null;
+    if (updates.partnerCode !== undefined) payload.partner_code = updates.partnerCode || null;
     if (updates.convertedClientId !== undefined) payload.converted_client_id = updates.convertedClientId;
     if (updates.convertedProjectId !== undefined) payload.converted_project_id = updates.convertedProjectId;
 
@@ -1131,8 +1152,8 @@ export const crmService = {
   },
 
   // --- Clients CRUD ---
-  async createClient(client: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>): Promise<Client> {
-    const { data, error } = await supabase.from('clients').insert([{
+  async createClient(client: Omit<Client, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<Client> {
+    const insertPayload: any = {
       name: client.name,
       company: client.company,
       phone: client.phone || null,
@@ -1142,13 +1163,22 @@ export const crmService = {
       industry: client.industry || null,
       gst_tax_id: client.gstTaxId || null,
       account_manager: client.accountManager || null,
+      partner_id: client.partnerId || null,
+      partner_name: client.partnerName || null,
+      partner_code: client.partnerCode || null,
       total_value: client.totalValue,
       total_paid: client.totalPaid,
       outstanding_amount: client.outstandingAmount,
       source: client.source,
       notes: client.notes || null,
       status: client.status
-    }]).select().single();
+    };
+
+    if (client.id) {
+      insertPayload.id = client.id;
+    }
+
+    const { data, error } = await supabase.from('clients').insert([insertPayload]).select().single();
 
     if (error) throw error;
     return mapClientFromDb(data);
@@ -1165,6 +1195,9 @@ export const crmService = {
     if (updates.industry !== undefined) payload.industry = updates.industry;
     if (updates.gstTaxId !== undefined) payload.gst_tax_id = updates.gstTaxId;
     if (updates.accountManager !== undefined) payload.account_manager = updates.accountManager;
+    if (updates.partnerId !== undefined) payload.partner_id = updates.partnerId || null;
+    if (updates.partnerName !== undefined) payload.partner_name = updates.partnerName || null;
+    if (updates.partnerCode !== undefined) payload.partner_code = updates.partnerCode || null;
     if (updates.totalValue !== undefined) payload.total_value = updates.totalValue;
     if (updates.totalPaid !== undefined) payload.total_paid = updates.totalPaid;
     if (updates.outstandingAmount !== undefined) payload.outstanding_amount = updates.outstandingAmount;
@@ -2121,6 +2154,7 @@ export const crmService = {
     if (updates.pendingEarnings !== undefined) payload.pending_earnings = updates.pendingEarnings;
     if (updates.notes !== undefined) payload.notes = updates.notes;
     if (updates.lastLoginAt !== undefined) payload.last_login_at = updates.lastLoginAt;
+    if ((updates as any).passwordHash !== undefined) payload.password_hash = (updates as any).passwordHash;
 
     const { error } = await supabase.from('partners').update(payload).eq('id', id);
     if (error) throw error;
@@ -2147,8 +2181,8 @@ export const crmService = {
     }
   },
 
-  async createPartnerReferral(referral: Omit<PartnerReferral, 'id' | 'createdAt' | 'updatedAt'>): Promise<PartnerReferral> {
-    const { data, error } = await supabase.from('partner_referrals').insert([{
+  async createPartnerReferral(referral: Omit<PartnerReferral, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<PartnerReferral> {
+    const insertPayload: any = {
       partner_id: referral.partnerId,
       lead_id: referral.leadId || null,
       client_id: referral.clientId || null,
@@ -2167,7 +2201,22 @@ export const crmService = {
       commission_earned: referral.commissionEarned || 0,
       commission_paid: referral.commissionPaid || 0,
       notes: referral.notes || null
-    }]).select().single();
+    };
+
+    if (referral.id) {
+      insertPayload.id = referral.id;
+    }
+
+    let { data, error } = await supabase.from('partner_referrals').insert([insertPayload]).select().single();
+
+    // Resilient fallback: If foreign key on lead_id fails because lead is still committing or offline
+    if (error && error.message?.includes('partner_referrals_lead_id_fkey') && insertPayload.lead_id) {
+      console.warn('Retrying partner referral insert without strict lead_id foreign key constraint...', error);
+      insertPayload.lead_id = null;
+      const retryRes = await supabase.from('partner_referrals').insert([insertPayload]).select().single();
+      data = retryRes.data;
+      error = retryRes.error;
+    }
 
     if (error) throw error;
     return mapPartnerReferralFromDb(data);
@@ -2232,6 +2281,19 @@ export const crmService = {
     return mapPartnerPayoutFromDb(data);
   },
 
+  async updatePartnerPayout(id: string, updates: Partial<PartnerPayout>): Promise<void> {
+    const payload: Record<string, any> = {};
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.amount !== undefined) payload.amount = updates.amount;
+    if (updates.paymentMethod !== undefined) payload.payment_method = updates.paymentMethod;
+    if (updates.transactionRef !== undefined) payload.transaction_ref = updates.transactionRef;
+    if (updates.notes !== undefined) payload.notes = updates.notes;
+    if (updates.payoutDate !== undefined) payload.payout_date = updates.payoutDate;
+
+    const { error } = await supabase.from('partner_payouts').update(payload).eq('id', id);
+    if (error) throw error;
+  },
+
   async findPartnerByCode(code: string): Promise<Partner | null> {
     try {
       if (!code || !code.trim()) return null;
@@ -2256,18 +2318,24 @@ export const crmService = {
     milestones: ProjectMilestone[];
     invoices: Invoice[];
     issues: ProjectIssue[];
+    documents: DocumentItem[];
   } | null> {
     try {
       if (!token || !token.trim()) return null;
+      const cleanToken = token.trim();
 
-      // 1. Fetch project by client_portal_token
+      // 1. Fetch project by portal_token or client_portal_token
       const { data: projectRow, error: projError } = await supabase
         .from('projects')
         .select('*')
-        .eq('client_portal_token', token.trim())
+        .or(`portal_token.eq.${cleanToken},client_portal_token.eq.${cleanToken}`)
         .maybeSingle();
 
       if (projError || !projectRow) return null;
+      if (projectRow.portal_enabled === false) {
+        console.warn('Client portal is disabled for this project.');
+        return null;
+      }
 
       // 2. Fetch client
       const { data: clientRow, error: clientError } = await supabase
@@ -2303,12 +2371,23 @@ export const crmService = {
         .eq('project_id', projectRow.id)
         .order('created_at', { ascending: false });
 
+      // 6. Fetch documents & agreements
+      const { data: docRows } = await supabase
+        .from('documents')
+        .select('*')
+        .or(`project_id.eq.${projectRow.id},client_id.eq.${clientRow.id}`)
+        .order('created_at', { ascending: false });
+
+      const mappedClient = mapClientFromDb(clientRow);
+      const mappedProject = mapProjectFromDb(projectRow);
+
       return {
-        project: mapProjectFromDb(projectRow),
-        client: mapClientFromDb(clientRow),
+        project: mappedProject,
+        client: mappedClient,
         milestones: (milestoneRows || []).map(m => mapMilestoneFromDb(m)),
         invoices: (invoiceRows || []).map(i => mapInvoiceFromDb(i)),
         issues: (issueRows || []).map(iss => mapIssueFromDb(iss)),
+        documents: (docRows || []).map(d => mapDocumentFromDb(d, [mappedClient], [mappedProject], []))
       };
     } catch (err) {
       console.error('fetchClientPortalData error:', err);

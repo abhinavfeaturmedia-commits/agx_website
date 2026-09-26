@@ -9,7 +9,7 @@ import {
 import { crmService } from '../../lib/crmService';
 import {
   Project, Client, ProjectMilestone, Invoice, ProjectIssue,
-  IssueType, IssuePriority, IssueStatus
+  IssueType, IssuePriority, IssueStatus, DocumentItem
 } from '../../types/crm';
 
 interface ClientIssuePortalProps {
@@ -59,6 +59,7 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
     milestones: ProjectMilestone[];
     invoices: Invoice[];
     issues: ProjectIssue[];
+    documents?: DocumentItem[];
   } | null>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -66,8 +67,8 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
   const [tokenInputValue, setTokenInputValue] = useState<string>('');
   const [tokenModalError, setTokenModalError] = useState<string | null>(null);
 
-  // Active Navigation Tab: 'roadmap' | 'issues' | 'invoices'
-  const [activeTab, setActiveTab] = useState<'roadmap' | 'issues' | 'invoices'>('roadmap');
+  // Active Navigation Tab: 'roadmap' | 'issues' | 'invoices' | 'documents'
+  const [activeTab, setActiveTab] = useState<'roadmap' | 'issues' | 'invoices' | 'documents'>('roadmap');
   const [issueViewMode, setIssueViewMode] = useState<'list' | 'report'>('list');
 
   // Issue Reporting Form State
@@ -194,33 +195,112 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
     }
   };
 
-  const processFiles = (files: File[]) => {
-    files.forEach(async (file) => {
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+
+  const processFiles = async (files: File[]) => {
+    setUploadingFiles(true);
+    for (const file of files) {
       if (file.size > 10 * 1024 * 1024) {
-        alert('File exceeds maximum size of 10MB.');
-        return;
+        alert(`"${file.name}" exceeds the maximum limit of 10MB.`);
+        continue;
       }
       try {
-        const { publicUrl } = await crmService.uploadAttachment('crm-attachments', file);
+        const { publicUrl, error } = await crmService.uploadAttachment('crm-attachments', file);
         if (publicUrl) {
           setAttachments(prev => [...prev, publicUrl].slice(0, 5));
-          return;
+          continue;
         }
-      } catch (_) {}
+        if (error) {
+          console.warn('Storage upload error:', error);
+        }
+      } catch (err) {
+        console.warn('Attachment upload failed:', err);
+      }
 
-      // Fallback: Read as base64 DataURL
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setAttachments(prev => [...prev, event.target!.result as string].slice(0, 5));
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+      // If storage upload fails, compress image client-side to thumbnail to prevent DB bloat
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxDim = 800;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.6);
+            setAttachments(prev => [...prev, compressed].slice(0, 5));
+          };
+          img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        alert(`Could not upload ${file.name}. Please ensure your file format is supported.`);
+      }
+    }
+    setUploadingFiles(false);
   };
 
   const removeAttachment = (index: number) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleVerifyTicket = async (issueId: string) => {
+    try {
+      await crmService.updateIssue(issueId, { status: 'CLOSED' });
+      setPortalData(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          issues: prev.issues.map(iss => iss.id === issueId ? { ...iss, status: 'CLOSED' as const } : iss)
+        };
+      });
+    } catch (err) {
+      console.warn('Error closing issue:', err);
+    }
+  };
+
+  const handleReopenTicket = async (issueId: string) => {
+    const reason = window.prompt('Please describe what is still not working or why this ticket is being reopened:');
+    if (!reason || !reason.trim()) return;
+
+    try {
+      const issue = portalData?.issues.find(i => i.id === issueId);
+      const updatedNotes = issue?.resolutionNotes
+        ? `${issue.resolutionNotes}\n\n[Reopened by Client]: ${reason.trim()}`
+        : `[Reopened by Client]: ${reason.trim()}`;
+
+      await crmService.updateIssue(issueId, {
+        status: 'REPORTED',
+        resolutionNotes: updatedNotes
+      });
+
+      setPortalData(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          issues: prev.issues.map(iss => iss.id === issueId ? {
+            ...iss,
+            status: 'REPORTED' as const,
+            resolutionNotes: updatedNotes
+          } : iss)
+        };
+      });
+    } catch (err) {
+      console.warn('Error reopening issue:', err);
+    }
   };
 
   // Submit Issue Handler
@@ -529,6 +609,21 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
             <span>Invoices & Payments</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 font-mono">
               {invoices.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('documents')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'documents'
+                ? 'bg-[#CCFF00] text-black shadow-md'
+                : 'bg-white/5 text-white/70 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <Download size={14} />
+            <span>Documents & SOWs</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 font-mono">
+              {(portalData?.documents || []).length}
             </span>
           </button>
         </div>
@@ -914,6 +1009,42 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
                               </div>
                             )}
 
+                            {iss.status === 'RESOLVED' && (
+                              <div className="flex items-center gap-2 pt-2 border-t border-white/10 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleVerifyTicket(iss.id); }}
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Check size={13} />
+                                  <span>Confirm Fix & Close Ticket</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleReopenTicket(iss.id); }}
+                                  className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <RefreshCw size={13} />
+                                  <span>Reopen Ticket (Issue Persists)</span>
+                                </button>
+                              </div>
+                            )}
+
+                            {iss.status === 'CLOSED' && (
+                              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                                <span className="text-[11px] text-emerald-400 font-mono flex items-center gap-1">
+                                  <CheckCircle2 size={13} /> Verified & Closed by Client
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleReopenTicket(iss.id); }}
+                                  className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white text-[11px] font-mono transition-all ml-auto cursor-pointer"
+                                >
+                                  Reopen if needed
+                                </button>
+                              </div>
+                            )}
+
                             {iss.attachments && iss.attachments.length > 0 && (
                               <div className="space-y-1">
                                 <span className="text-[10px] text-white/50 uppercase font-bold block">Attachments:</span>
@@ -1051,6 +1182,65 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Tab 4: Documents & Agreements Repository */}
+        {activeTab === 'documents' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-base text-white">Project Deliverables & SOW Repository</h3>
+                <p className="text-xs text-white/50">Access signed Master Service Agreements, Statements of Work, and technical specifications.</p>
+              </div>
+            </div>
+
+            {(!portalData?.documents || portalData.documents.length === 0) ? (
+              <div className="p-12 rounded-3xl bg-[#0D1017] border border-white/5 text-center space-y-2">
+                <FileText size={32} className="mx-auto text-white/30" />
+                <h4 className="font-bold text-sm text-white">No Uploaded Documents Found</h4>
+                <p className="text-xs text-white/50">Official project documentation and signed contracts will be made available here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {portalData.documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="p-5 rounded-2xl bg-[#0D1017] hover:bg-[#121622] border border-white/10 transition-all flex flex-col justify-between space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-[#CCFF00] shrink-0">
+                          <FileText size={20} />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-xs text-white line-clamp-1">{doc.title}</h4>
+                          <span className="text-[10px] text-white/40 font-mono block">
+                            {doc.fileSize} • Uploaded {new Date(doc.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20">
+                        {doc.docType}
+                      </span>
+                    </div>
+
+                    <div className="pt-3 border-t border-white/5 flex items-center justify-between">
+                      <span className="text-[10px] text-white/40 font-mono">By {doc.uploadedBy}</span>
+                      <a
+                        href={doc.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors flex items-center gap-1.5 font-mono cursor-pointer"
+                      >
+                        <Download size={13} />
+                        <span>Download / View</span>
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>

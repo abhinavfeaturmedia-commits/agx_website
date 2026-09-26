@@ -9,6 +9,9 @@ import {
 } from 'lucide-react';
 import { useCrmStore } from '../../lib/crmStore';
 import { toast } from '../../lib/toastStore';
+import { BotAvatar } from 'bot-avatars';
+import { ThinkingOrb } from 'thinking-orbs';
+import { BorderBeam } from 'border-beam';
 
 interface McpSettingsSectionProps {
   store: ReturnType<typeof useCrmStore>;
@@ -321,25 +324,31 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
           </div>
 
           {/* Test Connection Button & Ping Diagnostics */}
-          <div className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-2xl border border-gray-200/80 self-start lg:self-auto shrink-0">
-            <div className="px-3">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
-                <Database size={13} className="text-emerald-600" />
-                <span>Supabase PostgreSQL</span>
+          <BorderBeam size="md" active={isTestingPing} colorVariant="ocean" strength={0.85}>
+            <div className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-2xl border border-gray-200/80 self-start lg:self-auto shrink-0">
+              <div className="px-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
+                  <Database size={13} className="text-emerald-600" />
+                  <span>Supabase PostgreSQL</span>
+                </div>
+                <span className="text-[11px] font-mono text-gray-500">
+                  Latency: <strong className="text-gray-900">{pingLatency ? `${pingLatency}ms` : '--'}</strong>
+                </span>
               </div>
-              <span className="text-[11px] font-mono text-gray-500">
-                Latency: <strong className="text-gray-900">{pingLatency ? `${pingLatency}ms` : '--'}</strong>
-              </span>
+              <button
+                onClick={handleTestPing}
+                disabled={isTestingPing}
+                className="px-4 py-2 rounded-xl bg-black hover:bg-neutral-800 active:scale-95 text-[#CCFF00] font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                {isTestingPing ? (
+                  <ThinkingOrb state="working" size={20} theme="dark" aria-label="Testing MCP bridge..." />
+                ) : (
+                  <RefreshCw size={13} />
+                )}
+                <span>{isTestingPing ? 'Pinging...' : 'Test Connection'}</span>
+              </button>
             </div>
-            <button
-              onClick={handleTestPing}
-              disabled={isTestingPing}
-              className="px-4 py-2 rounded-xl bg-black hover:bg-neutral-800 active:scale-95 text-[#CCFF00] font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
-            >
-              <RefreshCw size={13} className={isTestingPing ? 'animate-spin' : ''} />
-              <span>{isTestingPing ? 'Pinging...' : 'Test Connection'}</span>
-            </button>
-          </div>
+          </BorderBeam>
         </div>
 
         {/* High-Contrast KPIs Bar */}
@@ -412,19 +421,25 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center font-bold shadow-xs ${acc.iconBg}`}>
-                      {acc.id === 'claude' && <Bot size={22} />}
-                      {acc.id === 'chatgpt' && <Smartphone size={22} />}
-                      {acc.id === 'cursor' && <Terminal size={22} />}
-                      {acc.id === 'gemini' && <Sparkles size={22} />}
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0">
+                      {acc.id === 'claude' && <BotAvatar type="mech" state={isTestingPing ? 'working' : 'default'} size={48} />}
+                      {acc.id === 'chatgpt' && <BotAvatar type="star" state="default" size={48} />}
+                      {acc.id === 'cursor' && <BotAvatar type="hexagon" state="default" size={48} />}
+                      {acc.id === 'gemini' && <BotAvatar type="clover" state="default" size={48} />}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-black text-gray-900">{acc.name}</h4>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          {acc.status}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {acc.id === 'claude' && <ThinkingOrb state="weaving" size={20} aria-label="Claude Reasoning" />}
+                          {acc.id === 'chatgpt' && <ThinkingOrb state="composing" size={20} aria-label="ChatGPT Composing" />}
+                          {acc.id === 'cursor' && <ThinkingOrb state="solving" size={20} aria-label="Cursor Solving" />}
+                          {acc.id === 'gemini' && <ThinkingOrb state="connecting" size={20} aria-label="Gemini Connecting" />}
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            {acc.status}
+                          </span>
+                        </div>
                       </div>
                       <span className="text-xs text-gray-500 font-medium">
                         {acc.provider} • <span className="font-mono text-[11px] text-gray-600">{acc.type}</span>
@@ -490,36 +505,45 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
         </div>
 
         <div className="divide-y divide-gray-100 border border-gray-100 rounded-2xl overflow-hidden bg-gray-50/50">
-          {aiLogs.map((log) => (
-            <div key={log.id} className="p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs hover:bg-white transition-colors">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                  log.aiPlatform === 'Claude Desktop' ? 'bg-amber-100 text-amber-900 border border-amber-200' :
-                  log.aiPlatform === 'ChatGPT' ? 'bg-emerald-100 text-emerald-900 border border-emerald-200' :
-                  log.aiPlatform === 'Cursor' ? 'bg-blue-100 text-blue-900 border border-blue-200' :
-                  'bg-purple-100 text-purple-900 border border-purple-200'
-                }`}>
-                  {log.aiPlatform}
-                </span>
+          {aiLogs.map((log) => {
+            const avatarType = log.aiPlatform === 'Claude Desktop' ? 'mech'
+              : log.aiPlatform === 'ChatGPT' ? 'star'
+              : log.aiPlatform === 'Cursor' ? 'hexagon' : 'clover';
 
-                <span className="font-mono font-bold text-gray-900 bg-white px-2 py-0.5 rounded-md border border-gray-200 text-[11px]">
-                  {log.toolUsed}()
-                </span>
+            return (
+              <div key={log.id} className="p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:bg-white transition-colors">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="shrink-0 flex items-center">
+                    <BotAvatar type={avatarType} state="default" size={28} />
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                    log.aiPlatform === 'Claude Desktop' ? 'bg-amber-100 text-amber-900 border border-amber-200' :
+                    log.aiPlatform === 'ChatGPT' ? 'bg-emerald-100 text-emerald-900 border border-emerald-200' :
+                    log.aiPlatform === 'Cursor' ? 'bg-blue-100 text-blue-900 border border-blue-200' :
+                    'bg-purple-100 text-purple-900 border border-purple-200'
+                  }`}>
+                    {log.aiPlatform}
+                  </span>
 
-                <span className="text-gray-700 font-medium">
-                  {log.summary}
-                </span>
+                  <span className="font-mono font-bold text-gray-900 bg-white px-2 py-0.5 rounded-md border border-gray-200 text-[11px]">
+                    {log.toolUsed}()
+                  </span>
+
+                  <span className="text-gray-700 font-medium">
+                    {log.summary}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-auto text-[11px] font-mono text-gray-400">
+                  <span className="flex items-center gap-1 text-emerald-600 font-bold">
+                    <CheckCircle2 size={12} /> {log.status}
+                  </span>
+                  <span>•</span>
+                  <span>{log.timestamp}</span>
+                </div>
               </div>
-
-              <div className="flex items-center gap-2 self-end sm:self-auto text-[11px] font-mono text-gray-400">
-                <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                  <CheckCircle2 size={12} /> {log.status}
-                </span>
-                <span>•</span>
-                <span>{log.timestamp}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

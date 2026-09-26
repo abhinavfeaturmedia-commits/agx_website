@@ -453,12 +453,19 @@ export const authService = {
       if (authData?.user) {
         isAuthenticated = true;
         authenticatedUserId = authData.user.id;
+      } else if (partnerRow?.password_hash) {
+        // Dedicated password_hash column verification
+        if (partnerRow.password_hash === trimmedPass) {
+          isAuthenticated = true;
+        }
       } else {
-        // Check if partner row has custom legacy password verification
+        // Check if partner row has custom legacy password verification in payout_details
         const payoutDetails = partnerRow?.payout_details;
         if (payoutDetails && typeof payoutDetails === 'object' && payoutDetails.passwordHash) {
           if (payoutDetails.passwordHash === trimmedPass) {
             isAuthenticated = true;
+            // Transparently backfill to dedicated password_hash column
+            supabase.from('partners').update({ password_hash: trimmedPass }).eq('id', partnerRow.id).then(() => {}, () => {});
           }
         }
       }
@@ -642,6 +649,7 @@ export const authService = {
         email: newPartner.email,
         company: newPartner.company,
         phone: newPartner.phone,
+        password_hash: data.password ? data.password.trim() : null,
         referral_code: newPartner.referralCode,
         commission_rate: newPartner.commissionRate,
         status: newPartner.status,
@@ -675,6 +683,102 @@ export const authService = {
       return { partner: newPartner, error: null };
     } catch (err: any) {
       return { partner: null, error: err };
+    }
+  },
+
+  // Update Partner Password with verification
+  async updatePartnerPassword(
+    partnerId: string,
+    email: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const trimmedEmail = email.trim().toLowerCase();
+      const trimmedCurrent = currentPassword.trim();
+      const trimmedNew = newPassword.trim();
+
+      if (!trimmedCurrent || !trimmedNew) {
+        return { success: false, error: new Error('Both current password and new password are required.') };
+      }
+
+      if (trimmedNew.length < 6) {
+        return { success: false, error: new Error('New password must be at least 6 characters long.') };
+      }
+
+      if (trimmedCurrent === trimmedNew) {
+        return { success: false, error: new Error('New password must be different from your current password.') };
+      }
+
+      // 1. Fetch partner record to verify current password
+      const { data: partnerRow } = await supabase
+        .from('partners')
+        .select('*')
+        .or(`id.eq.${partnerId},email.ilike.${trimmedEmail}`)
+        .maybeSingle();
+
+      let isCurrentValid = false;
+
+      // Check via Supabase Auth first
+      const { data: authData } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password: trimmedCurrent
+      }).catch(() => ({ data: null, error: true }));
+
+      if (authData?.user) {
+        isCurrentValid = true;
+      } else if (partnerRow?.password_hash && partnerRow.password_hash === trimmedCurrent) {
+        isCurrentValid = true;
+      } else if (partnerRow?.payout_details && typeof partnerRow.payout_details === 'object' && partnerRow.payout_details.passwordHash === trimmedCurrent) {
+        isCurrentValid = true;
+      }
+
+      if (!isCurrentValid) {
+        return { success: false, error: new Error('Current password is incorrect. Please verify and try again.') };
+      }
+
+      // 2. Update Supabase Auth user password if session exists
+      try {
+        await supabase.auth.updateUser({ password: trimmedNew });
+      } catch (authUpdateErr) {
+        console.warn('Notice: supabase.auth.updateUser notice (may require active session):', authUpdateErr);
+      }
+
+      // 3. Update database row in 'partners'
+      const targetId = partnerRow?.id || partnerId;
+      const nowIso = new Date().toISOString();
+      const { error: dbUpdateErr } = await supabase
+        .from('partners')
+        .update({
+          password_hash: trimmedNew,
+          updated_at: nowIso
+        })
+        .eq('id', targetId);
+
+      if (dbUpdateErr) {
+        console.warn('Supabase DB password_hash update error:', dbUpdateErr);
+        // Fallback: also update in payout_details if needed
+        try {
+          const existingDetails = partnerRow?.payout_details || {};
+          await supabase.from('partners').update({
+            payout_details: { ...existingDetails, passwordHash: trimmedNew },
+            updated_at: nowIso
+          }).eq('id', targetId);
+        } catch (_) {}
+      }
+
+      // Update cached session partner if present
+      const currentSessionPartner = this.getCurrentPartner();
+      if (currentSessionPartner && (currentSessionPartner.id === targetId || currentSessionPartner.email === trimmedEmail)) {
+        this.setPartnerSession({
+          ...currentSessionPartner,
+          updatedAt: nowIso
+        });
+      }
+
+      return { success: true, error: null };
+    } catch (err: any) {
+      return { success: false, error: err instanceof Error ? err : new Error(String(err)) };
     }
   },
 

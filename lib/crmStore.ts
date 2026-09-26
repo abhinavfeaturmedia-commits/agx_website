@@ -1,6 +1,6 @@
 // AGX CRM & Business Operating System Store & Data Provider
 // Enterprise Supabase Integration with Optimistic UI, Full CRUD, Realtime Sync, and Toast Alerts
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { crmService } from './crmService';
 import { authService } from './authService';
 import { toast } from './toastStore';
@@ -112,7 +112,7 @@ export function generateUUID(): string {
 }
 
 // Global hook & store state
-export function useCrmStore() {
+function useCrmStoreInternal() {
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => 
     authService.getStaffSession() || loadFromStorage('current_user', DEFAULT_ADMIN_USER)
   );
@@ -177,7 +177,15 @@ export function useCrmStore() {
       const data = await crmService.fetchAllData();
 
       if (data.profiles !== undefined) setTeamMembers(data.profiles.length > 0 ? data.profiles : INITIAL_USERS);
-      if (data.leads !== undefined) setLeads(data.leads);
+      
+      // Resilient Smart Merge for Leads: keep pending local items until verified in cloud
+      if (data.leads !== undefined) {
+        setLeads(prevLocal => {
+          const cloudIds = new Set(data.leads!.map(l => l.id));
+          const localPending = prevLocal.filter(l => !cloudIds.has(l.id));
+          return [...data.leads!, ...localPending];
+        });
+      }
       if (data.clients !== undefined) setClients(data.clients);
       if (data.projects !== undefined) setProjects(data.projects);
       if (data.tasks !== undefined) setTasks(data.tasks);
@@ -220,8 +228,26 @@ export function useCrmStore() {
       if (data.notifications !== undefined) setNotifications(data.notifications);
       if (data.auditLogs !== undefined) setAuditLogs(data.auditLogs);
       if ((data as any).partners !== undefined) setPartners((data as any).partners);
-      if ((data as any).partnerReferrals !== undefined) setPartnerReferrals((data as any).partnerReferrals);
-      if ((data as any).partnerPayouts !== undefined) setPartnerPayouts((data as any).partnerPayouts);
+
+      // Resilient Smart Merge for Partner Referrals
+      if ((data as any).partnerReferrals !== undefined) {
+        const cloudRefs = (data as any).partnerReferrals as PartnerReferral[];
+        setPartnerReferrals(prevLocal => {
+          const cloudIds = new Set(cloudRefs.map(r => r.id));
+          const localPending = prevLocal.filter(l => !cloudIds.has(l.id));
+          return [...cloudRefs, ...localPending];
+        });
+      }
+
+      // Resilient Smart Merge for Partner Payouts
+      if ((data as any).partnerPayouts !== undefined) {
+        const cloudPayouts = (data as any).partnerPayouts as PartnerPayout[];
+        setPartnerPayouts(prevLocal => {
+          const cloudIds = new Set(cloudPayouts.map(p => p.id));
+          const localPending = prevLocal.filter(l => !cloudIds.has(l.id));
+          return [...cloudPayouts, ...localPending];
+        });
+      }
 
       const cloudIssues = await crmService.fetchAllIssues();
       if (cloudIssues !== undefined) {
@@ -332,8 +358,8 @@ export function useCrmStore() {
   };
 
   // --- Lead Actions ---
-  const addLead = (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): string => {
-    const tempId = generateUUID();
+  const addLead = (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): string => {
+    const tempId = lead.id || generateUUID();
     const newLead: Lead = {
       ...lead,
       id: tempId,
@@ -344,7 +370,7 @@ export function useCrmStore() {
     logAudit('CREATE', 'Lead', newLead.id, `Created new lead: ${newLead.name} (${newLead.company})`);
     toast.success('Lead Created', `${newLead.name} added to deal pipeline.`);
 
-    crmService.createLead(lead).then(savedLead => {
+    crmService.createLead({ ...lead, id: tempId }).then(savedLead => {
       setLeads(prev => prev.map(l => l.id === tempId ? savedLead : l));
       setPartnerReferrals(prev => prev.map(r => r.leadId === tempId ? { ...r, leadId: savedLead.id } : r));
     }).catch(err => {
@@ -398,6 +424,14 @@ export function useCrmStore() {
     );
     toast.info('Deal Stage Updated', `${lead.name} moved to ${newStatus} (${newProbability}%)${effectiveLossReason ? ` · ${effectiveLossReason}` : ''}`);
 
+    // Automatically sync status to linked partner referral if any
+    setPartnerReferrals(prev => prev.map(r => {
+      if (r.leadId === leadId) {
+        return { ...r, dealStatus: newStatus as any, updatedAt: new Date().toISOString() };
+      }
+      return r;
+    }));
+
     crmService.updateLead(leadId, {
       status: newStatus,
       probability: newProbability,
@@ -418,6 +452,8 @@ export function useCrmStore() {
     accountManager?: string;
     serviceType?: string;
     projectDueDate?: string;
+    createAgreement?: boolean;
+    createInitialInvoice?: boolean;
     milestoneSplit?: '50/50' | '40/30/30' | '30/70' | '100';
   }) => {
     const lead = leads.find(l => l.id === leadId);
@@ -566,6 +602,27 @@ export function useCrmStore() {
       setProjects(prev => prev.map(p => p.id === tempProjectId ? persistedProject : p));
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, convertedClientId: savedClient.id, convertedProjectId: savedProject.id } : l));
       await crmService.updateLead(leadId, { convertedClientId: savedClient.id, convertedProjectId: savedProject.id });
+
+      // Automatically generate initial Master Service Agreement if requested
+      if (options?.createAgreement) {
+        addAgreement({
+          name: `${lead.company || lead.name} - Master Service Agreement`,
+          agreementType: 'Master Service Agreement',
+          clientId: savedClient.id,
+          clientName: savedClient.company,
+          projectId: savedProject.id,
+          projectName: savedProject.name,
+          startDate: new Date().toISOString().split('T')[0],
+          expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          commercialValue: dealVal,
+          status: 'Draft'
+        });
+      }
+
+      // Automatically generate advance invoice for Milestone 1 if requested
+      if (options?.createInitialInvoice && savedMilestones.length > 0) {
+        createInvoiceFromMilestone(savedProject.id, savedMilestones[0].id);
+      }
 
       // Link and reconcile partner referrals if lead originated from a partner
       const matchingRefs = partnerReferrals.filter(r => 
@@ -1839,8 +1896,8 @@ export function useCrmStore() {
     crmService.deletePartner(id).catch(err => console.warn('Supabase delete partner err:', err));
   };
 
-  const addPartnerReferral = (referral: Omit<PartnerReferral, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const tempId = generateUUID();
+  const addPartnerReferral = (referral: Omit<PartnerReferral, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
+    const tempId = referral.id || generateUUID();
     const newReferral: PartnerReferral = {
       ...referral,
       id: tempId,
@@ -1850,9 +1907,97 @@ export function useCrmStore() {
     setPartnerReferrals(prev => [newReferral, ...prev]);
     toast.success('Referral Registered', `Referral client "${newReferral.clientName}" registered into pipeline.`);
 
-    crmService.createPartnerReferral(referral).then(saved => {
+    crmService.createPartnerReferral({ ...referral, id: tempId }).then(saved => {
       setPartnerReferrals(prev => prev.map(r => r.id === tempId ? saved : r));
     }).catch(err => console.warn('Supabase create referral err:', err));
+  };
+
+  // Atomic creation of Lead and Partner Referral to eliminate race conditions
+  const addPartnerLeadReferral = async (
+    partner: Partner,
+    payload: {
+      clientName: string;
+      company: string;
+      clientEmail?: string;
+      clientPhone?: string;
+      projectType: string;
+      dealValue: number;
+      notes?: string;
+    }
+  ): Promise<{ lead: Lead; referral: PartnerReferral }> => {
+    const leadId = generateUUID();
+    const referralId = generateUUID();
+    const now = new Date().toISOString();
+
+    const rawRate = partner.commissionRate || 0.10;
+    const rate = rawRate >= 1 ? rawRate / 100 : rawRate;
+
+    const newLead: Lead = {
+      id: leadId,
+      name: payload.clientName,
+      company: payload.company || payload.clientName,
+      email: payload.clientEmail || '',
+      phone: payload.clientPhone || '',
+      interestedService: payload.projectType,
+      estimatedDealValue: payload.dealValue,
+      probability: 60,
+      source: `Partner Referral (${partner.name} - ${partner.referralCode})`,
+      priority: 'High',
+      status: 'NEW',
+      assignedTo: 'Unassigned',
+      partnerId: partner.id,
+      partnerName: partner.name,
+      partnerCode: partner.referralCode,
+      notes: payload.notes ? `Referred by AGX Partner: ${partner.name} (${partner.company || partner.email}). Notes: ${payload.notes}` : `Referred by AGX Partner: ${partner.name} (${partner.company || partner.email}).`,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const newReferral: PartnerReferral = {
+      id: referralId,
+      partnerId: partner.id,
+      leadId: leadId,
+      partnerName: partner.name,
+      clientName: payload.clientName,
+      company: payload.company || payload.clientName,
+      clientEmail: payload.clientEmail || undefined,
+      clientPhone: payload.clientPhone || undefined,
+      projectType: payload.projectType,
+      dealValue: payload.dealValue,
+      totalPaid: 0,
+      pendingPayment: payload.dealValue,
+      dealStatus: 'NEW',
+      paymentStatus: 'Pending',
+      commissionRate: rate,
+      commissionEarned: 0,
+      commissionPaid: 0,
+      notes: payload.notes || undefined,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    // 1. Immediate optimistic UI updates
+    setLeads(prev => [newLead, ...prev]);
+    setPartnerReferrals(prev => [newReferral, ...prev]);
+    logAudit('CREATE', 'Lead', leadId, `Partner ${partner.name} registered lead: ${newLead.name} (${newLead.company})`);
+    toast.success('Referral Registered! 🚀', `${newLead.name} added to pipeline.`);
+
+    // 2. Sequential cloud persistence ensuring Foreign Key integrity
+    try {
+      const savedLead = await crmService.createLead(newLead);
+      setLeads(prev => prev.map(l => l.id === leadId ? savedLead : l));
+
+      const savedRef = await crmService.createPartnerReferral({
+        ...newReferral,
+        leadId: savedLead.id
+      });
+      setPartnerReferrals(prev => prev.map(r => r.id === referralId ? savedRef : r));
+
+      return { lead: savedLead, referral: savedRef };
+    } catch (err: any) {
+      console.warn('Supabase partner referral save notice (persisted in offline cache):', err);
+      return { lead: newLead, referral: newReferral };
+    }
   };
 
   const updatePartnerReferral = (id: string, updates: Partial<PartnerReferral>) => {
@@ -1875,27 +2020,102 @@ export function useCrmStore() {
     };
     setPartnerPayouts(prev => [newPayout, ...prev]);
 
-    // Deduct from partner pending earnings and increase paid earnings
-    setPartners(prev => prev.map(p => {
-      if (p.id === payout.partnerId) {
-        const newPaid = p.paidEarnings + payout.amount;
-        const newPending = Math.max(0, p.totalEarnings - newPaid);
-        return {
-          ...p,
-          paidEarnings: newPaid,
-          pendingEarnings: newPending,
-          updatedAt: new Date().toISOString()
-        };
-      }
-      return p;
-    }));
+    // Deduct from partner pending earnings and increase paid earnings ONLY IF status is 'Completed'
+    if (payout.status === 'Completed') {
+      setPartners(prev => prev.map(p => {
+        if (p.id === payout.partnerId) {
+          const newPaid = p.paidEarnings + payout.amount;
+          const newPending = Math.max(0, p.totalEarnings - newPaid);
+          return {
+            ...p,
+            paidEarnings: newPaid,
+            pendingEarnings: newPending,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return p;
+      }));
 
-    logAudit('CREATE', 'Partner', tempId, `Disbursed partner payout of ₹${payout.amount.toLocaleString('en-IN')} via ${payout.paymentMethod}`);
-    toast.success('Commission Paid Out', `₹${payout.amount.toLocaleString('en-IN')} logged as paid to partner.`);
+      // Automatically create ledger expense for P&L parity
+      const partnerObj = partners.find(p => p.id === payout.partnerId);
+      const expTempId = generateUUID();
+      const newExpense: Expense = {
+        id: expTempId,
+        category: 'Other',
+        amount: payout.amount,
+        expenseDate: payout.payoutDate || new Date().toISOString().split('T')[0],
+        vendor: payout.partnerName || partnerObj?.name || 'Affiliate Partner',
+        description: `Partner Commission Payout (Ref: ${payout.transactionRef || tempId})`,
+        paymentMethod: payout.paymentMethod || 'UPI',
+        status: 'Approved',
+        createdAt: new Date().toISOString()
+      };
+      setExpenses(prev => [newExpense, ...prev]);
+      crmService.createExpense(newExpense).catch(err => console.warn('Supabase commission expense insert err:', err));
+    }
+
+    logAudit('CREATE', 'Partner', tempId, `${payout.status === 'Completed' ? 'Disbursed' : 'Requested'} partner payout of ₹${payout.amount.toLocaleString('en-IN')} via ${payout.paymentMethod} (Status: ${payout.status || 'Pending'})`);
+    toast.success(
+      payout.status === 'Completed' ? 'Commission Paid Out' : 'Payout Request Submitted',
+      `₹${payout.amount.toLocaleString('en-IN')} ${payout.status === 'Completed' ? 'logged as paid to partner and added to ledger expenses.' : 'submitted for finance approval.'}`
+    );
 
     crmService.createPartnerPayout(payout).then(saved => {
       setPartnerPayouts(prev => prev.map(p => p.id === tempId ? saved : p));
     }).catch(err => console.warn('Supabase record payout err:', err));
+  };
+
+  const updatePartnerPayout = async (payoutId: string, updates: Partial<PartnerPayout>) => {
+    const existing = partnerPayouts.find(p => p.id === payoutId);
+    if (!existing) return;
+
+    setPartnerPayouts(prev => prev.map(p => p.id === payoutId ? { ...p, ...updates } : p));
+
+    // If status transitioned to 'Completed', deduct pending and credit paid on partner, plus record expense
+    if (updates.status === 'Completed' && existing.status !== 'Completed') {
+      const payoutAmount = updates.amount !== undefined ? updates.amount : existing.amount;
+      const partnerId = existing.partnerId;
+
+      setPartners(prev => prev.map(p => {
+        if (p.id === partnerId) {
+          const newPaid = p.paidEarnings + payoutAmount;
+          const newPending = Math.max(0, p.totalEarnings - newPaid);
+          return {
+            ...p,
+            paidEarnings: newPaid,
+            pendingEarnings: newPending,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return p;
+      }));
+
+      // Automatically create expense
+      const partnerObj = partners.find(p => p.id === partnerId);
+      const expTempId = generateUUID();
+      const newExpense: Expense = {
+        id: expTempId,
+        category: 'Other',
+        amount: payoutAmount,
+        expenseDate: updates.payoutDate || existing.payoutDate || new Date().toISOString().split('T')[0],
+        vendor: existing.partnerName || partnerObj?.name || 'Affiliate Partner',
+        description: `Partner Commission Payout (Ref: ${updates.transactionRef || existing.transactionRef || payoutId})`,
+        paymentMethod: updates.paymentMethod || existing.paymentMethod || 'UPI',
+        status: 'Approved',
+        createdAt: new Date().toISOString()
+      };
+      setExpenses(prev => [newExpense, ...prev]);
+      crmService.createExpense(newExpense).catch(err => console.warn('Supabase commission expense insert err:', err));
+
+      logAudit('UPDATE', 'Partner', payoutId, `Approved partner payout of ₹${payoutAmount.toLocaleString('en-IN')} for ${existing.partnerName || 'Partner'}`);
+      toast.success('Payout Approved & Disbursed', `₹${payoutAmount.toLocaleString('en-IN')} marked as Completed and logged to Expenses.`);
+    }
+
+    try {
+      await crmService.updatePartnerPayout(payoutId, updates);
+    } catch (err) {
+      console.warn('Supabase update payout err:', err);
+    }
   };
 
   return {
@@ -1998,9 +2218,11 @@ export function useCrmStore() {
     updatePartner,
     deletePartner,
     addPartnerReferral,
+    addPartnerLeadReferral,
     updatePartnerReferral,
     deletePartnerReferral,
     recordPartnerPayout,
+    updatePartnerPayout,
     isSupabaseConnected,
     isLoading,
     isSyncing,
@@ -2024,5 +2246,21 @@ export function useCrmStore() {
     canManageProjects,
     canManageUsers
   };
+}
+
+export type CrmStoreType = ReturnType<typeof useCrmStoreInternal>;
+const CrmStoreContext = createContext<CrmStoreType | null>(null);
+
+export const CrmStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const store = useCrmStoreInternal();
+  return React.createElement(CrmStoreContext.Provider, { value: store }, children);
+};
+
+export function useCrmStore(): CrmStoreType {
+  const context = useContext(CrmStoreContext);
+  if (context) {
+    return context;
+  }
+  return useCrmStoreInternal();
 }
 

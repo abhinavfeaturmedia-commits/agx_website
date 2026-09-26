@@ -320,8 +320,10 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP WI
 ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS notes TEXT;
 
 ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS portal_token TEXT;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS client_portal_token TEXT;
 ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS portal_enabled BOOLEAN DEFAULT TRUE;
 
+ALTER TABLE public.project_milestones ADD COLUMN IF NOT EXISTS order_index INTEGER DEFAULT 0;
 ALTER TABLE public.project_milestones ADD COLUMN IF NOT EXISTS invoice_id UUID REFERENCES public.invoices(id) ON DELETE SET NULL;
 ALTER TABLE public.project_milestones ADD COLUMN IF NOT EXISTS is_invoiced BOOLEAN DEFAULT FALSE;
 
@@ -354,6 +356,7 @@ ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS partner_id UUID;
 ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS partner_name TEXT;
 ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS partner_code TEXT;
 
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS portal_enabled BOOLEAN DEFAULT TRUE;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS partner_id UUID;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS partner_name TEXT;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS partner_code TEXT;
@@ -366,6 +369,7 @@ CREATE TABLE IF NOT EXISTS public.partners (
     email TEXT UNIQUE NOT NULL,
     company TEXT,
     phone TEXT,
+    password_hash TEXT,
     referral_code TEXT UNIQUE NOT NULL,
     commission_rate NUMERIC DEFAULT 0.10, -- 10% standard, 15% VIP
     status TEXT DEFAULT 'Active', -- 'Active', 'Pending', 'Suspended'

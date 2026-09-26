@@ -20,6 +20,7 @@ import { ConsultationModal } from './components/ConsultationModal';
 import { ErrorBoundary } from './components/crm/ErrorBoundary';
 import { UserRole, Partner } from './types/crm';
 import { authService } from './lib/authService';
+import { CrmStoreProvider } from './lib/crmStore';
 
 // Dynamic Code-Splitting: Lazy-load heavy CRM & Portal modules on demand
 const AdminLogin = lazy(() => import('./components/crm/AdminLogin').then(m => ({ default: m.AdminLogin })));
@@ -259,9 +260,10 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // If in Partner Portal mode, enforce authenticated partner session route guard
-  if (currentView === 'partner-portal') {
-    const currentPartner = activePartner || authService.getCurrentPartner();
+  const renderContent = () => {
+    // If in Partner Portal mode, enforce authenticated partner session route guard
+    if (currentView === 'partner-portal') {
+      const currentPartner = activePartner || authService.getCurrentPartner();
     if (!currentPartner) {
       return (
         <ErrorBoundary fallbackRoute={navigateToWebsite}>
@@ -471,6 +473,13 @@ const App: React.FC = () => {
         />
       </div>
     </div>
+    );
+  };
+
+  return (
+    <CrmStoreProvider>
+      {renderContent()}
+    </CrmStoreProvider>
   );
 };
 

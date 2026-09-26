@@ -13,6 +13,8 @@ import { GlobalSearchModal } from './GlobalSearchModal';
 import { ToastNotification } from './ToastNotification';
 import { AuthModal } from './AuthModal';
 import { UserRole, CrmModuleKey } from '../../types/crm';
+import { BorderBeam } from 'border-beam';
+import { MetalBadge } from 'metal-fx';
 
 // Code-split heavy views to optimize bundle performance
 const LeadsView = lazy(() => import('./LeadsView').then(m => ({ default: m.LeadsView })));
@@ -249,15 +251,17 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
 
               {/* Quick Actions Button with nested icon */}
               <div className="relative hidden sm:block">
-                <button
-                  onClick={() => handleQuickCreate('lead')}
-                  className="flex items-center gap-2 pl-3.5 pr-2 py-1.5 rounded-full bg-black hover:bg-gray-800 text-white font-bold text-xs shadow-md transition-all cursor-pointer btn-press group"
-                >
-                  <span>New Lead</span>
-                  <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-[#CCFF00] group-hover:text-black transition-colors">
-                    <Plus size={12} className="text-[#CCFF00] group-hover:text-black transition-colors" />
-                  </span>
-                </button>
+                <BorderBeam size="pulse-inner" colorVariant="sunset" strength={0.8} style={{ display: 'inline-block' }}>
+                  <button
+                    onClick={() => handleQuickCreate('lead')}
+                    className="flex items-center gap-2 pl-3.5 pr-2 py-1.5 rounded-full bg-black hover:bg-gray-800 text-white font-bold text-xs shadow-md transition-all cursor-pointer btn-press group"
+                  >
+                    <span>New Lead</span>
+                    <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-[#CCFF00] group-hover:text-black transition-colors">
+                      <Plus size={12} className="text-[#CCFF00] group-hover:text-black transition-colors" />
+                    </span>
+                  </button>
+                </BorderBeam>
               </div>
 
               {/* Notifications Bell */}
@@ -367,10 +371,8 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
                       <div className="min-w-0 flex-1">
                         <strong className="text-gray-900 text-xs font-black block truncate">{currentUser?.fullName || 'Admin User'}</strong>
                         <span className="text-[11px] text-gray-400 block truncate">{currentUser?.email}</span>
-                        <div className="flex items-center gap-1 mt-1">
-                          <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-black text-[#CCFF00]">
-                            {currentUser?.role || 'Super Admin'}
-                          </span>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <MetalBadge>{currentUser?.role || 'Super Admin'}</MetalBadge>
                           <span className="text-[9px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
                             {currentUser?.department || 'General'}
                           </span>

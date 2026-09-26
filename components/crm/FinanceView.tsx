@@ -39,7 +39,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
     expenses, addExpense, deleteExpense,
     quotations, addQuotation, updateQuotation, deleteQuotation, convertQuotationToInvoice,
     totalQuotedValue, acceptedQuotationsCount, pendingQuotationsCount, quotationConversionRate,
-    clients, leads, projects, totalRevenue, directExpensesTotal, partnerPayoutsTotal, totalExpenses, netProfit, profitMargin,
+    clients, leads, projects, partnerReferrals, totalRevenue, directExpensesTotal, partnerPayoutsTotal, totalExpenses, netProfit, profitMargin,
     outstandingInvoicesTotal, currentUser, canAccessFinance
   } = store;
 
@@ -188,12 +188,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
       const projInvoices = invoices.filter(i => i.projectId === p.id || i.projectName === p.name);
       const projPayments = payments.filter(pay => pay.projectId === p.id || pay.projectName === p.name);
       const projExpenses = expenses.filter(e => e.projectId === p.id || e.projectName === p.name);
+      const projReferrals = (partnerReferrals || []).filter(r => r.projectId === p.id || (r.clientId && r.clientId === p.clientId));
 
       const billed = projInvoices.reduce((s, i) => s + (i.total || 0), 0) || p.projectValue || 0;
       const revenue = projPayments.reduce((s, pay) => s + (pay.amount || 0), 0) || p.receivedAmount || 0;
       const directExpense = projExpenses.reduce((s, e) => s + (e.amount || 0), 0);
-      const net = revenue - directExpense;
-      const margin = revenue > 0 ? Math.round((net / revenue) * 100) : (billed > 0 ? Math.round(((billed - directExpense) / billed) * 100) : 0);
+      const partnerCommission = projReferrals.reduce((s, r) => s + (r.commissionEarned || (r.dealValue * (r.commissionRate || 0.10))), 0);
+      const totalCost = directExpense + partnerCommission;
+      const net = revenue - totalCost;
+      const margin = revenue > 0 ? Math.round((net / revenue) * 100) : (billed > 0 ? Math.round(((billed - totalCost) / billed) * 100) : 0);
 
       return {
         id: p.id,
@@ -203,11 +206,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
         billed,
         revenue,
         directExpense,
+        partnerCommission,
         net,
         margin
       };
     });
-  }, [projects, invoices, payments, expenses]);
+  }, [projects, invoices, payments, expenses, partnerReferrals]);
 
   // Filtered Invoices
   const filteredInvoices = useMemo(() => {
@@ -1464,6 +1468,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
                     <th className="py-3 px-3">Contract / Billed</th>
                     <th className="py-3 px-3">Realized Revenue</th>
                     <th className="py-3 px-3">Direct Expenses</th>
+                    <th className="py-3 px-3">Partner Comm.</th>
                     <th className="py-3 px-3">Net Profit</th>
                     <th className="py-3 px-4 text-right">Margin %</th>
                   </tr>
@@ -1476,6 +1481,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
                       <td className="py-3 px-3 font-semibold">₹{proj.billed.toLocaleString('en-IN')}</td>
                       <td className="py-3 px-3 font-bold text-emerald-600">₹{proj.revenue.toLocaleString('en-IN')}</td>
                       <td className="py-3 px-3 font-bold text-rose-600">₹{proj.directExpense.toLocaleString('en-IN')}</td>
+                      <td className="py-3 px-3 font-bold text-purple-600">₹{proj.partnerCommission.toLocaleString('en-IN')}</td>
                       <td className="py-3 px-3 font-extrabold text-gray-900">₹{proj.net.toLocaleString('en-IN')}</td>
                       <td className="py-3 px-4 text-right">
                         <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${

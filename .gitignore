@@ -23,6 +23,7 @@ token.json
 # Intermediate working files (Layer 3)
 .tmp/*
 !.tmp/.gitkeep
+scratch/
 
 # Python artifacts
 __pycache__/

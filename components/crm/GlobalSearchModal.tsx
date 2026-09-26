@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, Users, Briefcase, CheckSquare, IndianRupee, Key, FileText, ArrowRight, UserCheck, Shield, Globe, AlertTriangle, Tag } from 'lucide-react';
+import { BorderBeam } from 'border-beam';
+import { ThinkingOrb } from 'thinking-orbs';
 import { Lead, Client, Project, Task, Invoice, CredentialVaultItem, Agreement, DocumentItem, UserProfile, Partner, ProjectIssue, Quotation } from '../../types/crm';
 
 interface GlobalSearchModalProps {
@@ -99,26 +101,31 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: -12 }}
           transition={{ type: 'spring', damping: 26, stiffness: 360 }}
-          className="w-full max-w-2xl bg-[#121620]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
+          className="w-full max-w-2xl bg-[#121620]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden relative"
         >
           {/* Input Header */}
-          <div className="relative flex items-center border-b border-white/10 px-5 py-4">
-            <Search size={20} className="text-[#CCFF00] mr-3" />
-            <input
-              autoFocus
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search leads, clients, projects, tasks, invoices, credentials..."
-              className="w-full bg-transparent text-white placeholder-white/40 text-base outline-none"
-            />
-            {query && (
-              <button onClick={() => setQuery('')} className="p-1 text-white/40 hover:text-white mr-2 btn-press">
-                <X size={16} />
-              </button>
-            )}
-            <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-white/40 bg-white/5 border border-white/10 rounded">ESC</kbd>
-          </div>
+          <BorderBeam size="line" active={Boolean(query)} colorVariant="mono" strength={0.8}>
+            <div className="relative flex items-center border-b border-white/10 px-5 py-4">
+              <Search size={20} className="text-[#CCFF00] mr-3 shrink-0" />
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search leads, clients, projects, tasks, invoices, credentials..."
+                className="w-full bg-transparent text-white placeholder-white/40 text-base outline-none"
+              />
+              {query && (
+                <div className="flex items-center gap-2 mr-2">
+                  <ThinkingOrb state="searching" size={20} theme="dark" aria-label="Scanning CRM indices" />
+                  <button onClick={() => setQuery('')} className="p-1 text-white/40 hover:text-white btn-press">
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+              <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-white/40 bg-white/5 border border-white/10 rounded">ESC</kbd>
+            </div>
+          </BorderBeam>
 
           {/* Results List */}
           <div className="max-h-[60vh] overflow-y-auto crm-scrollbar p-4 space-y-4">

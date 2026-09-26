@@ -193,6 +193,21 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
     toast.success('Commission Tier Updated', `${partner.name} upgraded to ${Math.round(nextRate * 100)}% tier.`);
   };
 
+  const allPendingPayouts = useMemo(() => {
+    return store.partnerPayouts.filter(p => p.status === 'Pending');
+  }, [store.partnerPayouts]);
+
+  const handleApprovePayout = (payoutId: string) => {
+    const defaultUtr = `UTR-${Date.now().toString().slice(-6)}`;
+    const utr = window.prompt('Enter payout transaction reference (e.g., UTR / NEFT / IMPS Ref):', defaultUtr);
+    if (utr === null) return;
+    store.updatePartnerPayout(payoutId, {
+      status: 'Completed',
+      transactionRef: utr.trim() || defaultUtr,
+      payoutDate: new Date().toISOString().split('T')[0]
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner & Header */}
@@ -277,6 +292,37 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
           <span className="text-[10px] text-amber-600 font-medium mt-0.5">Pending payouts to disburse</span>
         </div>
       </div>
+
+      {/* Pending Payouts Review Banner */}
+      {allPendingPayouts.length > 0 && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shrink-0">
+              <Clock size={20} />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-amber-950 flex items-center gap-2">
+                <span>{allPendingPayouts.length} Pending Partner Payout Request{allPendingPayouts.length > 1 ? 's' : ''} Awaiting Approval</span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-extrabold uppercase">Action Required</span>
+              </h4>
+              <span className="text-[11px] text-amber-800 font-medium">
+                Total requested balance: ₹{allPendingPayouts.reduce((acc, p) => acc + p.amount, 0).toLocaleString('en-IN')} across partners
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {allPendingPayouts.slice(0, 3).map(p => (
+              <button
+                key={p.id}
+                onClick={() => handleApprovePayout(p.id)}
+                className="px-3 py-1.5 rounded-xl bg-black hover:bg-gray-800 text-[#CCFF00] text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Approve ₹{p.amount.toLocaleString('en-IN')} ({p.partnerName || 'Partner'})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="p-4 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -611,9 +657,25 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                             <span className="text-gray-900 font-bold">₹{p.amount.toLocaleString('en-IN')}</span>
                             <span className="text-gray-400 text-[10px] block">{p.payoutDate} via {p.paymentMethod}</span>
                           </div>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">
-                            {p.transactionRef || 'Completed'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              p.status === 'Completed'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : p.status === 'Pending'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-rose-100 text-rose-700'
+                            }`}>
+                              {p.transactionRef || p.status}
+                            </span>
+                            {p.status === 'Pending' && (
+                              <button
+                                onClick={() => handleApprovePayout(p.id)}
+                                className="px-2.5 py-1 bg-black text-[#CCFF00] hover:bg-gray-800 rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
+                              >
+                                Approve & Pay
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
