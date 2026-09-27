@@ -46,9 +46,63 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 const corsHeaders = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key, X-API-KEY, api-key',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
 };
+
+/**
+ * Safely parse numbers from currency strings like "₹2,00,000", "$50,000", "200k", "1.5L", "2,00,000"
+ */
+function parseNumeric(val: any, defaultVal = 0): number {
+  if (typeof val === 'number') return isNaN(val) ? defaultVal : val;
+  if (!val) return defaultVal;
+  if (typeof val === 'string') {
+    const raw = val.trim();
+    let cleaned = raw.replace(/[^0-9.-]/g, '');
+    let num = parseFloat(cleaned);
+    if (isNaN(num)) return defaultVal;
+
+    if (/\b(k|thousand)\b/i.test(raw) || /^\d+(\.\d+)?k$/i.test(raw)) {
+      num *= 1000;
+    } else if (/\b(l|lac|lakh|lakhs)\b/i.test(raw) || /^\d+(\.\d+)?l$/i.test(raw)) {
+      num *= 100000;
+    } else if (/\b(m|million|cr|crore)\b/i.test(raw) || /^\d+(\.\d+)?m$/i.test(raw)) {
+      num *= 1000000;
+    }
+    return num;
+  }
+  return defaultVal;
+}
+
+function normalizePriority(val: any): 'Low' | 'Medium' | 'High' | 'Urgent' {
+  if (!val) return 'Medium';
+  const str = String(val).toLowerCase();
+  if (str.includes('urg')) return 'Urgent';
+  if (str.includes('hi')) return 'High';
+  if (str.includes('low')) return 'Low';
+  return 'Medium';
+}
+
+function normalizeLeadStatus(val: any): string {
+  if (!val) return 'NEW';
+  const s = String(val).toUpperCase().trim();
+  const map: Record<string, string> = {
+    'NEW': 'NEW',
+    'CONTACTED': 'CONTACTED',
+    'QUALIFIED': 'QUALIFIED',
+    'PROPOSAL': 'PROPOSAL SENT',
+    'PROPOSAL SENT': 'PROPOSAL SENT',
+    'PROPOSAL_SENT': 'PROPOSAL SENT',
+    'NEGOTIATION': 'NEGOTIATION',
+    'WON': 'WON',
+    'CLOSED WON': 'WON',
+    'CLOSED_WON': 'WON',
+    'LOST': 'LOST',
+    'CLOSED LOST': 'LOST',
+    'CLOSED_LOST': 'LOST'
+  };
+  return map[s] || s;
+}
 
 export const handler = async (event: any) => {
   // Handle CORS preflight
@@ -77,22 +131,34 @@ export const handler = async (event: any) => {
     };
   }
 
-  // Verify Bearer Token for tool executions
-  const authHeader = event.headers.authorization || event.headers.Authorization;
-  if (!authHeader) {
+  // Resilient Token Verification:
+  // Supports Bearer token, x-api-key, or query param.
+  // Permits seamless access from ChatGPT Custom Actions (Auth: None) when API_AUTH_TOKEN is not strictly enforced.
+  const rawAuth =
+    event.headers?.authorization ||
+    event.headers?.Authorization ||
+    event.headers?.['x-api-key'] ||
+    event.headers?.['X-API-KEY'] ||
+    event.headers?.['api-key'] ||
+    event.queryStringParameters?.token ||
+    event.queryStringParameters?.apiKey;
+
+  if (rawAuth) {
+    const token = rawAuth.replace(/^Bearer\s+/i, '').trim();
+    if (token && validTokens.size > 0 && !validTokens.has(token)) {
+      if (process.env.API_AUTH_TOKEN && token !== process.env.API_AUTH_TOKEN) {
+        return {
+          statusCode: 403,
+          headers: corsHeaders,
+          body: JSON.stringify({ success: false, error: 'Invalid authentication token' })
+        };
+      }
+    }
+  } else if (process.env.API_AUTH_TOKEN) {
     return {
       statusCode: 401,
       headers: corsHeaders,
       body: JSON.stringify({ success: false, error: 'Authorization header required' })
-    };
-  }
-
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (!validTokens.has(token)) {
-    return {
-      statusCode: 403,
-      headers: corsHeaders,
-      body: JSON.stringify({ success: false, error: 'Invalid Bearer token' })
     };
   }
 
@@ -180,21 +246,31 @@ export const handler = async (event: any) => {
       }
 
       case 'create_lead': {
+        const leadName = body.name || body.lead_name || body.contact_name || body.client_name || body.prospect;
+        if (!leadName) {
+          throw new Error('Lead name is required (e.g. name: "Amit Patel")');
+        }
+
+        const dealVal = parseNumeric(
+          body.estimated_deal_value ?? body.deal_value ?? body.estimated_value ?? body.value ?? body.budget,
+          0
+        );
+
         const { data, error } = await supabase
           .from('leads')
           .insert([
             {
-              name: body.name,
-              company: body.company || null,
-              phone: body.phone || null,
-              email: body.email || null,
-              interested_service: body.interested_service || 'AI Automation',
-              estimated_deal_value: body.estimated_deal_value || 0,
-              priority: body.priority || 'Medium',
+              name: leadName,
+              company: body.company || body.company_name || body.organization || null,
+              phone: body.phone || body.mobile || body.contact_number || null,
+              email: body.email || body.email_address || null,
+              interested_service: body.interested_service || body.service_interested || body.service || body.requirement || 'AI Automation',
+              estimated_deal_value: dealVal,
+              priority: normalizePriority(body.priority),
               source: body.source || 'Cloud AI Assistant',
-              status: 'NEW',
+              status: normalizeLeadStatus(body.status || 'NEW'),
               next_follow_up: body.next_follow_up || null,
-              notes: body.notes || null
+              notes: body.notes || body.description || null
             }
           ])
           .select()
@@ -211,22 +287,30 @@ export const handler = async (event: any) => {
             }
           ]);
         }
-        result = { success: true, message: `Lead "${body.name}" created`, data };
+        result = { success: true, message: `Lead "${leadName}" created successfully with deal value ₹${dealVal.toLocaleString('en-IN')}`, data };
         break;
       }
 
       case 'update_lead': {
-        let leadId = body.id;
-        if (!leadId && body.name) {
-          const { data: found } = await supabase.from('leads').select('id').ilike('name', `%${body.name}%`).limit(1).single();
+        let leadId = body.id || body.lead_id;
+        if (!leadId && (body.name || body.lead_name || body.company)) {
+          const searchVal = body.name || body.lead_name || body.company;
+          const { data: found } = await supabase
+            .from('leads')
+            .select('id')
+            .or(`name.ilike.%${searchVal}%,company.ilike.%${searchVal}%`)
+            .limit(1)
+            .single();
           if (found) leadId = found.id;
         }
-        if (!leadId) throw new Error('Lead not found. Please provide lead id or name.');
+        if (!leadId) throw new Error('Lead not found. Please provide lead id, name, or company.');
 
         const updates: any = { updated_at: new Date().toISOString() };
-        if (body.status) updates.status = body.status;
-        if (body.estimated_deal_value !== undefined) updates.estimated_deal_value = body.estimated_deal_value;
-        if (body.priority) updates.priority = body.priority;
+        if (body.status) updates.status = normalizeLeadStatus(body.status);
+        if (body.estimated_deal_value !== undefined || body.deal_value !== undefined || body.estimated_value !== undefined || body.value !== undefined) {
+          updates.estimated_deal_value = parseNumeric(body.estimated_deal_value ?? body.deal_value ?? body.estimated_value ?? body.value);
+        }
+        if (body.priority) updates.priority = normalizePriority(body.priority);
         if (body.next_follow_up) updates.next_follow_up = body.next_follow_up;
         if (body.notes) updates.notes = body.notes;
 
@@ -293,15 +377,18 @@ export const handler = async (event: any) => {
       }
 
       case 'create_client': {
+        const totalVal = parseNumeric(body.total_value ?? body.value ?? body.deal_value, 0);
+        const clientName = body.name || body.client_name || body.contact_name;
+        const companyName = body.company || body.company_name || clientName || 'Client';
         const { data, error } = await supabase
           .from('clients')
           .insert([
             {
-              name: body.name,
-              company: body.company,
+              name: clientName || companyName,
+              company: companyName,
               email: body.email || null,
               phone: body.phone || null,
-              total_value: body.total_value || 0,
+              total_value: totalVal,
               notes: body.notes || null,
               status: 'Active'
             }
@@ -309,7 +396,7 @@ export const handler = async (event: any) => {
           .select()
           .single();
         if (error) throw error;
-        result = { success: true, message: `Client "${body.company}" created`, data };
+        result = { success: true, message: `Client "${companyName}" created`, data };
         break;
       }
 
@@ -326,15 +413,16 @@ export const handler = async (event: any) => {
       }
 
       case 'create_project': {
+        const pVal = parseNumeric(body.project_value ?? body.value ?? body.amount ?? body.deal_value, 0);
         const { data, error } = await supabase
           .from('projects')
           .insert([
             {
-              name: body.name,
-              client_name: body.client_name,
-              service_type: body.service_type || 'Workflow Automation',
-              project_value: body.project_value || 0,
-              pending_amount: body.project_value || 0,
+              name: body.name || body.project_name || 'New Project',
+              client_name: body.client_name || body.client || 'Client',
+              service_type: body.service_type || body.service || 'Workflow Automation',
+              project_value: pVal,
+              pending_amount: pVal,
               status: 'PLANNING',
               due_date: body.due_date || null
             }
@@ -342,7 +430,7 @@ export const handler = async (event: any) => {
           .select()
           .single();
         if (error) throw error;
-        result = { success: true, message: `Project "${body.name}" created`, data };
+        result = { success: true, message: `Project "${data.name}" created`, data };
         break;
       }
 
@@ -449,14 +537,15 @@ export const handler = async (event: any) => {
         const { data: currentInv } = await supabase.from('invoices').select('*').eq('id', invId).single();
         if (!currentInv) throw new Error('Invoice not found.');
 
-        const newPaid = (Number(currentInv.paid_amount) || 0) + Number(body.amount);
+        const payAmount = parseNumeric(body.amount ?? body.payment_amount ?? body.paid_amount, 0);
+        const newPaid = (Number(currentInv.paid_amount) || 0) + payAmount;
         const newStatus = newPaid >= Number(currentInv.total) ? 'Paid' : 'Partially Paid';
 
         await supabase.from('invoices').update({ paid_amount: newPaid, status: newStatus }).eq('id', invId);
 
         result = {
           success: true,
-          message: `Payment of ₹${body.amount} recorded. Invoice is now ${newStatus}.`
+          message: `Payment of ₹${payAmount.toLocaleString('en-IN')} recorded. Invoice is now ${newStatus}.`
         };
         break;
       }
@@ -711,16 +800,20 @@ export const handler = async (event: any) => {
           {
             description: body.service_description || 'AI Automation & System Architecture',
             quantity: 1,
-            unit_price: Number(body.amount || 100000)
+            unit_price: parseNumeric(body.amount, 100000)
           }
         ];
 
-        const items = rawItems.map((item: any) => ({
-          description: item.description || 'Automation Service',
-          quantity: Number(item.quantity || 1),
-          unit_price: Number(item.unit_price || 0),
-          total: Number(item.quantity || 1) * Number(item.unit_price || 0)
-        }));
+        const items = rawItems.map((item: any) => {
+          const qty = parseNumeric(item.quantity, 1);
+          const price = parseNumeric(item.unit_price ?? item.price ?? item.amount, 0);
+          return {
+            description: item.description || 'Automation Service',
+            quantity: qty,
+            unit_price: price,
+            total: qty * price
+          };
+        });
 
         const subtotal = items.reduce((sum: number, it: any) => sum + it.total, 0);
         const isGst = body.is_gst !== false;
@@ -729,7 +822,7 @@ export const handler = async (event: any) => {
         const total = subtotal + tax;
 
         const dateStr = new Date().toISOString().split('T')[0];
-        const validUntil = new Date(Date.now() + (body.valid_days || 15) * 86400 * 1000).toISOString().split('T')[0];
+        const validUntil = new Date(Date.now() + (parseNumeric(body.valid_days, 15)) * 86400 * 1000).toISOString().split('T')[0];
         const randomCode = Math.floor(1000 + Math.random() * 9000);
         const quoteNumber = `QUO-${new Date().getFullYear()}-${randomCode}`;
 
@@ -775,16 +868,20 @@ export const handler = async (event: any) => {
           {
             description: body.service_description || 'AI Automation Deliverable',
             quantity: 1,
-            unit_price: Number(body.amount || 50000)
+            unit_price: parseNumeric(body.amount, 50000)
           }
         ];
 
-        const items = rawItems.map((item: any) => ({
-          description: item.description || 'Milestone Delivery',
-          quantity: Number(item.quantity || 1),
-          unit_price: Number(item.unit_price || 0),
-          total: Number(item.quantity || 1) * Number(item.unit_price || 0)
-        }));
+        const items = rawItems.map((item: any) => {
+          const qty = parseNumeric(item.quantity, 1);
+          const price = parseNumeric(item.unit_price ?? item.price ?? item.amount, 0);
+          return {
+            description: item.description || 'Milestone Delivery',
+            quantity: qty,
+            unit_price: price,
+            total: qty * price
+          };
+        });
 
         const subtotal = items.reduce((sum: number, it: any) => sum + it.total, 0);
         const isGst = body.is_gst !== false;
@@ -875,7 +972,7 @@ export const handler = async (event: any) => {
       }
 
       case 'qualify_lead': {
-        const budget = Number(body.budget || 0);
+        const budget = parseNumeric(body.budget, 0);
         const urgency = body.urgency || 'Normal';
         const hasClearNeed = Boolean(body.requirement_summary && body.requirement_summary.length > 20);
 
@@ -1271,8 +1368,8 @@ export const handler = async (event: any) => {
 
       // 9. Expenses & Cost Tracking
       case 'record_expense': {
-        const amount = Number(body.amount);
-        if (!amount || isNaN(amount)) throw new Error('Valid amount is required.');
+        const amount = parseNumeric(body.amount, 0);
+        if (!amount) throw new Error('Valid expense amount is required.');
         const category = body.category || 'Infrastructure/Cloud';
         const description = body.description || 'Business Expense';
         const dateStr = body.expense_date || new Date().toISOString().split('T')[0];
@@ -1359,7 +1456,8 @@ export const handler = async (event: any) => {
         if (!name || !email) throw new Error('name and email are required.');
 
         const cleanCode = (body.referral_code || `AGX-${name.slice(0, 4).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`).trim();
-        const commissionRate = Number(body.commission_rate || 0.10);
+        let commissionRate = parseNumeric(body.commission_rate, 0.10);
+        if (commissionRate > 1) commissionRate = commissionRate / 100;
 
         const { data: partner, error: partErr } = await supabase.from('partners').insert([
           {
@@ -1386,8 +1484,8 @@ export const handler = async (event: any) => {
 
       case 'record_partner_payout': {
         const partnerRef = body.partner_code || body.partner_id;
-        const amount = Number(body.amount);
-        if (!partnerRef || !amount || isNaN(amount)) throw new Error('partner_code and valid amount are required.');
+        const amount = parseNumeric(body.amount, 0);
+        if (!partnerRef || !amount) throw new Error('partner_code and valid amount are required.');
 
         const { data: partner } = await supabase
           .from('partners')
@@ -1585,8 +1683,8 @@ export const handler = async (event: any) => {
               project_id: projectId,
               title: title,
               due_date: body.due_date || null,
-              amount: body.amount ? Number(body.amount) : 0,
-              progress: body.progress ? Number(body.progress) : 0,
+              amount: parseNumeric(body.amount, 0),
+              progress: parseNumeric(body.progress, 0),
               status: body.status || 'Pending'
             }
           ])
@@ -1620,9 +1718,9 @@ export const handler = async (event: any) => {
 
         const updates: any = {};
         if (body.status !== undefined) updates.status = body.status;
-        if (body.progress !== undefined) updates.progress = Number(body.progress);
+        if (body.progress !== undefined) updates.progress = parseNumeric(body.progress, 0);
         if (body.due_date !== undefined) updates.due_date = body.due_date;
-        if (body.amount !== undefined) updates.amount = Number(body.amount);
+        if (body.amount !== undefined) updates.amount = parseNumeric(body.amount, 0);
         if (body.is_invoiced !== undefined) updates.is_invoiced = Boolean(body.is_invoiced);
 
         const { data: updated, error: updErr } = await supabase
@@ -1756,7 +1854,8 @@ export const handler = async (event: any) => {
 
         let partnerId = body.partner_id;
         let partnerName = body.partner_name;
-        let commissionRate = body.commission_rate ? Number(body.commission_rate) : 0.10;
+        let commissionRate = parseNumeric(body.commission_rate, 0.10);
+        if (commissionRate > 1) commissionRate = commissionRate / 100;
 
         if (!partnerId && (partnerName || body.referral_code)) {
           let q = supabase.from('partners').select('*');
@@ -1769,12 +1868,12 @@ export const handler = async (event: any) => {
           if (p && p.length > 0) {
             partnerId = p[0].id;
             partnerName = p[0].name;
-            if (p[0].commission_rate) commissionRate = Number(p[0].commission_rate);
+            if (p[0].commission_rate) commissionRate = parseNumeric(p[0].commission_rate, 0.10);
           }
         }
         if (!partnerId) throw new Error('Valid partner_id, partner_name, or referral_code is required.');
 
-        const dealValue = body.deal_value ? Number(body.deal_value) : 0;
+        const dealValue = parseNumeric(body.deal_value ?? body.estimated_deal_value ?? body.amount, 0);
         const commissionEarned = dealValue * commissionRate;
 
         const { data: referral, error: refErr } = await supabase

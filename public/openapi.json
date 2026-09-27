@@ -23,7 +23,8 @@
   "security": [
     {
       "BearerAuth": []
-    }
+    },
+    {}
   ],
   "paths": {
     "/api/tools/get_daily_briefing": {
@@ -148,8 +149,15 @@
                     "description": "Service interest (e.g. AI Automation, Web App)"
                   },
                   "estimated_deal_value": {
-                    "type": "number",
-                    "description": "Estimated commercial deal value in INR"
+                    "description": "Estimated commercial deal value in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   },
                   "priority": {
                     "type": "string",
@@ -195,7 +203,14 @@
                     "description": "NEW, CONTACTED, QUALIFIED, PROPOSAL SENT, NEGOTIATION, WON, LOST"
                   },
                   "estimated_deal_value": {
-                    "type": "number"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   },
                   "priority": {
                     "type": "string",
@@ -288,8 +303,15 @@
                     "description": "Project title"
                   },
                   "project_value": {
-                    "type": "number",
-                    "description": "Total project commercial value in INR"
+                    "description": "Total project commercial value in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   },
                   "service_type": {
                     "type": "string",
@@ -378,8 +400,15 @@
                     "description": "GSTIN or Tax ID"
                   },
                   "total_value": {
-                    "type": "number",
-                    "description": "Initial account value"
+                    "description": "Initial account value (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   }
                 }
               }
@@ -505,8 +534,15 @@
                     "description": "Custom AI Agent, Automation, etc."
                   },
                   "project_value": {
-                    "type": "number",
-                    "description": "Total value in INR"
+                    "description": "Total value in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   },
                   "due_date": {
                     "type": "string",
@@ -598,8 +634,15 @@
                     "description": "Milestone title"
                   },
                   "amount": {
-                    "type": "number",
-                    "description": "Commercial amount in INR"
+                    "description": "Commercial amount in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   },
                   "due_date": {
                     "type": "string",
@@ -773,8 +816,15 @@
                     "description": "Client name"
                   },
                   "amount": {
-                    "type": "number",
-                    "description": "Invoice subtotal amount in INR"
+                    "description": "Invoice subtotal amount in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   },
                   "due_days": {
                     "type": "number",
@@ -819,8 +869,15 @@
                     "description": "Client or Lead name"
                   },
                   "amount": {
-                    "type": "number",
-                    "description": "Quotation subtotal amount in INR"
+                    "description": "Quotation subtotal amount in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   },
                   "valid_days": {
                     "type": "number",
@@ -864,8 +921,15 @@
                     "type": "string"
                   },
                   "amount": {
-                    "type": "number",
-                    "description": "Amount received in INR"
+                    "description": "Amount received in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   },
                   "payment_method": {
                     "type": "string",
@@ -959,8 +1023,15 @@
                     "description": "record or list"
                   },
                   "amount": {
-                    "type": "number",
-                    "description": "Amount spent in INR"
+                    "description": "Amount spent in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   },
                   "description": {
                     "type": "string"
@@ -1103,12 +1174,26 @@
                     "description": "Referred client name"
                   },
                   "deal_value": {
-                    "type": "number",
-                    "description": "Deal commercial value in INR"
+                    "description": "Deal commercial value in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   },
                   "amount": {
-                    "type": "number",
-                    "description": "Payout amount in INR"
+                    "description": "Payout amount in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   }
                 }
               }

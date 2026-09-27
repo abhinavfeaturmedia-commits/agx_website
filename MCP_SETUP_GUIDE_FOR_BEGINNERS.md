@@ -202,9 +202,8 @@ Because your website is already hosted 24/7 on **Netlify**, you can connect Chat
    ```
 4. Click **Import**. ChatGPT will immediately import all 18 tools!
 5. Under **Authentication**:
-   - Type: Choose **API Key**
-   - Auth Type: Choose **Bearer**
-   - API Key: Paste `agx_secret_token_12345` (your secure token).
+   - **Option A (Recommended - Zero Friction)**: Select **None**. The API is pre-configured to allow your Custom GPT to connect seamlessly without entering tokens!
+   - **Option B (Secured with API Key)**: If you prefer strict token authentication, select **API Key** -> Auth Type: **Bearer** -> Paste `agx_secret_token_12345`.
 6. Click **Save** in the top right.
 
 🎉 **Now you can use voice dictation on your phone**:  

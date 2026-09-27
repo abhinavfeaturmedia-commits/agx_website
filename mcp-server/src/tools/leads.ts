@@ -1,4 +1,4 @@
-import { supabase, formatSuccess, formatError, ToolResult } from '../db.js';
+import { supabase, formatSuccess, formatError, ToolResult, parseNumeric } from '../db.js';
 import { Lead, LeadActivity } from '../types.js';
 
 /**
@@ -53,7 +53,7 @@ export async function createLead(params: {
   whatsapp?: string;
   location?: string;
   interested_service?: string;
-  estimated_deal_value?: number;
+  estimated_deal_value?: number | string;
   priority?: 'Low' | 'Medium' | 'High' | 'Urgent';
   source?: string;
   assigned_to?: string;
@@ -69,7 +69,7 @@ export async function createLead(params: {
       whatsapp: params.whatsapp || params.phone || null,
       location: params.location || null,
       interested_service: params.interested_service || 'AI Automation',
-      estimated_deal_value: params.estimated_deal_value ?? 0,
+      estimated_deal_value: parseNumeric(params.estimated_deal_value, 0),
       priority: params.priority || 'Medium',
       source: params.source || 'Direct Outreach / AI Assistant',
       assigned_to: params.assigned_to || null,
@@ -106,7 +106,7 @@ export async function updateLead(params: {
   id?: string;
   name?: string;
   status?: 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'PROPOSAL SENT' | 'NEGOTIATION' | 'WON' | 'LOST';
-  estimated_deal_value?: number;
+  estimated_deal_value?: number | string;
   priority?: 'Low' | 'Medium' | 'High' | 'Urgent';
   next_follow_up?: string;
   notes?: string;
@@ -135,7 +135,7 @@ export async function updateLead(params: {
     };
 
     if (params.status) updates.status = params.status;
-    if (params.estimated_deal_value !== undefined) updates.estimated_deal_value = params.estimated_deal_value;
+    if (params.estimated_deal_value !== undefined) updates.estimated_deal_value = parseNumeric(params.estimated_deal_value, 0);
     if (params.priority) updates.priority = params.priority;
     if (params.next_follow_up) updates.next_follow_up = params.next_follow_up;
     if (params.notes) updates.notes = params.notes;

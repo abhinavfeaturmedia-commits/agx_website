@@ -44,3 +44,27 @@ export function formatError(message: string, error?: any): ToolResult {
   const errMsg = error instanceof Error ? error.message : (error?.message || String(error || 'Unknown error'));
   return { success: false, message, error: errMsg };
 }
+
+/**
+ * Safely parse numbers from currency strings like "₹2,00,000", "$50,000", "200k", "1.5L"
+ */
+export function parseNumeric(val: any, defaultVal = 0): number {
+  if (typeof val === 'number') return isNaN(val) ? defaultVal : val;
+  if (!val) return defaultVal;
+  if (typeof val === 'string') {
+    const raw = val.trim();
+    let cleaned = raw.replace(/[^0-9.-]/g, '');
+    let num = parseFloat(cleaned);
+    if (isNaN(num)) return defaultVal;
+
+    if (/\b(k|thousand)\b/i.test(raw) || /^\d+(\.\d+)?k$/i.test(raw)) {
+      num *= 1000;
+    } else if (/\b(l|lac|lakh|lakhs)\b/i.test(raw) || /^\d+(\.\d+)?l$/i.test(raw)) {
+      num *= 100000;
+    } else if (/\b(m|million|cr|crore)\b/i.test(raw) || /^\d+(\.\d+)?m$/i.test(raw)) {
+      num *= 1000000;
+    }
+    return num;
+  }
+  return defaultVal;
+}
