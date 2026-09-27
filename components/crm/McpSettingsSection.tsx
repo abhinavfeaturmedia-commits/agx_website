@@ -55,7 +55,7 @@ const CONNECTED_ACCOUNTS: ConnectedAccount[] = [
     transport: 'stdio pipe',
     portOrPath: 'mcp-server/dist/index.js',
     authMethod: 'Direct Stdio IPC',
-    activeToolsCount: 18,
+    activeToolsCount: 48,
     iconBg: 'bg-amber-50 text-amber-600 border-amber-200',
     iconColor: '#D97706',
     description: 'Subprocess communication via stdio JSON-RPC. Look for the hammer icon to manage leads, tasks, and financials directly in chat.',
@@ -70,7 +70,7 @@ const CONNECTED_ACCOUNTS: ConnectedAccount[] = [
     transport: 'Stdio Process',
     portOrPath: '~/.gemini/config/mcp_config.json',
     authMethod: 'Local Stdio',
-    activeToolsCount: 18,
+    activeToolsCount: 48,
     iconBg: 'bg-cyan-50 text-cyan-600 border-cyan-200',
     iconColor: '#0891B2',
     description: 'Native agent integration inside Antigravity. The AI pair programmer uses AGX CRM tools to query sprints, tasks, and client specs.',
@@ -85,7 +85,7 @@ const CONNECTED_ACCOUNTS: ConnectedAccount[] = [
     transport: 'MCP JSON-RPC 2.0',
     portOrPath: '.cursor/mcp.json',
     authMethod: 'Local Process',
-    activeToolsCount: 18,
+    activeToolsCount: 48,
     iconBg: 'bg-blue-50 text-blue-600 border-blue-200',
     iconColor: '#2563EB',
     description: 'Integrated directly into Cursor editor settings. Query bugs, tasks, and client requirements in inline agent chat.',
@@ -100,7 +100,7 @@ const CONNECTED_ACCOUNTS: ConnectedAccount[] = [
     transport: 'HTTP REST / OpenAPI 3.0',
     portOrPath: 'agxperience.netlify.app/api/*',
     authMethod: 'Bearer Token (Encrypted)',
-    activeToolsCount: 18,
+    activeToolsCount: 48,
     iconBg: 'bg-emerald-50 text-emerald-600 border-emerald-200',
     iconColor: '#059669',
     description: 'Hosted 24/7 on Netlify serverless functions. Allows the ChatGPT mobile app on iOS/Android to manage leads and tasks anytime without your laptop powered on.',
@@ -115,7 +115,7 @@ const CONNECTED_ACCOUNTS: ConnectedAccount[] = [
     transport: 'Function Declarations / POST',
     portOrPath: 'POST /api/tools/:name',
     authMethod: 'Bearer Token Header',
-    activeToolsCount: 18,
+    activeToolsCount: 48,
     iconBg: 'bg-purple-50 text-purple-600 border-purple-200',
     iconColor: '#7C3AED',
     description: 'Exposes standard REST endpoints callable from Google AI Studio, custom Python scripts, n8n, or Zapier automations.',
@@ -184,7 +184,9 @@ const MCP_TOOLS_CATALOG = [
     tools: [
       { name: 'list_projects', desc: 'Filter projects by status (PLANNING, IN PROGRESS, COMPLETED) or manager.', args: ['status', 'client_name', 'project_manager'] },
       { name: 'create_project', desc: 'Initialize project with scope, deadline, and commercial budget.', args: ['name', 'client_name', 'service_type', 'project_value', 'due_date'] },
-      { name: 'update_project', desc: 'Update progress percentage (0-100%), milestones, or delivery dates.', args: ['name', 'progress', 'status', 'due_date'] }
+      { name: 'update_project', desc: 'Update progress percentage (0-100%), status, priority, or delivery dates.', args: ['name', 'progress', 'status', 'due_date'] },
+      { name: 'create_milestone', desc: 'Add a project milestone with target deadline and commercial payment amount.', args: ['project_name', 'title', 'due_date', 'amount'] },
+      { name: 'update_milestone', desc: 'Update milestone progress %, completion status, or billing state.', args: ['title', 'progress', 'status', 'is_invoiced'] }
     ]
   },
   {
@@ -201,16 +203,86 @@ const MCP_TOOLS_CATALOG = [
     badge: 'Revenue',
     tools: [
       { name: 'get_financial_summary', desc: 'Total invoiced, collected revenue, outstanding balances, and pipeline margin.', args: ['none'] },
-      { name: 'list_invoices', desc: 'Search invoices by status (Draft, Sent, Paid, Overdue) or client.', args: ['status', 'client_name', 'limit'] },
+      { name: 'create_quotation', desc: '1-Click proposal quotation generator with itemized deliverables & 18% GST.', args: ['client_name', 'amount', 'items', 'valid_days'] },
+      { name: 'list_quotations', desc: 'Search and inspect commercial proposals and quotations by client or status.', args: ['client_name', 'status', 'limit'] },
+      { name: 'create_invoice', desc: 'Issue milestone invoice with GST calculation, due dates, and payment notes.', args: ['client_name', 'amount', 'due_days', 'notes'] },
+      { name: 'list_invoices', desc: 'Filter and inspect client invoices by payment state (Paid, Overdue, Draft).', args: ['client_name', 'status', 'limit'] },
+      { name: 'get_overdue_invoices', desc: 'Overdue receivables chaser with pre-drafted polite WhatsApp & Email reminders.', args: ['none'] },
       { name: 'record_payment', desc: 'Record received payment, mark invoice paid, and update client balance.', args: ['invoice_number', 'amount', 'payment_method'] }
     ]
   },
   {
-    module: 'Calendar & Deadlines',
-    badge: 'Schedule',
+    module: 'Calendar & Schedule',
+    badge: 'Meetings',
     tools: [
       { name: 'get_upcoming_events', desc: 'Fetch upcoming client meetings, demos, and deadlines for next 7-30 days.', args: ['days_ahead', 'event_type', 'limit'] },
-      { name: 'schedule_event', desc: 'Schedule new client follow-up, demo call, or project deadline.', args: ['title', 'start_time', 'meeting_url', 'client_name'] }
+      { name: 'schedule_event', desc: 'Schedule new client follow-up, demo call, or project deadline.', args: ['title', 'start_time', 'meeting_url', 'client_name'] },
+      { name: 'process_meeting_transcript', desc: 'Auto-file call notes/transcripts into CRM, set next follow-up, and create action tasks.', args: ['client_name', 'transcript_or_notes', 'action_items', 'next_follow_up'] }
+    ]
+  },
+  {
+    module: 'Executive Intelligence & Sales',
+    badge: 'AI Strategy',
+    tools: [
+      { name: 'get_daily_briefing', desc: '10-second morning briefing: today\'s follow-ups, urgent tasks, and overdue receivables.', args: ['none'] },
+      { name: 'convert_lead_to_client', desc: 'Deal Won pipeline: marks Won, creates client, starts project & assigns 3 onboarding tasks.', args: ['lead_name', 'project_name', 'project_value', 'service_type'] },
+      { name: 'get_stalled_leads_warning', desc: 'Detects deals inactive for > 5 days and generates tailored re-engagement prompts.', args: ['days_inactive'] },
+      { name: 'qualify_lead', desc: 'Automated deal qualification scorer (Tier A/B/C) based on budget, urgency & scope.', args: ['budget', 'urgency', 'requirement_summary'] }
+    ]
+  },
+  {
+    module: 'Security, Partners & Legal',
+    badge: 'Operations',
+    tools: [
+      { name: 'query_vault_credentials', desc: 'Securely look up client staging URLs & platform credentials with automatic audit logging.', args: ['platform_or_client', 'requester_name'] },
+      { name: 'store_vault_credential', desc: 'Securely store encrypted credentials or API keys in the vault.', args: ['platform_name', 'username', 'password', 'environment'] },
+      { name: 'calculate_partner_commissions', desc: 'Track affiliate referral revenue, 10% commission calculations, and pending payouts.', args: ['partner_code', 'partner_name'] },
+      { name: 'register_partner', desc: 'Onboard and register a new affiliate partner with referral code & commission rate.', args: ['name', 'email', 'referral_code', 'commission_rate'] },
+      { name: 'create_partner_referral', desc: 'Log a client or deal referral under an affiliate partner with commission attribution.', args: ['partner_name', 'client_name', 'deal_value', 'deal_status'] },
+      { name: 'record_partner_payout', desc: 'Record a completed commission payout to an affiliate partner with transaction ref.', args: ['partner_code', 'amount', 'transaction_ref'] },
+      { name: 'draft_communication', desc: '1-Click WhatsApp & Email follow-up copy generator with instant wa.me direct links.', args: ['recipient_name', 'phone', 'purpose', 'channel'] },
+      { name: 'generate_legal_contract', desc: 'Generate standardized Mutual NDAs, MSAs, and Statements of Work in clean Markdown.', args: ['party_name', 'contract_type', 'commercial_terms'] },
+      { name: 'list_agreements', desc: 'List contracts, NDAs, and agreements by client or status.', args: ['client_name', 'agreement_type', 'status'] }
+    ]
+  },
+  {
+    module: 'Issues & Quality Assurance',
+    badge: 'Support',
+    tools: [
+      { name: 'create_issue', desc: 'Report and log client bugs, UI revisions, or feature requests with auto ticket numbers.', args: ['title', 'description', 'project_name', 'priority'] },
+      { name: 'list_issues', desc: 'List QA issues and bug tickets filtered by status, priority, or project.', args: ['status', 'priority', 'project_name'] },
+      { name: 'resolve_issue', desc: 'Mark issue resolved or closed with technical resolution notes.', args: ['ticket_number', 'resolution_notes', 'status'] }
+    ]
+  },
+  {
+    module: 'Expenses & Business Costs',
+    badge: 'Finance',
+    tools: [
+      { name: 'record_expense', desc: 'Record operational expense, SaaS tool, or cloud cost with vendor details.', args: ['amount', 'description', 'category', 'vendor'] },
+      { name: 'list_expenses', desc: 'List expenses and calculate total cost totals by category.', args: ['category'] }
+    ]
+  },
+  {
+    module: 'Documents & Asset Vault',
+    badge: 'Assets',
+    tools: [
+      { name: 'add_document_link', desc: 'Save a specification, contract, design link, or deliverable asset to CRM Documents Vault.', args: ['title', 'file_url', 'doc_type', 'client_name'] },
+      { name: 'list_documents', desc: 'Search documents, contracts, and uploaded asset links in CRM.', args: ['doc_type'] }
+    ]
+  },
+  {
+    module: 'Team Workload & Broadcast',
+    badge: 'Collaboration',
+    tools: [
+      { name: 'send_notification', desc: 'Broadcast an announcement or alert to team member dashboards in AGX CRM.', args: ['title', 'message', 'notification_type'] },
+      { name: 'get_team_workload', desc: 'Check team capacity, active task counts, and workload distribution across all members.', args: ['none'] }
+    ]
+  },
+  {
+    module: 'Audit & Compliance',
+    badge: 'Governance',
+    tools: [
+      { name: 'get_audit_logs', desc: 'Query system security audit logs, data mutations, and change history.', args: ['user_name', 'action_type', 'entity_type', 'limit'] }
     ]
   }
 ];

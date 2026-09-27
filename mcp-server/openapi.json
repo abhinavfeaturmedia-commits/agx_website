@@ -37,17 +37,30 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "query": { "type": "string", "description": "Search term" },
-                  "status": { "type": "string", "description": "NEW, CONTACTED, QUALIFIED, PROPOSAL SENT, NEGOTIATION, WON, LOST" },
-                  "priority": { "type": "string", "description": "Low, Medium, High, Urgent" },
-                  "limit": { "type": "number" }
+                  "query": {
+                    "type": "string",
+                    "description": "Search term"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "NEW, CONTACTED, QUALIFIED, PROPOSAL SENT, NEGOTIATION, WON, LOST"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "Low, Medium, High, Urgent"
+                  },
+                  "limit": {
+                    "type": "number"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "List of matching leads" }
+          "200": {
+            "description": "List of matching leads"
+          }
         }
       }
     },
@@ -61,24 +74,52 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name"],
+                "required": [
+                  "name"
+                ],
                 "properties": {
-                  "name": { "type": "string" },
-                  "company": { "type": "string" },
-                  "phone": { "type": "string" },
-                  "email": { "type": "string" },
-                  "interested_service": { "type": "string" },
-                  "estimated_deal_value": { "type": "number" },
-                  "priority": { "type": "string", "enum": ["Low", "Medium", "High", "Urgent"] },
-                  "next_follow_up": { "type": "string" },
-                  "notes": { "type": "string" }
+                  "name": {
+                    "type": "string"
+                  },
+                  "company": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "interested_service": {
+                    "type": "string"
+                  },
+                  "estimated_deal_value": {
+                    "type": "number"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "Low",
+                      "Medium",
+                      "High",
+                      "Urgent"
+                    ]
+                  },
+                  "next_follow_up": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Lead created successfully" }
+          "200": {
+            "description": "Lead created successfully"
+          }
         }
       }
     },
@@ -93,20 +134,45 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "id": { "type": "string" },
-                  "name": { "type": "string" },
-                  "status": { "type": "string", "enum": ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL SENT", "NEGOTIATION", "WON", "LOST"] },
-                  "estimated_deal_value": { "type": "number" },
-                  "priority": { "type": "string" },
-                  "next_follow_up": { "type": "string" },
-                  "notes": { "type": "string" }
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "NEW",
+                      "CONTACTED",
+                      "QUALIFIED",
+                      "PROPOSAL SENT",
+                      "NEGOTIATION",
+                      "WON",
+                      "LOST"
+                    ]
+                  },
+                  "estimated_deal_value": {
+                    "type": "number"
+                  },
+                  "priority": {
+                    "type": "string"
+                  },
+                  "next_follow_up": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Lead updated successfully" }
+          "200": {
+            "description": "Lead updated successfully"
+          }
         }
       }
     },
@@ -120,20 +186,42 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["activity_type", "notes"],
+                "required": [
+                  "activity_type",
+                  "notes"
+                ],
                 "properties": {
-                  "lead_id": { "type": "string" },
-                  "lead_name": { "type": "string" },
-                  "activity_type": { "type": "string", "enum": ["Call", "WhatsApp", "Email", "Meeting", "Note"] },
-                  "notes": { "type": "string" },
-                  "set_next_follow_up": { "type": "string" }
+                  "lead_id": {
+                    "type": "string"
+                  },
+                  "lead_name": {
+                    "type": "string"
+                  },
+                  "activity_type": {
+                    "type": "string",
+                    "enum": [
+                      "Call",
+                      "WhatsApp",
+                      "Email",
+                      "Meeting",
+                      "Note"
+                    ]
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "set_next_follow_up": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Activity logged" }
+          "200": {
+            "description": "Activity logged"
+          }
         }
       }
     },
@@ -148,15 +236,21 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "query": { "type": "string" },
-                  "status": { "type": "string" }
+                  "query": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "List of clients" }
+          "200": {
+            "description": "List of clients"
+          }
         }
       }
     },
@@ -170,21 +264,38 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name", "company"],
+                "required": [
+                  "name",
+                  "company"
+                ],
                 "properties": {
-                  "name": { "type": "string" },
-                  "company": { "type": "string" },
-                  "email": { "type": "string" },
-                  "phone": { "type": "string" },
-                  "total_value": { "type": "number" },
-                  "notes": { "type": "string" }
+                  "name": {
+                    "type": "string"
+                  },
+                  "company": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "total_value": {
+                    "type": "number"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Client created" }
+          "200": {
+            "description": "Client created"
+          }
         }
       }
     },
@@ -199,15 +310,21 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "status": { "type": "string" },
-                  "client_name": { "type": "string" }
+                  "status": {
+                    "type": "string"
+                  },
+                  "client_name": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "List of projects" }
+          "200": {
+            "description": "List of projects"
+          }
         }
       }
     },
@@ -221,20 +338,35 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name", "client_name"],
+                "required": [
+                  "name",
+                  "client_name"
+                ],
                 "properties": {
-                  "name": { "type": "string" },
-                  "client_name": { "type": "string" },
-                  "service_type": { "type": "string" },
-                  "project_value": { "type": "number" },
-                  "due_date": { "type": "string" }
+                  "name": {
+                    "type": "string"
+                  },
+                  "client_name": {
+                    "type": "string"
+                  },
+                  "service_type": {
+                    "type": "string"
+                  },
+                  "project_value": {
+                    "type": "number"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Project created" }
+          "200": {
+            "description": "Project created"
+          }
         }
       }
     },
@@ -249,16 +381,24 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "status": { "type": "string" },
-                  "priority": { "type": "string" },
-                  "due_today": { "type": "boolean" }
+                  "status": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "string"
+                  },
+                  "due_today": {
+                    "type": "boolean"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "List of tasks" }
+          "200": {
+            "description": "List of tasks"
+          }
         }
       }
     },
@@ -272,21 +412,37 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["title"],
+                "required": [
+                  "title"
+                ],
                 "properties": {
-                  "title": { "type": "string" },
-                  "description": { "type": "string" },
-                  "assigned_to": { "type": "string" },
-                  "priority": { "type": "string" },
-                  "due_date": { "type": "string" },
-                  "project_name": { "type": "string" }
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "assigned_to": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "project_name": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Task created" }
+          "200": {
+            "description": "Task created"
+          }
         }
       }
     },
@@ -301,17 +457,27 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "id": { "type": "string" },
-                  "title": { "type": "string" },
-                  "status": { "type": "string" },
-                  "assigned_to": { "type": "string" }
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "assigned_to": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Task updated" }
+          "200": {
+            "description": "Task updated"
+          }
         }
       }
     },
@@ -326,14 +492,19 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "period": { "type": "string", "description": "Optional period filter: this_month, all_time" }
+                  "period": {
+                    "type": "string",
+                    "description": "Optional period filter: this_month, all_time"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Financial metrics" }
+          "200": {
+            "description": "Financial metrics"
+          }
         }
       }
     },
@@ -347,18 +518,28 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["amount"],
+                "required": [
+                  "amount"
+                ],
                 "properties": {
-                  "invoice_number": { "type": "string" },
-                  "amount": { "type": "number" },
-                  "payment_method": { "type": "string" }
+                  "invoice_number": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "number"
+                  },
+                  "payment_method": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Payment recorded" }
+          "200": {
+            "description": "Payment recorded"
+          }
         }
       }
     },
@@ -373,14 +554,18 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "days_ahead": { "type": "number" }
+                  "days_ahead": {
+                    "type": "number"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Upcoming events" }
+          "200": {
+            "description": "Upcoming events"
+          }
         }
       }
     },
@@ -394,19 +579,1513 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["title", "start_time"],
+                "required": [
+                  "title",
+                  "start_time"
+                ],
                 "properties": {
-                  "title": { "type": "string" },
-                  "start_time": { "type": "string" },
-                  "meeting_url": { "type": "string" },
-                  "client_name": { "type": "string" }
+                  "title": {
+                    "type": "string"
+                  },
+                  "start_time": {
+                    "type": "string"
+                  },
+                  "meeting_url": {
+                    "type": "string"
+                  },
+                  "client_name": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Event scheduled" }
+          "200": {
+            "description": "Event scheduled"
+          }
+        }
+      }
+    },
+    "/api/tools/get_daily_briefing": {
+      "post": {
+        "summary": "Get morning executive briefing of follow-ups, urgent tasks, calendar events, and overdue bills",
+        "operationId": "getDailyBriefing",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Daily briefing summary"
+          }
+        }
+      }
+    },
+    "/api/tools/convert_lead_to_client": {
+      "post": {
+        "summary": "Deal Won automated pipeline: converts lead to active client, creates project, and assigns kickoff onboarding tasks",
+        "operationId": "convertLeadToClient",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "lead_id": {
+                    "type": "string",
+                    "description": "UUID of lead"
+                  },
+                  "lead_name": {
+                    "type": "string",
+                    "description": "Full or partial name of lead to match"
+                  },
+                  "company": {
+                    "type": "string",
+                    "description": "Client company name"
+                  },
+                  "project_name": {
+                    "type": "string",
+                    "description": "Title of the project"
+                  },
+                  "service_type": {
+                    "type": "string",
+                    "description": "Workflow Automation, Custom AI Agent, etc."
+                  },
+                  "project_value": {
+                    "type": "number",
+                    "description": "Total commercial value in INR"
+                  },
+                  "project_manager": {
+                    "type": "string",
+                    "description": "Assigned PM"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Client, project, and kickoff onboarding tasks created"
+          }
+        }
+      }
+    },
+    "/api/tools/create_quotation": {
+      "post": {
+        "summary": "Generate an official commercial proposal quotation with GST calculation and items breakdown",
+        "operationId": "createQuotation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "client_name"
+                ],
+                "properties": {
+                  "client_name": {
+                    "type": "string",
+                    "description": "Client or company name"
+                  },
+                  "lead_name": {
+                    "type": "string",
+                    "description": "Associated lead name"
+                  },
+                  "lead_id": {
+                    "type": "string",
+                    "description": "Optional lead UUID"
+                  },
+                  "project_name": {
+                    "type": "string",
+                    "description": "Project title"
+                  },
+                  "service_description": {
+                    "type": "string",
+                    "description": "Main service scope"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Lump sum amount if not specifying itemized array"
+                  },
+                  "items": {
+                    "type": "array",
+                    "description": "Itemized deliverables",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unit_price": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "valid_days": {
+                    "type": "number",
+                    "description": "Number of days quotation remains valid (default 15)"
+                  },
+                  "is_gst": {
+                    "type": "boolean",
+                    "description": "Apply 18% GST (default true)"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Commercial terms and milestones"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Official quotation record created"
+          }
+        }
+      }
+    },
+    "/api/tools/create_invoice": {
+      "post": {
+        "summary": "Create and issue an official milestone invoice with GST and payment instructions",
+        "operationId": "createInvoice",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "client_name"
+                ],
+                "properties": {
+                  "client_name": {
+                    "type": "string",
+                    "description": "Client company name"
+                  },
+                  "client_id": {
+                    "type": "string",
+                    "description": "Optional client UUID"
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "description": "Optional project UUID"
+                  },
+                  "service_description": {
+                    "type": "string",
+                    "description": "Milestone description"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Subtotal amount in INR"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unit_price": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "due_days": {
+                    "type": "number",
+                    "description": "Days until payment due (default 7)"
+                  },
+                  "is_gst": {
+                    "type": "boolean",
+                    "description": "Apply 18% GST (default true)"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Payment instructions"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invoice created and issued"
+          }
+        }
+      }
+    },
+    "/api/tools/get_stalled_leads_warning": {
+      "post": {
+        "summary": "Analyze pipeline to detect stalled leads inactive for > 5 days and provide revival recommendations",
+        "operationId": "getStalledLeadsWarning",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "days_inactive": {
+                    "type": "number",
+                    "description": "Days without activity (default 5)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of stalled leads at risk"
+          }
+        }
+      }
+    },
+    "/api/tools/qualify_lead": {
+      "post": {
+        "summary": "Score and evaluate an incoming lead against AGX deal criteria (Tier A/B/C)",
+        "operationId": "qualifyLead",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "lead_id": {
+                    "type": "string",
+                    "description": "Optional UUID of lead to update in database"
+                  },
+                  "budget": {
+                    "type": "number",
+                    "description": "Estimated budget in INR"
+                  },
+                  "urgency": {
+                    "type": "string",
+                    "description": "Immediate, Within 1 month, Exploring"
+                  },
+                  "company_size": {
+                    "type": "string",
+                    "description": "Team or company size"
+                  },
+                  "requirement_summary": {
+                    "type": "string",
+                    "description": "Summary of requirements"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Qualification score and recommendation"
+          }
+        }
+      }
+    },
+    "/api/tools/process_meeting_transcript": {
+      "post": {
+        "summary": "Process raw client meeting notes or call transcripts, log to CRM, update follow-ups, and auto-create action item tasks",
+        "operationId": "processMeetingTranscript",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "transcript_or_notes"
+                ],
+                "properties": {
+                  "lead_name": {
+                    "type": "string",
+                    "description": "Lead or client name"
+                  },
+                  "client_name": {
+                    "type": "string",
+                    "description": "Client name"
+                  },
+                  "transcript_or_notes": {
+                    "type": "string",
+                    "description": "Raw meeting transcript or notes"
+                  },
+                  "meeting_type": {
+                    "type": "string",
+                    "description": "Discovery Call, Demo, Project Review, Support"
+                  },
+                  "next_follow_up": {
+                    "type": "string",
+                    "description": "ISO timestamp for next follow-up"
+                  },
+                  "action_items": {
+                    "type": "array",
+                    "description": "List of action item task titles to create",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Meeting logged and action tasks created"
+          }
+        }
+      }
+    },
+    "/api/tools/get_overdue_invoices": {
+      "post": {
+        "summary": "Identify overdue receivables and generate polite pre-formatted WhatsApp & Email payment reminder messages",
+        "operationId": "getOverdueInvoices",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Overdue invoices with reminder copy"
+          }
+        }
+      }
+    },
+    "/api/tools/query_vault_credentials": {
+      "post": {
+        "summary": "Securely look up client staging URLs, platform accounts, and configurations from Credentials Vault (with automatic audit logging)",
+        "operationId": "queryVaultCredentials",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "platform_or_client"
+                ],
+                "properties": {
+                  "platform_or_client": {
+                    "type": "string",
+                    "description": "Platform name, service URL, or client name"
+                  },
+                  "requester_name": {
+                    "type": "string",
+                    "description": "Name of person requesting access"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Vault credentials and audit entry confirmation"
+          }
+        }
+      }
+    },
+    "/api/tools/calculate_partner_commissions": {
+      "post": {
+        "summary": "Calculate affiliate referral revenue, commission earnings (10%), and pending payout balance for a partner",
+        "operationId": "calculatePartnerCommissions",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "partner_code": {
+                    "type": "string",
+                    "description": "Partner referral code (e.g., AGX-ABHIN-9353)"
+                  },
+                  "partner_name": {
+                    "type": "string",
+                    "description": "Partner full name"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Commission and payout calculation"
+          }
+        }
+      }
+    },
+    "/api/tools/draft_communication": {
+      "post": {
+        "summary": "Draft high-converting follow-up WhatsApp or Email messages with 1-click wa.me dispatch links",
+        "operationId": "draftCommunication",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "recipient_name"
+                ],
+                "properties": {
+                  "channel": {
+                    "type": "string",
+                    "description": "WhatsApp or Email"
+                  },
+                  "recipient_name": {
+                    "type": "string",
+                    "description": "Name of lead or client"
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Recipient phone number (e.g. 9921335360)"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "description": "Proposal Follow-up, Meeting Confirmation, Payment Reminder, Project Update"
+                  },
+                  "custom_notes": {
+                    "type": "string",
+                    "description": "Additional specific details or context"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ready-to-send copy and wa.me deep-link"
+          }
+        }
+      }
+    },
+    "/api/tools/generate_legal_contract": {
+      "post": {
+        "summary": "Generate standardized legal agreements (Mutual NDA, Master Service Agreement, Scope of Work) formatted in clean Markdown",
+        "operationId": "generateLegalContract",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "party_name"
+                ],
+                "properties": {
+                  "contract_type": {
+                    "type": "string",
+                    "description": "Mutual NDA, Master Service Agreement, Statement of Work"
+                  },
+                  "party_name": {
+                    "type": "string",
+                    "description": "Legal entity name of counterparty"
+                  },
+                  "effective_date": {
+                    "type": "string",
+                    "description": "Effective start date (YYYY-MM-DD)"
+                  },
+                  "commercial_terms": {
+                    "type": "string",
+                    "description": "Pricing, milestones, and payment schedule"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agreement generated and saved to CRM database"
+          }
+        }
+      }
+    },
+    "/api/tools/create_issue": {
+      "post": {
+        "summary": "Report and log a client bug, UI revision, or technical issue ticket in CRM",
+        "operationId": "createIssue",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "Title or headline of the issue"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Detailed explanation of bug or request"
+                  },
+                  "project_name": {
+                    "type": "string",
+                    "description": "Name of project"
+                  },
+                  "client_name": {
+                    "type": "string",
+                    "description": "Client company name"
+                  },
+                  "issue_type": {
+                    "type": "string",
+                    "description": "Bug, UI/UX Polish, Content Change, Feature Revision, Performance, Access/Config"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "Low, Medium, High, Critical"
+                  },
+                  "assigned_to": {
+                    "type": "string",
+                    "description": "Assigned developer or engineer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Issue ticket created"
+          }
+        }
+      }
+    },
+    "/api/tools/list_issues": {
+      "post": {
+        "summary": "List client QA issues and bug tickets filtered by status, priority, or project",
+        "operationId": "listIssues",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "description": "REPORTED, IN REVIEW, IN PROGRESS, RESOLVED, CLOSED"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "Low, Medium, High, Critical"
+                  },
+                  "project_name": {
+                    "type": "string",
+                    "description": "Filter by project name"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of issues"
+          }
+        }
+      }
+    },
+    "/api/tools/resolve_issue": {
+      "post": {
+        "summary": "Mark an issue ticket as RESOLVED or CLOSED with resolution notes",
+        "operationId": "resolveIssue",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ticket_number": {
+                    "type": "string",
+                    "description": "Ticket code (e.g. ISS-2026-1042)"
+                  },
+                  "resolution_notes": {
+                    "type": "string",
+                    "description": "Explanation of fix deployed"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "RESOLVED or CLOSED"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Issue resolved"
+          }
+        }
+      }
+    },
+    "/api/tools/record_expense": {
+      "post": {
+        "summary": "Record a business operational expense, SaaS tool, or cloud cost",
+        "operationId": "recordExpense",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "amount",
+                  "description"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "description": "Expense amount in INR"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Description of expense"
+                  },
+                  "category": {
+                    "type": "string",
+                    "description": "Developer Cost, SaaS Tools, Infrastructure/Cloud, Marketing/Ads, Office, Other"
+                  },
+                  "vendor": {
+                    "type": "string",
+                    "description": "Vendor or service provider"
+                  },
+                  "payment_method": {
+                    "type": "string",
+                    "description": "Payment method used"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Expense recorded"
+          }
+        }
+      }
+    },
+    "/api/tools/list_expenses": {
+      "post": {
+        "summary": "List business expenses and calculate total cost totals by category",
+        "operationId": "listExpenses",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "description": "Developer Cost, SaaS Tools, Infrastructure/Cloud, Marketing/Ads, Office"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of expenses and total sum"
+          }
+        }
+      }
+    },
+    "/api/tools/add_document_link": {
+      "post": {
+        "summary": "Save a specification, contract, design link, or deliverable asset to CRM Documents Vault",
+        "operationId": "addDocumentLink",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title",
+                  "file_url"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "Title of document"
+                  },
+                  "file_url": {
+                    "type": "string",
+                    "description": "Direct URL or Google Drive link"
+                  },
+                  "doc_type": {
+                    "type": "string",
+                    "description": "Contract, NDA, Proposal, Specification, Design, Invoice, Other"
+                  },
+                  "client_name": {
+                    "type": "string",
+                    "description": "Associated client name"
+                  },
+                  "lead_name": {
+                    "type": "string",
+                    "description": "Associated lead name"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document link saved"
+          }
+        }
+      }
+    },
+    "/api/tools/list_documents": {
+      "post": {
+        "summary": "Search documents, contracts, and uploaded asset links in CRM",
+        "operationId": "listDocuments",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "doc_type": {
+                    "type": "string",
+                    "description": "Contract, NDA, Proposal, Specification, Design"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Matching documents"
+          }
+        }
+      }
+    },
+    "/api/tools/register_partner": {
+      "post": {
+        "summary": "Onboard and register a new affiliate or channel partner with custom referral code and commission rate",
+        "operationId": "registerPartner",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "email"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Partner full name"
+                  },
+                  "email": {
+                    "type": "string",
+                    "description": "Partner email"
+                  },
+                  "company": {
+                    "type": "string",
+                    "description": "Partner agency or company name"
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Phone number"
+                  },
+                  "referral_code": {
+                    "type": "string",
+                    "description": "Unique referral code (e.g. AGX-PUNE-10)"
+                  },
+                  "commission_rate": {
+                    "type": "number",
+                    "description": "Commission rate (e.g. 0.10 for 10%)"
+                  },
+                  "payout_method": {
+                    "type": "string",
+                    "description": "UPI, Bank Transfer, PayPal"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Partner registered"
+          }
+        }
+      }
+    },
+    "/api/tools/record_partner_payout": {
+      "post": {
+        "summary": "Record a completed commission payout to an affiliate partner with transaction reference",
+        "operationId": "recordPartnerPayout",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "partner_code",
+                  "amount"
+                ],
+                "properties": {
+                  "partner_code": {
+                    "type": "string",
+                    "description": "Partner referral code or UUID"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Payout amount in INR"
+                  },
+                  "payment_method": {
+                    "type": "string",
+                    "description": "UPI, Bank Transfer, PayPal"
+                  },
+                  "transaction_ref": {
+                    "type": "string",
+                    "description": "Bank UTR or transaction ID"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Payout notes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Partner payout recorded"
+          }
+        }
+      }
+    },
+    "/api/tools/send_notification": {
+      "post": {
+        "summary": "Broadcast an announcement or alert to team member dashboards in AGX CRM",
+        "operationId": "sendNotification",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title",
+                  "message"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "Headline of notification"
+                  },
+                  "message": {
+                    "type": "string",
+                    "description": "Detailed message text"
+                  },
+                  "notification_type": {
+                    "type": "string",
+                    "description": "info, warning, success, urgent"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification broadcasted"
+          }
+        }
+      }
+    },
+    "/api/tools/get_team_workload": {
+      "post": {
+        "summary": "Check team capacity, active task counts, and workload distribution across all members",
+        "operationId": "getTeamWorkload",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Team workload breakdown"
+          }
+        }
+      }
+    },
+    "/api/tools/update_client": {
+      "post": {
+        "summary": "Update client profile details, address, tax ID, or status",
+        "operationId": "updateClient",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Client UUID"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Client contact or company name"
+                  },
+                  "company": {
+                    "type": "string",
+                    "description": "Company legal/trade name"
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Phone number"
+                  },
+                  "email": {
+                    "type": "string",
+                    "description": "Email address"
+                  },
+                  "address": {
+                    "type": "string",
+                    "description": "Physical office address"
+                  },
+                  "gst_tax_id": {
+                    "type": "string",
+                    "description": "GSTIN or Tax ID"
+                  },
+                  "industry": {
+                    "type": "string",
+                    "description": "Client industry"
+                  },
+                  "website": {
+                    "type": "string",
+                    "description": "Client website URL"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Active, Inactive, On Hold"
+                  },
+                  "account_manager": {
+                    "type": "string",
+                    "description": "Assigned account manager"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Internal notes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated client details"
+          }
+        }
+      }
+    },
+    "/api/tools/update_project": {
+      "post": {
+        "summary": "Update project status, progress %, due dates, or PM",
+        "operationId": "updateProject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Project UUID"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Project title to search"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "NOT STARTED, PLANNING, IN PROGRESS, TESTING, CLIENT REVIEW, REVISION, COMPLETED, MAINTENANCE"
+                  },
+                  "progress": {
+                    "type": "number",
+                    "description": "Completion percentage (0 to 100)"
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "description": "Target completion date (YYYY-MM-DD)"
+                  },
+                  "delivery_date": {
+                    "type": "string",
+                    "description": "Actual delivery date (YYYY-MM-DD)"
+                  },
+                  "project_manager": {
+                    "type": "string",
+                    "description": "Assigned Project Manager"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "Low, Medium, High, Urgent"
+                  },
+                  "project_value": {
+                    "type": "number",
+                    "description": "Total commercial value"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Project description/scope"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated project details"
+          }
+        }
+      }
+    },
+    "/api/tools/create_milestone": {
+      "post": {
+        "summary": "Add a project milestone with due date and commercial amount",
+        "operationId": "createMilestone",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "project_id": {
+                    "type": "string",
+                    "description": "Project UUID"
+                  },
+                  "project_name": {
+                    "type": "string",
+                    "description": "Project name to associate with"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Milestone title (e.g. Phase 1 - Architecture & Database)"
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "description": "Target milestone date (YYYY-MM-DD)"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Commercial amount tied to milestone in INR"
+                  },
+                  "progress": {
+                    "type": "number",
+                    "description": "Milestone progress % (0 to 100)"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Pending, In Progress, Completed"
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created milestone details"
+          }
+        }
+      }
+    },
+    "/api/tools/update_milestone": {
+      "post": {
+        "summary": "Update milestone status, completion %, or billing state",
+        "operationId": "updateMilestone",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Milestone UUID"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Milestone title to search"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Pending, In Progress, Completed"
+                  },
+                  "progress": {
+                    "type": "number",
+                    "description": "Milestone progress % (0 to 100)"
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "description": "Due date (YYYY-MM-DD)"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Milestone amount in INR"
+                  },
+                  "is_invoiced": {
+                    "type": "boolean",
+                    "description": "Whether milestone has been invoiced"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated milestone details"
+          }
+        }
+      }
+    },
+    "/api/tools/list_invoices": {
+      "post": {
+        "summary": "List and filter invoices by client or payment status",
+        "operationId": "listInvoices",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client_name": {
+                    "type": "string",
+                    "description": "Filter by client name"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Draft, Sent, Paid, Partially Paid, Overdue"
+                  },
+                  "limit": {
+                    "type": "number",
+                    "description": "Max invoices to return (default 20)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of invoices"
+          }
+        }
+      }
+    },
+    "/api/tools/list_quotations": {
+      "post": {
+        "summary": "List and filter quotations and proposals",
+        "operationId": "listQuotations",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client_name": {
+                    "type": "string",
+                    "description": "Filter by client name"
+                  },
+                  "lead_name": {
+                    "type": "string",
+                    "description": "Filter by lead name"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Draft, Sent, Accepted, Declined, Expired, Converted"
+                  },
+                  "limit": {
+                    "type": "number",
+                    "description": "Max quotations to return"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of quotations"
+          }
+        }
+      }
+    },
+    "/api/tools/list_agreements": {
+      "post": {
+        "summary": "List contracts, NDAs, and agreements",
+        "operationId": "listAgreements",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client_name": {
+                    "type": "string",
+                    "description": "Filter by client or contract name"
+                  },
+                  "agreement_type": {
+                    "type": "string",
+                    "description": "Master Service Agreement, NDA, Statement of Work, Retainer, Proposal"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Draft, Sent, Signed, Expired, Cancelled"
+                  },
+                  "limit": {
+                    "type": "number",
+                    "description": "Max agreements to return"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of contracts and agreements"
+          }
+        }
+      }
+    },
+    "/api/tools/store_vault_credential": {
+      "post": {
+        "summary": "Securely store encrypted credentials or API keys in the vault",
+        "operationId": "storeVaultCredential",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "platform_name": {
+                    "type": "string",
+                    "description": "Service or platform name (e.g. Supabase, OpenAI, AWS)"
+                  },
+                  "username": {
+                    "type": "string",
+                    "description": "Account username, email, or client ID"
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "Encrypted password or secret"
+                  },
+                  "api_key": {
+                    "type": "string",
+                    "description": "API key or secret token"
+                  },
+                  "service_url": {
+                    "type": "string",
+                    "description": "Login portal URL"
+                  },
+                  "environment": {
+                    "type": "string",
+                    "description": "Production, Staging, Sandbox (default Production)"
+                  },
+                  "client_name": {
+                    "type": "string",
+                    "description": "Associate credential with client"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Security notes or description"
+                  }
+                },
+                "required": [
+                  "platform_name",
+                  "username"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmation of stored credential"
+          }
+        }
+      }
+    },
+    "/api/tools/create_partner_referral": {
+      "post": {
+        "summary": "Log a client or deal referral under an affiliate partner",
+        "operationId": "createPartnerReferral",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "partner_name": {
+                    "type": "string",
+                    "description": "Partner agency or affiliate name"
+                  },
+                  "referral_code": {
+                    "type": "string",
+                    "description": "Partner unique referral code"
+                  },
+                  "client_name": {
+                    "type": "string",
+                    "description": "Referred client/lead contact name"
+                  },
+                  "company": {
+                    "type": "string",
+                    "description": "Referred company name"
+                  },
+                  "client_email": {
+                    "type": "string",
+                    "description": "Referred client email"
+                  },
+                  "client_phone": {
+                    "type": "string",
+                    "description": "Referred client phone number"
+                  },
+                  "project_type": {
+                    "type": "string",
+                    "description": "Type of service needed"
+                  },
+                  "deal_value": {
+                    "type": "number",
+                    "description": "Commercial deal value in INR"
+                  },
+                  "commission_rate": {
+                    "type": "number",
+                    "description": "Commission decimal rate (e.g. 0.10 for 10%)"
+                  },
+                  "deal_status": {
+                    "type": "string",
+                    "description": "NEW, CONTACTED, QUALIFIED, PROPOSAL SENT, WON, IN PROGRESS, COMPLETED, LOST"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Referral details or notes"
+                  }
+                },
+                "required": [
+                  "client_name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created partner referral record"
+          }
+        }
+      }
+    },
+    "/api/tools/get_audit_logs": {
+      "post": {
+        "summary": "Query system security audit logs and change history",
+        "operationId": "getAuditLogs",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_name": {
+                    "type": "string",
+                    "description": "Filter by user who performed the action"
+                  },
+                  "action_type": {
+                    "type": "string",
+                    "description": "CREATE, UPDATE, DELETE, STATUS_CHANGE, REVEAL_SECRET, CONVERT_LEAD, PAYMENT_RECORDED"
+                  },
+                  "entity_type": {
+                    "type": "string",
+                    "description": "Lead, Client, Project, Task, Invoice, Payment, Expense, Credential, Agreement, Issue"
+                  },
+                  "limit": {
+                    "type": "number",
+                    "description": "Max audit logs to return (default 20)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of system audit logs"
+          }
         }
       }
     }
