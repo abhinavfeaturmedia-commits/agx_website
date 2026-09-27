@@ -112,7 +112,41 @@ export const handler = async (event: any) => {
   // Extract tool name from path, body, or query params (e.g. /api/tools/create_lead or body.tool)
   const pathParts = event.path.split('/').filter(Boolean);
   const lastPart = pathParts[pathParts.length - 1];
-  const toolName = body.tool || body.name || event.queryStringParameters?.tool || (lastPart !== 'mcp' && lastPart !== 'api' ? lastPart : '');
+  let toolName = body.tool || body.name || event.queryStringParameters?.tool || (lastPart !== 'mcp' && lastPart !== 'api' ? lastPart : '');
+
+  // Smart Multiplexing Normalizer (Guarantees 100% feature coverage under OpenAI 30-operation limit)
+  if (toolName === 'manage_milestones') {
+    toolName = (body.action === 'update' || (body.id && !body.amount)) ? 'update_milestone' : 'create_milestone';
+  } else if (toolName === 'manage_invoices') {
+    if (body.action === 'get_overdue' || body.action === 'overdue') toolName = 'get_overdue_invoices';
+    else if (body.action === 'list') toolName = 'list_invoices';
+    else toolName = 'create_invoice';
+  } else if (toolName === 'manage_quotations') {
+    toolName = body.action === 'list' ? 'list_quotations' : 'create_quotation';
+  } else if (toolName === 'manage_issues') {
+    if (body.action === 'resolve' || body.resolution_notes) toolName = 'resolve_issue';
+    else if (body.action === 'list') toolName = 'list_issues';
+    else toolName = 'create_issue';
+  } else if (toolName === 'manage_expenses') {
+    toolName = body.action === 'list' ? 'list_expenses' : 'record_expense';
+  } else if (toolName === 'manage_vault') {
+    toolName = (body.action === 'store' || body.password || body.api_key) ? 'store_vault_credential' : 'query_vault_credentials';
+  } else if (toolName === 'manage_agreements') {
+    toolName = body.action === 'list' ? 'list_agreements' : 'generate_legal_contract';
+  } else if (toolName === 'manage_partners') {
+    if (body.action === 'referral') toolName = 'create_partner_referral';
+    else if (body.action === 'payout') toolName = 'record_partner_payout';
+    else if (body.action === 'commissions') toolName = 'calculate_partner_commissions';
+    else toolName = 'register_partner';
+  } else if (toolName === 'manage_calendar') {
+    if (body.action === 'transcript' || body.transcript_or_notes) toolName = 'process_meeting_transcript';
+    else if (body.action === 'schedule' || body.start_time) toolName = 'schedule_event';
+    else toolName = 'get_upcoming_events';
+  } else if (toolName === 'manage_team') {
+    if (body.action === 'workload') toolName = 'get_team_workload';
+    else if (body.action === 'audit' || body.action === 'audit_logs') toolName = 'get_audit_logs';
+    else toolName = 'send_notification';
+  }
 
   try {
     let result: any;
