@@ -1055,10 +1055,18 @@ export const crmService = {
       const { error } = await supabase.from(tableName).update({ deleted_at: new Date().toISOString() }).eq('id', id);
       if (error) {
         console.warn(`Soft delete fallback on ${tableName}:`, error.message);
-        await supabase.from(tableName).delete().eq('id', id);
+        const { error: hardDelErr } = await supabase.from(tableName).delete().eq('id', id);
+        if (hardDelErr) {
+          console.error(`Hard delete error on ${tableName}:`, hardDelErr);
+          throw hardDelErr;
+        }
       }
     } catch (_) {
-      await supabase.from(tableName).delete().eq('id', id);
+      const { error: hardDelErr } = await supabase.from(tableName).delete().eq('id', id);
+      if (hardDelErr) {
+        console.error(`Hard delete error on ${tableName}:`, hardDelErr);
+        throw hardDelErr;
+      }
     }
   },
 

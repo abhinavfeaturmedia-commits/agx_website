@@ -1,3 +1,4 @@
+import { supabase } from './db.js';
 import { searchLeads, createLead, updateLead, logLeadActivity } from './tools/leads.js';
 import { getFinancialSummary } from './tools/finance.js';
 import { searchClients } from './tools/clients.js';
@@ -52,7 +53,9 @@ async function runVerification() {
       activity_type: 'Call',
       notes: 'Simulation call: verified MCP tool execution pipeline end-to-end.',
     });
-    console.log('✅ Activity logged:', actRes.success ? 'Success' : 'Failed');
+    // Clean up test lead to avoid cluttering CRM
+    const { error: delErr } = await supabase.from('leads').delete().eq('id', testLead.data.id);
+    console.log('🧹 Test lead cleanup:', !delErr ? '✅ Deleted test lead' : '⚠️ Cleanup warning: ' + delErr.message);
   } else {
     console.log('❌ Lead creation failed:', testLead.error);
   }

@@ -47,13 +47,14 @@ export const INITIAL_PARTNER_PAYOUTS: PartnerPayout[] = [];
 
 const STORAGE_PREFIX = 'agx_crm_';
 
-// Purge legacy mock data cache once on initial load
-const CLEAN_VERSION_KEY = 'agx_crm_prod_clean_v1';
-if (typeof window !== 'undefined' && !localStorage.getItem(CLEAN_VERSION_KEY)) {
+// Purge legacy mock data and stale offline cache once on initial load / version bump
+const CLEAN_VERSION_KEY = 'agx_crm_prod_clean_v2';
+if (typeof window !== 'undefined' && localStorage.getItem(CLEAN_VERSION_KEY) !== 'true') {
   const keysToClean = [
-    'leads', 'clients', 'projects', 'tasks', 'invoices', 'payments',
+    'leads', 'clients', 'projects', 'tasks', 'invoices', 'quotations', 'payments',
     'expenses', 'agreements', 'documents', 'credentials', 'events',
-    'notifications', 'audit_logs', 'issues', 'team_members'
+    'notifications', 'audit_logs', 'issues', 'team_members', 'partners',
+    'partner_referrals', 'partner_payouts'
   ];
   keysToClean.forEach(k => localStorage.removeItem(STORAGE_PREFIX + k));
   localStorage.setItem(CLEAN_VERSION_KEY, 'true');
@@ -190,49 +191,13 @@ function useCrmStoreInternal() {
       const data = await crmService.fetchAllData();
 
       if (data.profiles !== undefined) setTeamMembers(data.profiles.length > 0 ? data.profiles : INITIAL_USERS);
-      
-      // Resilient Smart Merge for Leads: keep pending local items until verified in cloud
-      if (data.leads !== undefined) {
-        setLeads(prevLocal => {
-          const cloudIds = new Set(data.leads!.map(l => l.id));
-          const localPending = prevLocal.filter(l => !cloudIds.has(l.id));
-          return [...data.leads!, ...localPending];
-        });
-      }
+      if (data.leads !== undefined) setLeads(data.leads);
       if (data.clients !== undefined) setClients(data.clients);
       if (data.projects !== undefined) setProjects(data.projects);
       if (data.tasks !== undefined) setTasks(data.tasks);
-
-      // Resilient Smart Merge for Invoices: keep pending local items until verified in cloud
-      if (data.invoices !== undefined) {
-        setInvoices(prevLocal => {
-          const cloudIds = new Set(data.invoices!.map(i => i.id));
-          const cloudNumbers = new Set(data.invoices!.map(i => i.invoiceNumber));
-          const localPending = prevLocal.filter(l => !cloudIds.has(l.id) && !cloudNumbers.has(l.invoiceNumber));
-          return [...data.invoices!, ...localPending];
-        });
-      }
-
-      // Resilient Smart Merge for Quotations: keep pending local items until verified in cloud
-      if ((data as any).quotations !== undefined) {
-        const cloudQuotes = (data as any).quotations as Quotation[];
-        setQuotations(prevLocal => {
-          const cloudIds = new Set(cloudQuotes.map(q => q.id));
-          const cloudNumbers = new Set(cloudQuotes.map(q => q.quotationNumber));
-          const localPending = prevLocal.filter(l => !cloudIds.has(l.id) && !cloudNumbers.has(l.quotationNumber));
-          return [...cloudQuotes, ...localPending];
-        });
-      }
-
-      // Resilient Smart Merge for Payments
-      if (data.payments !== undefined) {
-        setPayments(prevLocal => {
-          const cloudIds = new Set(data.payments!.map(p => p.id));
-          const localPending = prevLocal.filter(l => !cloudIds.has(l.id));
-          return [...data.payments!, ...localPending];
-        });
-      }
-
+      if (data.invoices !== undefined) setInvoices(data.invoices);
+      if ((data as any).quotations !== undefined) setQuotations((data as any).quotations);
+      if (data.payments !== undefined) setPayments(data.payments);
       if (data.expenses !== undefined) setExpenses(data.expenses);
       if (data.agreements !== undefined) setAgreements(data.agreements);
       if (data.documents !== undefined) setDocuments(data.documents);
@@ -241,26 +206,8 @@ function useCrmStoreInternal() {
       if (data.notifications !== undefined) setNotifications(data.notifications);
       if (data.auditLogs !== undefined) setAuditLogs(data.auditLogs);
       if ((data as any).partners !== undefined) setPartners((data as any).partners);
-
-      // Resilient Smart Merge for Partner Referrals
-      if ((data as any).partnerReferrals !== undefined) {
-        const cloudRefs = (data as any).partnerReferrals as PartnerReferral[];
-        setPartnerReferrals(prevLocal => {
-          const cloudIds = new Set(cloudRefs.map(r => r.id));
-          const localPending = prevLocal.filter(l => !cloudIds.has(l.id));
-          return [...cloudRefs, ...localPending];
-        });
-      }
-
-      // Resilient Smart Merge for Partner Payouts
-      if ((data as any).partnerPayouts !== undefined) {
-        const cloudPayouts = (data as any).partnerPayouts as PartnerPayout[];
-        setPartnerPayouts(prevLocal => {
-          const cloudIds = new Set(cloudPayouts.map(p => p.id));
-          const localPending = prevLocal.filter(l => !cloudIds.has(l.id));
-          return [...cloudPayouts, ...localPending];
-        });
-      }
+      if ((data as any).partnerReferrals !== undefined) setPartnerReferrals((data as any).partnerReferrals);
+      if ((data as any).partnerPayouts !== undefined) setPartnerPayouts((data as any).partnerPayouts);
 
       const cloudIssues = await crmService.fetchAllIssues();
       if (cloudIssues !== undefined) {
@@ -476,6 +423,18 @@ function useCrmStoreInternal() {
   const deleteLead = (leadId: string) => {
     const lead = leads.find(l => l.id === leadId);
     setLeads(prev => prev.filter(l => l.id !== leadId));
+    try {
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem(STORAGE_PREFIX + 'leads');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter((l: any) => l.id !== leadId);
+            localStorage.setItem(STORAGE_PREFIX + 'leads', JSON.stringify(filtered));
+          }
+        }
+      }
+    } catch (_) {}
     logAudit('DELETE', 'Lead', leadId, `Deleted lead: ${lead?.name || leadId}`);
     toast.warning('Lead Removed', `${lead?.name || 'Lead'} has been deleted.`);
 

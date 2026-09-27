@@ -109,10 +109,21 @@ export const handler = async (event: any) => {
     };
   }
 
-  // Extract tool name from path, body, or query params (e.g. /api/tools/create_lead or body.tool)
-  const pathParts = event.path.split('/').filter(Boolean);
-  const lastPart = pathParts[pathParts.length - 1];
-  let toolName = body.tool || body.name || event.queryStringParameters?.tool || (lastPart !== 'mcp' && lastPart !== 'api' ? lastPart : '');
+  // Extract tool name primarily from URL path (e.g. /api/tools/create_lead or /.netlify/functions/mcp/tools/create_lead)
+  const pathParts = (event.path || '').split('/').filter(Boolean);
+  const lastPart = pathParts.length > 0 ? pathParts[pathParts.length - 1] : '';
+
+  let toolName = '';
+  // Check if lastPart is a specific tool name (and not a generic router segment)
+  if (lastPart && lastPart !== 'mcp' && lastPart !== 'api' && lastPart !== 'tools') {
+    toolName = lastPart;
+  } else if (body.tool) {
+    toolName = body.tool;
+  } else if (body.tool_name) {
+    toolName = body.tool_name;
+  } else if (event.queryStringParameters?.tool) {
+    toolName = event.queryStringParameters.tool;
+  }
 
   // Smart Multiplexing Normalizer (Guarantees 100% feature coverage under OpenAI 30-operation limit)
   if (toolName === 'manage_milestones') {
