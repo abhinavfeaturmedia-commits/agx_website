@@ -46,8 +46,10 @@ This repository is pre-configured for one-click deployment to Netlify:
 2. **Build Settings** (automatically read from [`netlify.toml`](./netlify.toml)):
    - **Build command**: `npm run build`
    - **Publish directory**: `dist`
-   - **Node Version**: 20
+   - **Functions directory**: `netlify/functions`
+   - **Node Version**: 22
 3. **Environment Variables** (Netlify Dashboard > Site Configuration > Environment Variables):
-   - `VITE_SUPABASE_URL` (optional, default provided)
-   - `VITE_SUPABASE_ANON_KEY` (optional, default provided)
-4. **Deploy**: Click **Deploy site**. SPA routing redirects and security headers are automatically configured via `netlify.toml` and `public/_redirects`.
+   - `VITE_SUPABASE_URL` (optional, default fallback configured)
+   - `VITE_SUPABASE_ANON_KEY` (optional, default fallback configured)
+   - `API_AUTH_TOKEN` (optional, custom token for securing `/api/mcp` endpoints)
+4. **Deploy**: Click **Deploy site**. SPA routing redirects, serverless API functions, and security headers are automatically configured via `netlify.toml` and `public/_redirects`.

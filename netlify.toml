@@ -14,11 +14,13 @@
   from = "/api"
   to = "/.netlify/functions/mcp"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/mcp/:splat"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/*"
