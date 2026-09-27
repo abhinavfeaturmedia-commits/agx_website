@@ -10,10 +10,8 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
       },
       plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || '')
-      },
+      // Sensitive API keys should not be baked into the client bundle
+      define: {},
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

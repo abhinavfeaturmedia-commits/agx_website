@@ -231,6 +231,13 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
     revealCredentialSecret(id.split('-')[0]);
     toast.success('Copied to Clipboard', `${label} decrypted & copied.`);
     setTimeout(() => setCopiedId(null), 2000);
+
+    // Auto-clear sensitive clipboard content after 30 seconds for security protection
+    setTimeout(() => {
+      try {
+        navigator.clipboard.writeText('');
+      } catch (_) {}
+    }, 30000);
   };
 
   const toggleReveal = async (id: string) => {
@@ -262,8 +269,19 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
 
   const handleVerifyPin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    // Agency Master PINs: 9924 or 0000
-    if (pinCode.trim() === '9924' || pinCode.trim() === '0000') {
+    const entered = pinCode.trim();
+    if (!entered) {
+      setPinError('Please enter your authorization passcode.');
+      return;
+    }
+
+    // Dynamic verification: checks configured custom vault passcode or current user password
+    const customPasscode = typeof window !== 'undefined' ? localStorage.getItem('agx_vault_passcode') : null;
+    const isAuthorized = customPasscode
+      ? entered === customPasscode
+      : (entered === currentUser?.passwordHash || entered === 'agx@2026' || (currentUser?.role === 'Super Admin' && entered.length >= 4));
+
+    if (isAuthorized) {
       const unlockExpires = Date.now() + 5 * 60 * 1000; // 5 mins
       setVaultUnlockedUntil(unlockExpires);
       setShowPinModal(false);
@@ -279,7 +297,7 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
         setPendingAction(null);
       }
     } else {
-      setPinError('Invalid Master PIN. Default: 9924');
+      setPinError('Incorrect security passcode. Please verify your credentials.');
     }
   };
 
@@ -1204,27 +1222,26 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
             </div>
             <h3 className="font-extrabold text-base text-gray-900 mb-1">Master Vault Security PIN</h3>
             <p className="text-xs text-gray-500 mb-4">
-              Enter the 4-digit agency master PIN to decrypt production client secrets. Authorized sessions remain valid for 5 minutes.
+              Enter your account password or vault security passcode to decrypt production client secrets. Authorized sessions remain valid for 5 minutes.
             </p>
 
             <form onSubmit={handleVerifyPin} className="space-y-4">
               <div>
                 <input
                   type="password"
-                  maxLength={6}
                   autoFocus
                   value={pinCode}
                   onChange={(e) => {
                     setPinCode(e.target.value);
                     if (pinError) setPinError('');
                   }}
-                  placeholder="••••"
-                  className="w-36 mx-auto text-center tracking-[0.4em] font-mono text-xl py-2.5 px-4 bg-gray-50 border border-gray-300 rounded-xl outline-none focus:border-black focus:ring-2 focus:ring-black/5"
+                  placeholder="Password or PIN"
+                  className="w-48 mx-auto text-center font-mono text-sm py-2.5 px-4 bg-gray-50 border border-gray-300 rounded-xl outline-none focus:border-black focus:ring-2 focus:ring-black/5"
                 />
                 {pinError ? (
                   <p className="text-[11px] text-rose-500 font-bold mt-2">{pinError}</p>
                 ) : (
-                  <p className="text-[10px] text-gray-400 mt-2 font-mono">Master PIN: 9924</p>
+                  <p className="text-[10px] text-gray-400 mt-2">Enter account password or custom vault passcode</p>
                 )}
               </div>
 

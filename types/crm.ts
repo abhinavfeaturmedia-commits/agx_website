@@ -333,9 +333,12 @@ export type QuotationItem = InvoiceItem;
 
 export type QuotationStatus = 'Draft' | 'Sent' | 'Accepted' | 'Declined' | 'Expired' | 'Converted';
 
+export type Currency = 'INR' | 'USD' | 'EUR' | 'GBP';
+
 export interface Quotation {
   id: string;
   quotationNumber: string;
+  currency?: Currency;
   leadId?: string;
   leadName?: string;
   clientId?: string;
@@ -380,6 +383,7 @@ export type InvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Partially Paid' | 'Over
 export interface Invoice {
   id: string;
   invoiceNumber: string;
+  currency?: Currency;
   clientId: string;
   clientName: string;
   recipientName?: string;
@@ -418,6 +422,7 @@ export interface Payment {
   id: string;
   invoiceId?: string;
   invoiceNumber?: string;
+  currency?: Currency;
   clientId: string;
   clientName: string;
   projectId?: string;

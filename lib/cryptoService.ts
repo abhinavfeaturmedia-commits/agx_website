@@ -1,13 +1,20 @@
 // Web Crypto API (AES-GCM 256-bit) client-side encryption utility for AGX Credentials Vault
 const ENC_PREFIX = 'enc:v1:';
-const MASTER_SALT = 'agx-os-vault-master-key-salt-2026';
+
+// Dynamic organization / instance seed configuration
+function getMasterSalt(customSeed?: string): string {
+  if (customSeed && customSeed.trim()) return customSeed.trim();
+  const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+  return env.VITE_VAULT_KEY_SEED || 'agx-os-vault-master-key-salt-2026';
+}
 
 // Derive an AES-GCM 256-bit cryptographic key from an organization seed
-async function getCryptoKey(): Promise<CryptoKey> {
+async function getCryptoKey(customSeed?: string): Promise<CryptoKey> {
   const enc = new TextEncoder();
+  const salt = getMasterSalt(customSeed);
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    enc.encode(MASTER_SALT),
+    enc.encode(salt),
     { name: 'PBKDF2' },
     false,
     ['deriveKey']

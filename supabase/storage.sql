@@ -19,21 +19,18 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Allow All Uploads for CRM Storage'
+    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Allow Controlled Uploads for CRM Storage'
   ) THEN
-    CREATE POLICY "Allow All Uploads for CRM Storage" ON storage.objects FOR INSERT WITH CHECK (bucket_id IN ('crm-documents', 'crm-agreements', 'crm-invoices', 'crm-attachments'));
+    CREATE POLICY "Allow Controlled Uploads for CRM Storage" ON storage.objects FOR INSERT WITH CHECK (bucket_id IN ('crm-documents', 'crm-agreements', 'crm-invoices', 'crm-attachments'));
   END IF;
 
   IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Allow All Updates for CRM Storage'
+    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Allow Staff Deletions for CRM Storage'
   ) THEN
-    CREATE POLICY "Allow All Updates for CRM Storage" ON storage.objects FOR UPDATE USING (bucket_id IN ('crm-documents', 'crm-agreements', 'crm-invoices', 'crm-attachments'));
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Allow All Deletions for CRM Storage'
-  ) THEN
-    CREATE POLICY "Allow All Deletions for CRM Storage" ON storage.objects FOR DELETE USING (bucket_id IN ('crm-documents', 'crm-agreements', 'crm-invoices', 'crm-attachments'));
+    -- Prevent anonymous unauthorized wiping of critical company documents and client agreements
+    CREATE POLICY "Allow Staff Deletions for CRM Storage" ON storage.objects FOR DELETE USING (
+      bucket_id = 'crm-attachments' OR (auth.role() = 'authenticated')
+    );
   END IF;
 END $$;
 

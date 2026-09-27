@@ -1,17 +1,18 @@
 {
-  "openapi": "3.0.1",
+  "openapi": "3.1.0",
   "info": {
-    "title": "AGX CRM Assistant API",
-    "description": "API for managing AGX CRM leads, clients, projects, tasks, calendar events, and finance directly through conversational AI.",
+    "title": "AGX CRM Cloud AI API",
+    "description": "24/7 Cloud API for managing AGX CRM leads, clients, projects, tasks, calendar events, and finance directly through conversational AI on ChatGPT, Claude, and Gemini.",
     "version": "1.0.0"
   },
   "servers": [
     {
-      "url": "https://YOUR_DOMAIN_OR_NGROK_TUNNEL.ngrok-free.app",
-      "description": "AGX CRM Server URL"
+      "url": "https://agxperience.netlify.app",
+      "description": "Production Netlify Cloud Server (24/7 Available)"
     }
   ],
   "components": {
+    "schemas": {},
     "securitySchemes": {
       "BearerAuth": {
         "type": "http",
@@ -36,9 +37,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "query": { "type": "string" },
-                  "status": { "type": "string" },
-                  "priority": { "type": "string" },
+                  "query": { "type": "string", "description": "Search term" },
+                  "status": { "type": "string", "description": "NEW, CONTACTED, QUALIFIED, PROPOSAL SENT, NEGOTIATION, WON, LOST" },
+                  "priority": { "type": "string", "description": "Low, Medium, High, Urgent" },
                   "limit": { "type": "number" }
                 }
               }
@@ -52,7 +53,7 @@
     },
     "/api/tools/create_lead": {
       "post": {
-        "summary": "Create a new lead",
+        "summary": "Create a new lead in AGX CRM",
         "operationId": "createLead",
         "requestBody": {
           "required": true,
@@ -68,7 +69,7 @@
                   "email": { "type": "string" },
                   "interested_service": { "type": "string" },
                   "estimated_deal_value": { "type": "number" },
-                  "priority": { "type": "string" },
+                  "priority": { "type": "string", "enum": ["Low", "Medium", "High", "Urgent"] },
                   "next_follow_up": { "type": "string" },
                   "notes": { "type": "string" }
                 }
@@ -94,7 +95,7 @@
                 "properties": {
                   "id": { "type": "string" },
                   "name": { "type": "string" },
-                  "status": { "type": "string" },
+                  "status": { "type": "string", "enum": ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL SENT", "NEGOTIATION", "WON", "LOST"] },
                   "estimated_deal_value": { "type": "number" },
                   "priority": { "type": "string" },
                   "next_follow_up": { "type": "string" },
@@ -138,7 +139,7 @@
     },
     "/api/tools/search_clients": {
       "post": {
-        "summary": "Search clients",
+        "summary": "Search active clients",
         "operationId": "searchClients",
         "requestBody": {
           "required": false,
@@ -161,7 +162,7 @@
     },
     "/api/tools/create_client": {
       "post": {
-        "summary": "Create a new client",
+        "summary": "Create a new client profile",
         "operationId": "createClient",
         "requestBody": {
           "required": true,
@@ -189,7 +190,7 @@
     },
     "/api/tools/list_projects": {
       "post": {
-        "summary": "List projects",
+        "summary": "List client projects",
         "operationId": "listProjects",
         "requestBody": {
           "required": false,
@@ -316,26 +317,29 @@
     },
     "/api/tools/get_financial_summary": {
       "post": {
-        "summary": "Get high-level business financial metrics",
+        "summary": "Get business financial health & metrics",
         "operationId": "getFinancialSummary",
         "requestBody": {
           "required": false,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "period": { "type": "string", "description": "Optional period filter: this_month, all_time" }
+                }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Financial metrics summary" }
+          "200": { "description": "Financial metrics" }
         }
       }
     },
     "/api/tools/record_payment": {
       "post": {
-        "summary": "Record a payment against an invoice",
+        "summary": "Record payment against an invoice",
         "operationId": "recordPayment",
         "requestBody": {
           "required": true,
@@ -382,7 +386,7 @@
     },
     "/api/tools/schedule_event": {
       "post": {
-        "summary": "Schedule a meeting or calendar event",
+        "summary": "Schedule a calendar event or meeting",
         "operationId": "scheduleEvent",
         "requestBody": {
           "required": true,

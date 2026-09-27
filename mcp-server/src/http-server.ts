@@ -15,8 +15,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
-const port = process.env.PORT || 3001;
-const authToken = process.env.API_AUTH_TOKEN || 'agx_secret_token_12345';
+const port = process.env.PORT || 3333;
+const authToken = process.env.API_AUTH_TOKEN || (process.env.NODE_ENV === 'development' ? 'agx_dev_token' : '');
 
 app.use(cors());
 app.use(express.json());

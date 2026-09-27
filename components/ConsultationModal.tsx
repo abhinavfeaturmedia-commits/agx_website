@@ -41,6 +41,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
+  const [honeypot, setHoneypot] = useState('');
+  const [isOfflineSaved, setIsOfflineSaved] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -66,6 +68,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 0. Anti-spam bot honeypot trap
+    if (honeypot.trim()) {
+      console.warn('Bot submission blocked via honeypot');
+      setIsSubmitting(false);
+      setIsSuccess(true);
+      return;
+    }
+
     if (!name.trim() || !email.trim()) {
       toast.error('Required Fields', 'Please enter your name and work email.');
       return;
@@ -140,11 +151,38 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       });
 
       setIsSuccess(true);
+      setIsOfflineSaved(false);
       toast.success('Blueprint Reserved', 'A Solution Architect will prepare your 14-day roadmap.');
     } catch (err: any) {
-      console.warn('Inbound lead capture fallback:', err);
-      setIsSuccess(true);
-      toast.success('Inquiry Received', 'Thank you! We have registered your request.');
+      console.warn('Inbound lead capture fallback to offline queue:', err);
+      try {
+        const estDealVal = selectedLeak.includes('40+') ? 350000 : 150000;
+        const offlineQueue = JSON.parse(localStorage.getItem('agx_offline_leads') || '[]');
+        offlineQueue.push({
+          name: name.trim(),
+          company: company.trim() || 'Direct Client',
+          phone: phone.trim() || null,
+          email: email.trim().toLowerCase(),
+          whatsapp: phone.trim() || null,
+          location: 'Website Inbound Wizard (Offline Queued)',
+          interestedService: selectedBottleneck,
+          estimatedDealValue: estDealVal,
+          probability: 70,
+          source: (typeof window !== 'undefined' ? (sessionStorage.getItem('agx_partner_ref') || localStorage.getItem('agx_partner_ref')) : '') || 'Website Diagnostic',
+          assignedTo: 'Abhinav (Super Admin)',
+          priority: 'High',
+          status: 'NEW',
+          notes: `Operational Bottleneck: ${selectedBottleneck}\nWeekly Time Loss: ${selectedLeak}\nQueued offline due to connectivity hiccup.\nClient Notes: ${notes || 'Requested custom 14-day automation blueprint.'}`,
+          queuedAt: new Date().toISOString()
+        });
+        localStorage.setItem('agx_offline_leads', JSON.stringify(offlineQueue));
+        setIsSuccess(true);
+        setIsOfflineSaved(true);
+        toast.info('Saved Offline', 'Your blueprint request is queued locally and will sync once connected.');
+      } catch (storageErr) {
+        setIsSuccess(true);
+        toast.success('Inquiry Received', 'Thank you! We have registered your request.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -156,6 +194,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setEmail('');
     setPhone('');
     setNotes('');
+    setHoneypot('');
+    setIsOfflineSaved(false);
     setStep(1);
     setIsSuccess(false);
     onClose();
@@ -226,6 +266,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   <strong className="text-emerald-400">30-Day Zero-Risk Active</strong>
                 </div>
               </div>
+
+              {/* If saved offline, show transparent notice */}
+              {isOfflineSaved && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-xs text-amber-200 text-left space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-400">
+                    <span>⚡ Saved in Resilient Offline Queue</span>
+                  </div>
+                  <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                    Cloud servers experienced a brief connectivity delay, so we safely cached your blueprint request in your browser. It will automatically synchronize as soon as connection is restored.
+                  </p>
+                </div>
+              )}
 
               <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
                 <a
@@ -432,6 +484,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[#CCFF00]"
                       />
                     </div>
+                  </div>
+
+                  {/* Bot Anti-Spam Honeypot - hidden from human view */}
+                  <div style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, width: 0, overflow: 'hidden' }} aria-hidden="true" tabIndex={-1}>
+                    <input
+                      type="text"
+                      name="bot_trap_field"
+                      tabIndex={-1}
+                      autoComplete="off"
+                      value={honeypot}
+                      onChange={(e) => setHoneypot(e.target.value)}
+                    />
                   </div>
 
                   <div>

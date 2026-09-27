@@ -1008,23 +1008,23 @@ export const crmService = {
 
     const leadActivities = leadActivitiesRes.error ? undefined : (leadActivitiesRes.data || []).map(mapLeadActivityFromDb);
     const milestones = milestonesRes.error ? undefined : (milestonesRes.data || []).map(mapMilestoneFromDb);
-    const clients = clientsRes.error ? undefined : (clientsRes.data || []).map(mapClientFromDb);
-    const projects = projectsRes.error ? undefined : (projectsRes.data || []).map(p => mapProjectFromDb(p, milestones || []));
-    const invoices = invoicesRes.error ? undefined : (invoicesRes.data || []).map(i => mapInvoiceFromDb(i, projects || []));
-    const leads = leadsRes.error ? undefined : (leadsRes.data || []).map(l => mapLeadFromDb(l, leadActivities || []));
-    const tasks = tasksRes.error ? undefined : (tasksRes.data || []).map(t => mapTaskFromDb(t, clients || [], projects || [], leads || []));
-    const payments = paymentsRes.error ? undefined : (paymentsRes.data || []).map(p => mapPaymentFromDb(p, clients || [], projects || [], invoices || []));
-    const expenses = expensesRes.error ? undefined : (expensesRes.data || []).map(e => mapExpenseFromDb(e, clients || [], projects || []));
-    const agreements = agreementsRes.error ? undefined : (agreementsRes.data || []).map(a => mapAgreementFromDb(a, clients || [], projects || [], leads || []));
-    const documents = documentsRes.error ? undefined : (documentsRes.data || []).map(d => mapDocumentFromDb(d, clients || [], projects || [], leads || []));
-    const credentials = credentialsRes.error ? undefined : (credentialsRes.data || []).map(c => mapCredentialFromDb(c, clients || [], projects || []));
-    const events = eventsRes.error ? undefined : (eventsRes.data || []).map(e => mapCalendarEventFromDb(e, leads || []));
+    const clients = clientsRes.error ? undefined : (clientsRes.data || []).filter((r: any) => !r.deleted_at).map(mapClientFromDb);
+    const projects = projectsRes.error ? undefined : (projectsRes.data || []).filter((r: any) => !r.deleted_at).map(p => mapProjectFromDb(p, milestones || []));
+    const invoices = invoicesRes.error ? undefined : (invoicesRes.data || []).filter((r: any) => !r.deleted_at).map(i => mapInvoiceFromDb(i, projects || []));
+    const leads = leadsRes.error ? undefined : (leadsRes.data || []).filter((r: any) => !r.deleted_at).map(l => mapLeadFromDb(l, leadActivities || []));
+    const tasks = tasksRes.error ? undefined : (tasksRes.data || []).filter((r: any) => !r.deleted_at).map(t => mapTaskFromDb(t, clients || [], projects || [], leads || []));
+    const payments = paymentsRes.error ? undefined : (paymentsRes.data || []).filter((r: any) => !r.deleted_at).map(p => mapPaymentFromDb(p, clients || [], projects || [], invoices || []));
+    const expenses = expensesRes.error ? undefined : (expensesRes.data || []).filter((r: any) => !r.deleted_at).map(e => mapExpenseFromDb(e, clients || [], projects || []));
+    const agreements = agreementsRes.error ? undefined : (agreementsRes.data || []).filter((r: any) => !r.deleted_at).map(a => mapAgreementFromDb(a, clients || [], projects || [], leads || []));
+    const documents = documentsRes.error ? undefined : (documentsRes.data || []).filter((r: any) => !r.deleted_at).map(d => mapDocumentFromDb(d, clients || [], projects || [], leads || []));
+    const credentials = credentialsRes.error ? undefined : (credentialsRes.data || []).filter((r: any) => !r.deleted_at).map(c => mapCredentialFromDb(c, clients || [], projects || []));
+    const events = eventsRes.error ? undefined : (eventsRes.data || []).filter((r: any) => !r.deleted_at).map(e => mapCalendarEventFromDb(e, leads || []));
     const notifications = notificationsRes.error ? undefined : (notificationsRes.data || []).map(mapNotificationFromDb);
     const auditLogs = auditLogsRes.error ? undefined : (auditLogsRes.data || []).map(mapAuditLogFromDb);
-    const partners = (partnersRes as any)?.error ? undefined : ((partnersRes as any)?.data || []).map(mapPartnerFromDb);
-    const partnerReferrals = (referralsRes as any)?.error ? undefined : ((referralsRes as any)?.data || []).map((r: any) => mapPartnerReferralFromDb(r, partners || []));
-    const partnerPayouts = (payoutsRes as any)?.error ? undefined : ((payoutsRes as any)?.data || []).map((p: any) => mapPartnerPayoutFromDb(p, partners || []));
-    const quotations = (quotationsRes as any)?.error ? undefined : ((quotationsRes as any)?.data || []).map((q: any) => mapQuotationFromDb(q, leads || [], clients || [], projects || []));
+    const partners = (partnersRes as any)?.error ? undefined : ((partnersRes as any)?.data || []).filter((r: any) => !r.deleted_at).map(mapPartnerFromDb);
+    const partnerReferrals = (referralsRes as any)?.error ? undefined : ((referralsRes as any)?.data || []).filter((r: any) => !r.deleted_at).map((r: any) => mapPartnerReferralFromDb(r, partners || []));
+    const partnerPayouts = (payoutsRes as any)?.error ? undefined : ((payoutsRes as any)?.data || []).filter((r: any) => !r.deleted_at).map((p: any) => mapPartnerPayoutFromDb(p, partners || []));
+    const quotations = (quotationsRes as any)?.error ? undefined : ((quotationsRes as any)?.data || []).filter((r: any) => !r.deleted_at).map((q: any) => mapQuotationFromDb(q, leads || [], clients || [], projects || []));
 
     return {
       profiles: (profilesRes.data || []).map(mapProfileFromDb),
@@ -1047,6 +1047,49 @@ export const crmService = {
       partnerReferrals,
       partnerPayouts
     };
+  },
+
+  // Resilient Soft Delete helper with fallback
+  async softDelete(tableName: string, id: string): Promise<void> {
+    try {
+      const { error } = await supabase.from(tableName).update({ deleted_at: new Date().toISOString() }).eq('id', id);
+      if (error) {
+        console.warn(`Soft delete fallback on ${tableName}:`, error.message);
+        await supabase.from(tableName).delete().eq('id', id);
+      }
+    } catch (_) {
+      await supabase.from(tableName).delete().eq('id', id);
+    }
+  },
+
+  // Restore soft-deleted record
+  async restore(tableName: string, id: string): Promise<void> {
+    try {
+      await supabase.from(tableName).update({ deleted_at: null }).eq('id', id);
+    } catch (e) {
+      console.warn(`Restore failed on ${tableName}:`, e);
+    }
+  },
+
+  // Atomic Number Sequence Generators
+  async generateNextInvoiceNumber(): Promise<string> {
+    try {
+      const { data, error } = await supabase.rpc('next_invoice_number');
+      if (!error && data) return data;
+    } catch (_) {}
+    const year = new Date().getFullYear();
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    return `INV-${year}-${rand}`;
+  },
+
+  async generateNextQuotationNumber(): Promise<string> {
+    try {
+      const { data, error } = await supabase.rpc('next_quotation_number');
+      if (!error && data) return data;
+    } catch (_) {}
+    const year = new Date().getFullYear();
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    return `QT-${year}-${rand}`;
   },
 
   // --- Leads CRUD ---
@@ -1126,8 +1169,7 @@ export const crmService = {
   },
 
   async deleteLead(id: string): Promise<void> {
-    const { error } = await supabase.from('leads').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('leads', id);
   },
 
   // --- Lead Activities ---
@@ -1212,8 +1254,7 @@ export const crmService = {
   },
 
   async deleteClient(id: string): Promise<void> {
-    const { error } = await supabase.from('clients').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('clients', id);
   },
 
   // --- Projects & Milestones CRUD ---
@@ -1270,8 +1311,7 @@ export const crmService = {
   },
 
   async deleteProject(id: string): Promise<void> {
-    const { error } = await supabase.from('projects').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('projects', id);
   },
 
   async createMilestone(milestone: Omit<ProjectMilestone, 'id'>): Promise<ProjectMilestone> {
@@ -1322,8 +1362,7 @@ export const crmService = {
   },
 
   async deleteMilestone(id: string): Promise<void> {
-    const { error } = await supabase.from('project_milestones').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('project_milestones', id);
   },
 
   // --- Tasks CRUD ---
@@ -1375,8 +1414,7 @@ export const crmService = {
   },
 
   async deleteTask(id: string): Promise<void> {
-    const { error } = await supabase.from('tasks').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('tasks', id);
   },
 
   // --- Quotations CRUD ---
@@ -1451,8 +1489,7 @@ export const crmService = {
   },
 
   async deleteQuotation(id: string): Promise<void> {
-    const { error } = await supabase.from('quotations').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('quotations', id);
   },
 
   // --- Invoices CRUD ---
@@ -1551,8 +1588,7 @@ export const crmService = {
     } catch (e) {
       console.warn('Client balance sync error on invoice delete:', e);
     }
-    const { error } = await supabase.from('invoices').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('invoices', id);
   },
 
   // --- Payments CRUD ---
@@ -1759,8 +1795,7 @@ export const crmService = {
   },
 
   async deleteExpense(id: string): Promise<void> {
-    const { error } = await supabase.from('expenses').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('expenses', id);
   },
 
   // --- Agreements CRUD ---
@@ -1800,25 +1835,7 @@ export const crmService = {
   },
 
   async deleteAgreement(id: string): Promise<void> {
-    const { data: agrRow } = await supabase
-      .from('agreements')
-      .select('file_url')
-      .eq('id', id)
-      .maybeSingle();
-
-    const { error } = await supabase.from('agreements').delete().eq('id', id);
-    if (error) throw error;
-
-    if (agrRow?.file_url && agrRow.file_url.includes('crm-agreements/')) {
-      try {
-        const parts = agrRow.file_url.split('crm-agreements/');
-        if (parts[1]) {
-          await supabase.storage.from('crm-agreements').remove([decodeURIComponent(parts[1])]);
-        }
-      } catch (e) {
-        console.warn('Storage file cleanup warning for agreement:', e);
-      }
-    }
+    await this.softDelete('agreements', id);
   },
 
   // --- Documents CRUD ---
@@ -1839,25 +1856,7 @@ export const crmService = {
   },
 
   async deleteDocument(id: string): Promise<void> {
-    const { data: docRow } = await supabase
-      .from('documents')
-      .select('file_url')
-      .eq('id', id)
-      .maybeSingle();
-
-    const { error } = await supabase.from('documents').delete().eq('id', id);
-    if (error) throw error;
-
-    if (docRow?.file_url && docRow.file_url.includes('crm-documents/')) {
-      try {
-        const parts = docRow.file_url.split('crm-documents/');
-        if (parts[1]) {
-          await supabase.storage.from('crm-documents').remove([decodeURIComponent(parts[1])]);
-        }
-      } catch (e) {
-        console.warn('Storage file cleanup warning for document:', e);
-      }
-    }
+    await this.softDelete('documents', id);
   },
 
   // --- Credentials Vault CRUD ---
@@ -1907,8 +1906,7 @@ export const crmService = {
   },
 
   async deleteCredential(id: string): Promise<void> {
-    const { error } = await supabase.from('credentials_vault').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('credentials_vault', id);
   },
 
   // --- Calendar Events CRUD ---
@@ -1931,8 +1929,7 @@ export const crmService = {
   },
 
   async deleteCalendarEvent(id: string): Promise<void> {
-    const { error } = await supabase.from('calendar_events').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('calendar_events', id);
   },
 
   // --- Team Profile CRUD ---
@@ -2103,8 +2100,7 @@ export const crmService = {
   },
 
   async deleteIssue(id: string): Promise<void> {
-    const { error } = await supabase.from('project_issues').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('project_issues', id);
   },
 
   // --- Partners CRUD ---
@@ -2164,8 +2160,7 @@ export const crmService = {
   },
 
   async deletePartner(id: string): Promise<void> {
-    const { error } = await supabase.from('partners').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('partners', id);
   },
 
   // --- Partner Referrals CRUD ---
@@ -2249,8 +2244,7 @@ export const crmService = {
   },
 
   async deletePartnerReferral(id: string): Promise<void> {
-    const { error } = await supabase.from('partner_referrals').delete().eq('id', id);
-    if (error) throw error;
+    await this.softDelete('partner_referrals', id);
   },
 
   // --- Partner Payouts CRUD ---

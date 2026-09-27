@@ -5,7 +5,8 @@ import {
   Bot, RefreshCw, Zap, ShieldCheck, Database, Smartphone, Play,
   Code2, ArrowRight, Activity, Search, AlertCircle, Key, Radio, Layers,
   CheckSquare, MessageSquare, ChevronRight, CornerDownRight, Server,
-  Sliders, ArrowUpRight
+  Sliders, ArrowUpRight, HelpCircle, Info, AlertTriangle, BookOpen,
+  ChevronDown, CheckCheck
 } from 'lucide-react';
 import { useCrmStore } from '../../lib/crmStore';
 import { toast } from '../../lib/toastStore';
@@ -17,7 +18,7 @@ interface McpSettingsSectionProps {
   store: ReturnType<typeof useCrmStore>;
 }
 
-type GuideTab = 'claude' | 'chatgpt' | 'cursor' | 'gemini';
+type GuideTab = 'claude' | 'antigravity' | 'cursor' | 'chatgpt' | 'gemini';
 
 interface ConnectedAccount {
   id: GuideTab;
@@ -38,7 +39,7 @@ interface ConnectedAccount {
 interface AiActivityLog {
   id: string;
   timestamp: string;
-  aiPlatform: 'Claude Desktop' | 'ChatGPT' | 'Cursor' | 'Gemini';
+  aiPlatform: 'Claude Desktop' | 'ChatGPT' | 'Cursor' | 'Gemini' | 'Antigravity';
   toolUsed: string;
   summary: string;
   status: 'Success' | 'Failed';
@@ -57,8 +58,38 @@ const CONNECTED_ACCOUNTS: ConnectedAccount[] = [
     activeToolsCount: 18,
     iconBg: 'bg-amber-50 text-amber-600 border-amber-200',
     iconColor: '#D97706',
-    description: 'Subprocess communication via stdio JSON-RPC. Allows Claude to directly query and modify CRM records in Supabase.',
+    description: 'Subprocess communication via stdio JSON-RPC. Look for the hammer icon to manage leads, tasks, and financials directly in chat.',
     capabilities: ['Full CRUD Access', 'Instant Supabase Sync', 'Lead & Deal Pipeline', 'Financial Analytics']
+  },
+  {
+    id: 'antigravity',
+    name: 'Google Antigravity IDE',
+    provider: 'Google DeepMind',
+    type: 'Built-in Agent Tooling',
+    status: 'Active',
+    transport: 'Stdio Process',
+    portOrPath: '~/.gemini/config/mcp_config.json',
+    authMethod: 'Local Stdio',
+    activeToolsCount: 18,
+    iconBg: 'bg-cyan-50 text-cyan-600 border-cyan-200',
+    iconColor: '#0891B2',
+    description: 'Native agent integration inside Antigravity. The AI pair programmer uses AGX CRM tools to query sprints, tasks, and client specs.',
+    capabilities: ['Autonomous Agent Tools', 'Project Milestone Status', 'DB Schema Insights', 'Live Task Management']
+  },
+  {
+    id: 'cursor',
+    name: 'Cursor IDE',
+    provider: 'Anysphere',
+    type: 'Code Editor Feature',
+    status: 'Ready',
+    transport: 'MCP JSON-RPC 2.0',
+    portOrPath: '.cursor/mcp.json',
+    authMethod: 'Local Process',
+    activeToolsCount: 18,
+    iconBg: 'bg-blue-50 text-blue-600 border-blue-200',
+    iconColor: '#2563EB',
+    description: 'Integrated directly into Cursor editor settings. Query bugs, tasks, and client requirements in inline agent chat.',
+    capabilities: ['Task & Bug Lookup', 'Project Milestone Status', 'Sprint Auditing', 'Inline Editor Calls']
   },
   {
     id: 'chatgpt',
@@ -74,21 +105,6 @@ const CONNECTED_ACCOUNTS: ConnectedAccount[] = [
     iconColor: '#059669',
     description: 'Hosted 24/7 on Netlify serverless functions. Allows the ChatGPT mobile app on iOS/Android to manage leads and tasks anytime without your laptop powered on.',
     capabilities: ['24/7 Cloud Available', 'Mobile Voice Dictation', 'Task & Lead CRUD', 'No Laptop Needed']
-  },
-  {
-    id: 'cursor',
-    name: 'Cursor & Antigravity IDE',
-    provider: 'Anysphere / IDEs',
-    type: 'Developer IDE Integration',
-    status: 'Active',
-    transport: 'MCP JSON-RPC 2.0',
-    portOrPath: '.cursor/mcp.json',
-    authMethod: 'Local Process',
-    activeToolsCount: 18,
-    iconBg: 'bg-blue-50 text-blue-600 border-blue-200',
-    iconColor: '#2563EB',
-    description: 'Integrated directly into your code editor. Query engineering tasks, client requirements, and credentials while programming.',
-    capabilities: ['Task & Bug Lookup', 'Project Milestone Status', 'DB Schema Insights', 'Sprint Auditing']
   },
   {
     id: 'gemini',
@@ -280,6 +296,17 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
   }
 }`;
 
+  const antigravityMcpConfig = `{
+  "mcpServers": {
+    "agx-crm": {
+      "command": "node",
+      "args": [
+        "c:/Users/Abhinav/Documents/Antigravity Files/agx_website/mcp-server/dist/index.js"
+      ]
+    }
+  }
+}`;
+
   const cursorMcpConfig = `{
   "mcpServers": {
     "agx-crm": {
@@ -290,6 +317,8 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
     }
   }
 }`;
+
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
     <div className="space-y-6 text-gray-900">
@@ -393,6 +422,93 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
         </div>
       </div>
 
+      {/* 1.5. Non-Technical Explainer: What is MCP? */}
+      <div className="bg-gradient-to-br from-neutral-900 via-black to-neutral-950 rounded-3xl p-6 sm:p-8 text-white border border-neutral-800 shadow-xl space-y-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-[#CCFF00]/5 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-800 pb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-[#CCFF00] text-black flex items-center justify-center font-bold shadow-md shrink-0">
+              <Zap size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#CCFF00]">
+                  Beginner's Fast Track
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/10 text-neutral-300">
+                  Zero Jargon
+                </span>
+              </div>
+              <h3 className="text-xl font-black text-white tracking-tight mt-0.5">
+                What is MCP? (Explained in 30 Seconds)
+              </h3>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 bg-neutral-800/80 px-3.5 py-2 rounded-2xl border border-neutral-700/60 self-start md:self-auto">
+            <Terminal size={14} className="text-[#CCFF00]" />
+            <span className="text-xs text-neutral-300">
+              Prerequisite Check: <code className="bg-black/60 px-1.5 py-0.5 rounded text-neutral-200 font-mono text-[11px]">node -v</code> (v18+)
+            </span>
+          </div>
+        </div>
+
+        {/* 3 Simple Pieces Visual Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-2">
+            <div className="flex items-center gap-2 text-[#CCFF00]">
+              <Bot size={18} />
+              <span className="text-xs font-black uppercase tracking-wider">1. The Brain (AI App)</span>
+            </div>
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Claude Desktop, Antigravity IDE, Cursor, or ChatGPT. It understands your natural language questions.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-neutral-900/90 border border-[#CCFF00]/30 space-y-2 relative">
+            <div className="flex items-center gap-2 text-[#CCFF00]">
+              <Cpu size={18} />
+              <span className="text-xs font-black uppercase tracking-wider">2. The Cable (MCP Server)</span>
+            </div>
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Like a universal USB cable. A small helper script that gives the AI "hands" to perform real database operations.
+            </p>
+            <span className="absolute top-3 right-3 text-[10px] font-mono font-extrabold text-black bg-[#CCFF00] px-2 py-0.5 rounded-full">
+              Bridge
+            </span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-2">
+            <div className="flex items-center gap-2 text-emerald-400">
+              <Database size={18} />
+              <span className="text-xs font-black uppercase tracking-wider">3. The Hands (CRM Data)</span>
+            </div>
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Your live Supabase PostgreSQL database holding all sales leads, team tasks, projects, and invoices.
+            </p>
+          </div>
+        </div>
+
+        {/* Quick Tip Box */}
+        <div className="p-3.5 bg-neutral-800/60 rounded-2xl border border-neutral-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5 text-neutral-300">
+            <Info size={16} className="text-[#CCFF00] shrink-0" />
+            <span>
+              <strong>Non-Technical Rule of Thumb:</strong> You only ever need to copy the configuration snippet once, paste it into your app's settings, and restart the app!
+            </span>
+          </div>
+
+          <button
+            onClick={() => handleCopy('MCP_SETUP_GUIDE_FOR_BEGINNERS.md', 'offline-guide-name')}
+            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-mono text-[11px] font-bold flex items-center gap-1.5 transition-colors self-start sm:self-auto cursor-pointer shrink-0"
+          >
+            <BookOpen size={13} className="text-[#CCFF00]" />
+            <span>{copiedKey === 'offline-guide-name' ? 'Filename Copied!' : 'Guide: MCP_SETUP_GUIDE_FOR_BEGINNERS.md'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* 2. Connected AI Accounts & Assistant Cards */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -407,11 +523,11 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
           </div>
           <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full self-start sm:self-auto flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            4 Adapters Configured
+            5 Adapters Configured
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {CONNECTED_ACCOUNTS.map((acc) => (
             <div
               key={acc.id}
@@ -423,8 +539,9 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0">
                       {acc.id === 'claude' && <BotAvatar type="mech" state={isTestingPing ? 'working' : 'default'} size={48} />}
-                      {acc.id === 'chatgpt' && <BotAvatar type="star" state="default" size={48} />}
+                      {acc.id === 'antigravity' && <BotAvatar type="droid" state="default" size={48} />}
                       {acc.id === 'cursor' && <BotAvatar type="hexagon" state="default" size={48} />}
+                      {acc.id === 'chatgpt' && <BotAvatar type="star" state="default" size={48} />}
                       {acc.id === 'gemini' && <BotAvatar type="clover" state="default" size={48} />}
                     </div>
                     <div>
@@ -432,8 +549,9 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
                         <h4 className="text-sm font-black text-gray-900">{acc.name}</h4>
                         <div className="flex items-center gap-1.5">
                           {acc.id === 'claude' && <ThinkingOrb state="weaving" size={20} aria-label="Claude Reasoning" />}
-                          {acc.id === 'chatgpt' && <ThinkingOrb state="composing" size={20} aria-label="ChatGPT Composing" />}
+                          {acc.id === 'antigravity' && <ThinkingOrb state="working" size={20} aria-label="Antigravity Active" />}
                           {acc.id === 'cursor' && <ThinkingOrb state="solving" size={20} aria-label="Cursor Solving" />}
+                          {acc.id === 'chatgpt' && <ThinkingOrb state="composing" size={20} aria-label="ChatGPT Composing" />}
                           {acc.id === 'gemini' && <ThinkingOrb state="connecting" size={20} aria-label="Gemini Connecting" />}
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -474,7 +592,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
               <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5 text-gray-500 font-mono text-[11px]">
                   <Key size={13} className="text-gray-400" />
-                  <span className="truncate max-w-[180px]">{acc.portOrPath}</span>
+                  <span className="truncate max-w-[140px]">{acc.portOrPath}</span>
                 </div>
 
                 <button
@@ -507,6 +625,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
         <div className="divide-y divide-gray-100 border border-gray-100 rounded-2xl overflow-hidden bg-gray-50/50">
           {aiLogs.map((log) => {
             const avatarType = log.aiPlatform === 'Claude Desktop' ? 'mech'
+              : log.aiPlatform === 'Antigravity' ? 'droid'
               : log.aiPlatform === 'ChatGPT' ? 'star'
               : log.aiPlatform === 'Cursor' ? 'hexagon' : 'clover';
 
@@ -518,6 +637,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
                   </div>
                   <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
                     log.aiPlatform === 'Claude Desktop' ? 'bg-amber-100 text-amber-900 border border-amber-200' :
+                    log.aiPlatform === 'Antigravity' ? 'bg-cyan-100 text-cyan-900 border border-cyan-200' :
                     log.aiPlatform === 'ChatGPT' ? 'bg-emerald-100 text-emerald-900 border border-emerald-200' :
                     log.aiPlatform === 'Cursor' ? 'bg-blue-100 text-blue-900 border border-blue-200' :
                     'bg-purple-100 text-purple-900 border border-purple-200'
@@ -562,12 +682,13 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
           </p>
         </div>
 
-        {/* Clean Segmented Tab Switcher */}
-        <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-2xl overflow-x-auto w-full sm:w-fit">
+        {/* Clean Segmented Tab Switcher (5 AI Platforms) */}
+        <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-2xl overflow-x-auto w-full">
           {[
             { id: 'claude', name: 'Claude Desktop', icon: Bot },
+            { id: 'antigravity', name: 'Google Antigravity IDE', icon: Terminal },
+            { id: 'cursor', name: 'Cursor IDE', icon: Code2 },
             { id: 'chatgpt', name: 'ChatGPT (Mobile & Web)', icon: Smartphone },
-            { id: 'cursor', name: 'Cursor & Antigravity', icon: Terminal },
             { id: 'gemini', name: 'Google Gemini & REST', icon: Sparkles }
           ].map((tab) => {
             const Icon = tab.icon;
@@ -576,7 +697,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
               <button
                 key={tab.id}
                 onClick={() => setActiveGuideTab(tab.id as GuideTab)}
-                className={`py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
                   isActive
                     ? 'bg-black text-white shadow-sm'
                     : 'text-gray-600 hover:text-black hover:bg-gray-200/70'
@@ -592,46 +713,69 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
         {/* Tab 1: Claude Desktop */}
         {activeGuideTab === 'claude' && (
           <div className="space-y-5 animate-in fade-in duration-200">
-            <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-2xl text-xs text-amber-950 leading-relaxed flex items-start gap-3">
+            <div className="p-4 bg-amber-50/90 border border-amber-200 rounded-2xl text-xs text-amber-950 leading-relaxed flex items-start gap-3">
               <Bot className="text-amber-600 shrink-0 mt-0.5" size={18} />
               <div>
-                <strong className="font-black block text-amber-900 mb-0.5">Native Claude Desktop Integration:</strong>
-                Claude Desktop launches the AGX MCP server as a local subprocess. Everything you ask Claude to update (leads, tasks, projects) takes effect immediately in your Supabase CRM database!
+                <strong className="font-black block text-amber-900 mb-0.5">Claude Desktop Integration (Windows & Mac):</strong>
+                Claude Desktop launches the AGX MCP server as a local background process on your machine. Everything you ask Claude to update (leads, tasks, projects) takes effect immediately in your live Supabase CRM database!
               </div>
             </div>
 
             {/* Step 1: File Paths */}
             <div className="space-y-2">
-              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                Step 1: Open your Claude Desktop Configuration file
+              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-black text-[#CCFF00] flex items-center justify-center text-[10px] font-black">1</span>
+                <span>Open your Claude Configuration folder (5-Second Shortcut)</span>
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200 space-y-1.5">
-                  <span className="font-bold text-gray-900 block text-xs">🪟 Windows Path:</span>
+                <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-gray-900 text-xs flex items-center gap-1">
+                      🪟 Windows Shortcut:
+                    </span>
+                    <span className="text-[10px] font-mono text-gray-500 bg-gray-200/80 px-2 py-0.5 rounded">Press Win + R</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600">
+                    Press <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-[10px] font-bold">Win + R</kbd>, paste this and press Enter:
+                  </p>
                   <div className="flex items-center justify-between gap-2 bg-white p-2 rounded-xl border border-gray-200 font-mono text-[11px] text-gray-800">
-                    <span className="truncate">%APPDATA%\Claude\claude_desktop_config.json</span>
+                    <span className="truncate">%APPDATA%\Claude</span>
                     <button
-                      onClick={() => handleCopy('%APPDATA%\\Claude\\claude_desktop_config.json', 'win-path')}
-                      className="text-gray-500 hover:text-black cursor-pointer p-1 rounded hover:bg-gray-100"
-                      title="Copy path"
+                      onClick={() => handleCopy('%APPDATA%\\Claude', 'win-run-path')}
+                      className="text-gray-500 hover:text-black cursor-pointer p-1 rounded hover:bg-gray-100 shrink-0"
+                      title="Copy Windows Run command"
                     >
-                      {copiedKey === 'win-path' ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                      {copiedKey === 'win-run-path' ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                     </button>
                   </div>
+                  <span className="text-[10px] text-gray-500 block">
+                    Inside that folder, open <code>claude_desktop_config.json</code> with Notepad (create it if missing).
+                  </span>
                 </div>
 
-                <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200 space-y-1.5">
-                  <span className="font-bold text-gray-900 block text-xs">🍎 macOS Path:</span>
+                <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-gray-900 text-xs flex items-center gap-1">
+                      🍎 macOS Shortcut:
+                    </span>
+                    <span className="text-[10px] font-mono text-gray-500 bg-gray-200/80 px-2 py-0.5 rounded">Finder Cmd+Shift+G</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600">
+                    In Finder, press <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-[10px] font-bold">Cmd + Shift + G</kbd>, paste this:
+                  </p>
                   <div className="flex items-center justify-between gap-2 bg-white p-2 rounded-xl border border-gray-200 font-mono text-[11px] text-gray-800">
-                    <span className="truncate">~/Library/Application Support/Claude/claude_desktop_config.json</span>
+                    <span className="truncate">~/Library/Application Support/Claude</span>
                     <button
-                      onClick={() => handleCopy('~/Library/Application Support/Claude/claude_desktop_config.json', 'mac-path')}
-                      className="text-gray-500 hover:text-black cursor-pointer p-1 rounded hover:bg-gray-100"
-                      title="Copy path"
+                      onClick={() => handleCopy('~/Library/Application Support/Claude', 'mac-path')}
+                      className="text-gray-500 hover:text-black cursor-pointer p-1 rounded hover:bg-gray-100 shrink-0"
+                      title="Copy Mac path"
                     >
                       {copiedKey === 'mac-path' ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                     </button>
                   </div>
+                  <span className="text-[10px] text-gray-500 block">
+                    Open <code>claude_desktop_config.json</code> with TextEdit.
+                  </span>
                 </div>
               </div>
             </div>
@@ -639,8 +783,9 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
             {/* Step 2: Code Window */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Step 2: Paste this snippet into your config
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-black text-[#CCFF00] flex items-center justify-center text-[10px] font-black">2</span>
+                  <span>Paste this exact snippet into your file</span>
                 </h4>
                 <button
                   onClick={() => handleCopy(claudeDesktopConfig, 'claude-json')}
@@ -651,7 +796,6 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
                 </button>
               </div>
 
-              {/* Sleek Dark IDE Code Block */}
               <div className="bg-[#0b0e14] rounded-2xl border border-gray-800 overflow-hidden shadow-lg">
                 <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 bg-[#07090e]">
                   <div className="flex items-center gap-1.5">
@@ -660,7 +804,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                     <span className="text-[11px] font-mono text-gray-400 ml-2">claude_desktop_config.json</span>
                   </div>
-                  <span className="text-[10px] font-mono text-gray-500">JSON</span>
+                  <span className="text-[10px] font-mono text-gray-500">JSON (Forward Slashes /)</span>
                 </div>
                 <pre className="p-4 font-mono text-xs text-emerald-400 overflow-x-auto leading-relaxed">
                   {claudeDesktopConfig}
@@ -668,33 +812,167 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
               </div>
             </div>
 
-            {/* Step 3: Example Prompts */}
+            {/* Step 3: Restart & Verify */}
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 flex items-start gap-3">
+              <CheckCircle2 className="text-emerald-600 shrink-0 mt-0.5" size={18} />
+              <div>
+                <strong className="font-bold text-emerald-900 block mb-0.5">
+                  Step 3: Completely quit and reopen Claude Desktop
+                </strong>
+                <span>
+                  Make sure Claude is closed from your taskbar or system tray (next to the clock). When you re-open Claude, look at the bottom right corner of the chat box: a 🔨 <strong>Hammer icon</strong> will appear with all 18 CRM tools ready!
+                </span>
+              </div>
+            </div>
+
+            {/* Step 4: Real Prompts */}
             <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-3">
-              <h4 className="text-xs font-black text-gray-900 flex items-center gap-2">
-                <span>Step 3: Restart Claude Desktop & Test with Real Prompts:</span>
+              <h4 className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-black text-[#CCFF00] flex items-center justify-center text-[10px] font-black">4</span>
+                <span>Ready-to-Use Natural Language Prompts (Click to Copy):</span>
               </h4>
-              <p className="text-xs text-gray-600">
-                You will see a 🔨 <strong>hammer icon</strong> in Claude. Simply type or voice-dictate:
-              </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <div className="p-3 bg-white rounded-xl border border-gray-200 text-gray-800 font-mono text-[11px]">
-                  💬 "Add a new lead: Rajesh from TechCorp, phone +91 9876543210, value ₹2.5L, high priority."
-                </div>
-                <div className="p-3 bg-white rounded-xl border border-gray-200 text-gray-800 font-mono text-[11px]">
-                  💬 "Move Rajesh to Proposal Sent and set next follow-up for Friday 3 PM."
-                </div>
-                <div className="p-3 bg-white rounded-xl border border-gray-200 text-gray-800 font-mono text-[11px]">
-                  💬 "What are my top 5 urgent tasks due today across all client projects?"
-                </div>
-                <div className="p-3 bg-white rounded-xl border border-gray-200 text-gray-800 font-mono text-[11px]">
-                  💬 "Give me a financial summary: how much revenue was collected and what invoices are overdue?"
-                </div>
+                {[
+                  'Add a new lead: Rajesh from TechCorp, phone +91 9876543210, value ₹2.5L, high priority.',
+                  'Move Rajesh to Proposal Sent and set next follow-up for Friday 3 PM.',
+                  'What are my top 5 urgent tasks due today across all client projects?',
+                  'Give me a financial summary: how much revenue was collected and what invoices are overdue?'
+                ].map((prompt, pIdx) => (
+                  <button
+                    key={pIdx}
+                    onClick={() => handleCopy(prompt, `prompt-${pIdx}`)}
+                    className="p-3 bg-white hover:bg-gray-100 rounded-xl border border-gray-200 text-left text-gray-800 font-mono text-[11px] transition-colors cursor-pointer group flex items-start justify-between gap-2"
+                  >
+                    <span>💬 "{prompt}"</span>
+                    <span className="shrink-0 text-gray-400 group-hover:text-black">
+                      {copiedKey === `prompt-${pIdx}` ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
         )}
 
-        {/* Tab 2: ChatGPT */}
+        {/* Tab 2: Antigravity IDE */}
+        {activeGuideTab === 'antigravity' && (
+          <div className="space-y-5 animate-in fade-in duration-200">
+            <div className="p-4 bg-cyan-50 border border-cyan-200 rounded-2xl text-xs text-cyan-950 leading-relaxed flex items-start gap-3">
+              <Terminal className="text-cyan-700 shrink-0 mt-0.5" size={18} />
+              <div>
+                <strong className="font-black block text-cyan-900 mb-0.5">Native Google Antigravity IDE Integration:</strong>
+                Antigravity comes with built-in Model Context Protocol support. The AI agent can inspect project requirements, query tasks, and update client statuses directly while pair-programming with you!
+              </div>
+            </div>
+
+            {/* Method A: UI Steps */}
+            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-3 text-xs">
+              <h4 className="text-xs font-black text-gray-900 flex items-center gap-1.5 uppercase tracking-wider">
+                <span className="w-5 h-5 rounded-full bg-black text-[#CCFF00] flex items-center justify-center text-[10px] font-black">1</span>
+                <span>Option A: Add via Antigravity Settings UI (Click-by-Click)</span>
+              </h4>
+              <ol className="list-decimal list-inside space-y-1.5 text-gray-700 leading-relaxed">
+                <li>In the top right or sidebar menu, click <strong>Additional Options (...) &gt; MCP Servers</strong>.</li>
+                <li>Click <strong>+ Add New MCP Server</strong>.</li>
+                <li>Choose <strong>Stdio (Local Command)</strong>:
+                  <div className="mt-2 ml-4 p-3 bg-white rounded-xl border border-gray-200 font-mono text-[11px] space-y-1">
+                    <div><strong>Server Name:</strong> <code className="text-indigo-600">agx-crm</code></div>
+                    <div><strong>Command:</strong> <code className="text-indigo-600">node</code></div>
+                    <div><strong>Arguments:</strong> <code className="text-indigo-600">c:/Users/Abhinav/Documents/Antigravity Files/agx_website/mcp-server/dist/index.js</code></div>
+                  </div>
+                </li>
+                <li>Click <strong>Save</strong>. The agent automatically discovers all 18 tools!</li>
+              </ol>
+            </div>
+
+            {/* Method B: Global Config File */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-black text-[#CCFF00] flex items-center justify-center text-[10px] font-black">2</span>
+                  <span>Option B: Add to Global Config File (<code>~/.gemini/config/mcp_config.json</code>)</span>
+                </h4>
+                <button
+                  onClick={() => handleCopy(antigravityMcpConfig, 'antigravity-json')}
+                  className="px-3 py-1.5 rounded-xl bg-black text-[#CCFF00] hover:bg-neutral-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+                >
+                  {copiedKey === 'antigravity-json' ? <Check size={14} className="text-[#CCFF00]" /> : <Copy size={14} />}
+                  <span>{copiedKey === 'antigravity-json' ? 'Copied!' : 'Copy Config'}</span>
+                </button>
+              </div>
+
+              <div className="bg-[#0b0e14] rounded-2xl border border-gray-800 overflow-hidden shadow-lg">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 bg-[#07090e]">
+                  <span className="text-[11px] font-mono text-gray-400">~/.gemini/config/mcp_config.json</span>
+                  <span className="text-[10px] font-mono text-gray-500">JSON</span>
+                </div>
+                <pre className="p-4 font-mono text-xs text-cyan-400 overflow-x-auto leading-relaxed">
+                  {antigravityMcpConfig}
+                </pre>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Cursor IDE */}
+        {activeGuideTab === 'cursor' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-950 leading-relaxed flex items-start gap-3">
+              <Code2 className="text-blue-600 shrink-0 mt-0.5" size={18} />
+              <div>
+                <strong className="font-black block text-blue-900 mb-0.5">Cursor IDE Integration:</strong>
+                Configure Cursor to query active engineering tickets, client requirements, and database tables straight from your code editor chat.
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-2.5 text-xs">
+              <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-black text-[#CCFF00] flex items-center justify-center text-[10px] font-black">1</span>
+                <span>Visual Setup via Cursor Settings</span>
+              </h4>
+              <ol className="list-decimal list-inside space-y-1.5 text-gray-700 leading-relaxed">
+                <li>Click the <strong>Gear icon ⚙️</strong> in Cursor top-right to open Settings.</li>
+                <li>In the left sidebar, click <strong>Features &gt; MCP Servers</strong>.</li>
+                <li>Click <strong>+ Add New MCP Server</strong>:
+                  <ul className="list-disc list-inside mt-1 ml-4 space-y-1 text-gray-600 font-mono text-[11px]">
+                    <li><strong>Name:</strong> agx-crm</li>
+                    <li><strong>Type:</strong> command</li>
+                    <li><strong>Command:</strong> node "c:/Users/Abhinav/Documents/Antigravity Files/agx_website/mcp-server/dist/index.js"</li>
+                  </ul>
+                </li>
+                <li>A green dot will appear indicating the server is <strong>Connected</strong>!</li>
+              </ol>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-black text-[#CCFF00] flex items-center justify-center text-[10px] font-black">2</span>
+                  <span>Alternative: Project <code>.cursor/mcp.json</code> file</span>
+                </h4>
+                <button
+                  onClick={() => handleCopy(cursorMcpConfig, 'cursor-json')}
+                  className="px-3 py-1.5 rounded-xl bg-black text-[#CCFF00] hover:bg-neutral-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+                >
+                  {copiedKey === 'cursor-json' ? <Check size={14} className="text-[#CCFF00]" /> : <Copy size={14} />}
+                  <span>{copiedKey === 'cursor-json' ? 'Copied!' : 'Copy Config'}</span>
+                </button>
+              </div>
+
+              <div className="bg-[#0b0e14] rounded-2xl border border-gray-800 overflow-hidden shadow-lg">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 bg-[#07090e]">
+                  <span className="text-[11px] font-mono text-gray-400">.cursor/mcp.json</span>
+                  <span className="text-[10px] font-mono text-gray-500">JSON</span>
+                </div>
+                <pre className="p-4 font-mono text-xs text-blue-400 overflow-x-auto leading-relaxed">
+                  {cursorMcpConfig}
+                </pre>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 4: ChatGPT */}
         {activeGuideTab === 'chatgpt' && (
           <div className="space-y-5 animate-in fade-in duration-200">
             <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 leading-relaxed flex items-start gap-3">
@@ -707,7 +985,6 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              {/* Step 1 */}
               <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-2.5">
                 <span className="font-black text-gray-900 block text-xs uppercase tracking-wider">
                   Step 1: Your Live Netlify OpenAPI Schema
@@ -731,7 +1008,6 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
                 </div>
               </div>
 
-              {/* Step 2 */}
               <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-2.5">
                 <span className="font-black text-gray-900 block text-xs uppercase tracking-wider">
                   Step 2: Create Custom GPT in ChatGPT
@@ -787,50 +1063,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
           </div>
         )}
 
-        {/* Tab 3: Cursor */}
-        {activeGuideTab === 'cursor' && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-950 leading-relaxed flex items-start gap-3">
-              <Terminal className="text-blue-600 shrink-0 mt-0.5" size={18} />
-              <div>
-                <strong className="font-black block text-blue-900 mb-0.5">Cursor & Antigravity IDE Integration:</strong>
-                Query active engineering tasks, client feature requests, and database schema records straight from your code editor chat.
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Add to <code>.cursor/mcp.json</code> or Antigravity Settings:
-                </h4>
-                <button
-                  onClick={() => handleCopy(cursorMcpConfig, 'cursor-json')}
-                  className="px-3 py-1.5 rounded-xl bg-black text-[#CCFF00] hover:bg-neutral-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
-                >
-                  {copiedKey === 'cursor-json' ? <Check size={14} className="text-[#CCFF00]" /> : <Copy size={14} />}
-                  <span>{copiedKey === 'cursor-json' ? 'Copied!' : 'Copy Config'}</span>
-                </button>
-              </div>
-
-              <div className="bg-[#0b0e14] rounded-2xl border border-gray-800 overflow-hidden shadow-lg">
-                <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 bg-[#07090e]">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span className="text-[11px] font-mono text-gray-400 ml-2">.cursor/mcp.json</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-gray-500">JSON</span>
-                </div>
-                <pre className="p-4 font-mono text-xs text-blue-400 overflow-x-auto leading-relaxed">
-                  {cursorMcpConfig}
-                </pre>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 4: Gemini */}
+        {/* Tab 5: Gemini */}
         {activeGuideTab === 'gemini' && (
           <div className="space-y-4 animate-in fade-in duration-200 text-xs">
             <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl text-purple-950 leading-relaxed flex items-start gap-3">
@@ -872,6 +1105,143 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
             </div>
           </div>
         )}
+      </div>
+
+      {/* 4.5. The 5 Golden Rules of MCP JSON (Avoid Common Mistakes) */}
+      <div className="bg-white border border-gray-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
+        <div className="flex items-center gap-2 text-rose-600">
+          <AlertTriangle size={18} />
+          <h3 className="text-base font-black text-gray-900">
+            The 5 Golden Rules of MCP JSON (Avoid Common Non-Technical Pitfalls)
+          </h3>
+        </div>
+        <p className="text-xs text-gray-500">
+          If an MCP configuration fails to load, 99% of the time it is due to one of these small syntax errors:
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          {/* Rule 1 */}
+          <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2.5">
+            <span className="font-extrabold text-gray-900 block text-xs">
+              1. Forward Slashes Only (<code className="text-emerald-600 font-bold">/</code>)
+            </span>
+            <p className="text-[11px] text-gray-600 leading-relaxed">
+              Windows paths use backslashes (<code className="text-rose-500">\</code>), but JSON requires forward slashes (<code className="text-emerald-600">/</code>).
+            </p>
+            <div className="space-y-1 font-mono text-[10px]">
+              <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800">
+                ❌ "c:\Users\Abhinav\..."
+              </div>
+              <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold">
+                ✅ "c:/Users/Abhinav/..."
+              </div>
+            </div>
+          </div>
+
+          {/* Rule 2 */}
+          <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2.5">
+            <span className="font-extrabold text-gray-900 block text-xs">
+              2. No Trailing Commas (<code className="text-rose-500 font-bold">,</code>)
+            </span>
+            <p className="text-[11px] text-gray-600 leading-relaxed">
+              Never put a comma after the last item in a list or block. JSON files will crash if an extra comma is present.
+            </p>
+            <div className="space-y-1 font-mono text-[10px]">
+              <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800">
+                ❌ "args": ["path"], &#125;
+              </div>
+              <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold">
+                ✅ "args": ["path"] &#125;
+              </div>
+            </div>
+          </div>
+
+          {/* Rule 3 */}
+          <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2.5">
+            <span className="font-extrabold text-gray-900 block text-xs">
+              3. Always Use Double Quotes (<code className="text-emerald-600 font-bold">""</code>)
+            </span>
+            <p className="text-[11px] text-gray-600 leading-relaxed">
+              Single quotes (<code className="text-rose-500">'</code>) or unquoted words are not allowed in JSON.
+            </p>
+            <div className="space-y-1 font-mono text-[10px]">
+              <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800">
+                ❌ command: 'node'
+              </div>
+              <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold">
+                ✅ "command": "node"
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Rules 4 & 5 Highlight */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs">
+          <div className="p-3 bg-neutral-900 text-white rounded-2xl flex items-center gap-3">
+            <RefreshCw size={18} className="text-[#CCFF00] shrink-0" />
+            <div>
+              <strong className="block text-[#CCFF00]">Rule 4: Always Restart Desktop AI Apps</strong>
+              <span className="text-neutral-300 text-[11px]">Claude & Cursor only read your configuration file when they first start up.</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-neutral-900 text-white rounded-2xl flex items-center gap-3">
+            <CheckCheck size={18} className="text-emerald-400 shrink-0" />
+            <div>
+              <strong className="block text-emerald-400">Rule 5: Verify the Server File Exists</strong>
+              <span className="text-neutral-300 text-[11px]">Ensure <code>mcp-server/dist/index.js</code> exists (already compiled for you!).</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4.6. 60-Second Troubleshooting Checklist & FAQ */}
+      <div className="bg-white border border-gray-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
+        <div className="flex items-center gap-2">
+          <HelpCircle size={18} className="text-black" />
+          <h3 className="text-base font-black text-gray-900">
+            🩺 60-Second Troubleshooting & FAQ (Non-Technical Quick Fixes)
+          </h3>
+        </div>
+
+        <div className="divide-y divide-gray-100 border border-gray-100 rounded-2xl overflow-hidden bg-gray-50/40 text-xs">
+          {[
+            {
+              q: 'Why don\'t I see the 🔨 hammer icon in Claude Desktop?',
+              a: 'Claude only loads tools during a cold startup. Completely quit Claude (check your Windows taskbar tray by the clock or press Cmd+Q on Mac) and re-open it. Also verify that you used forward slashes ("/") in the path.'
+            },
+            {
+              q: 'Claude gave an error saying "Invalid JSON file on startup"?',
+              a: 'This means there is a typo in your claude_desktop_config.json file—usually an extra comma at the end of a line or a missing quote. Copy the clean code block from Tab 1 above and paste it over your entire file.'
+            },
+            {
+              q: 'Can I manage my CRM from my phone when my laptop is turned off?',
+              a: 'YES! Because the AGX website is hosted 24/7 on Netlify serverless, the ChatGPT mobile app connects directly to the cloud without needing your laptop powered on.'
+            },
+            {
+              q: 'How do I test if my connection works right now?',
+              a: 'Click the "Test Connection" button at the very top of this page. If Supabase responds in green, your database credentials and API bridge are 100% operational.'
+            }
+          ].map((item, idx) => (
+            <div key={idx} className="p-4 bg-white hover:bg-gray-50/60 transition-colors">
+              <button
+                onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
+                className="w-full flex items-center justify-between text-left font-bold text-gray-900 cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-black shrink-0" />
+                  <span>{item.q}</span>
+                </span>
+                <ChevronDown size={14} className={`text-gray-400 transition-transform ${openFaq === idx ? 'rotate-180 text-black' : ''}`} />
+              </button>
+              {openFaq === idx && (
+                <p className="mt-2 text-gray-600 leading-relaxed pl-3.5 border-l-2 border-black/20 text-[11px] pt-1">
+                  {item.a}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* 5. Filterable MCP Tool Catalog (18 Tools) */}

@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.1",
+  "openapi": "3.1.0",
   "info": {
     "title": "AGX CRM Cloud AI API",
     "description": "24/7 Cloud API for managing AGX CRM leads, clients, projects, tasks, calendar events, and finance directly through conversational AI on ChatGPT, Claude, and Gemini.",
@@ -9,13 +9,10 @@
     {
       "url": "https://agxperience.netlify.app",
       "description": "Production Netlify Cloud Server (24/7 Available)"
-    },
-    {
-      "url": "http://localhost:3001",
-      "description": "Local Development Server"
     }
   ],
   "components": {
+    "schemas": {},
     "securitySchemes": {
       "BearerAuth": {
         "type": "http",
@@ -327,7 +324,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "period": { "type": "string", "description": "Optional period filter: this_month, all_time" }
+                }
               }
             }
           }

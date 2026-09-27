@@ -9,9 +9,9 @@ import {
 } from 'lucide-react';
 import {
   Invoice, Payment, Expense, InvoiceStatus, PaymentStatus, ExpenseCategory, GstType,
-  Quotation, QuotationItem, QuotationStatus
+  Quotation, QuotationItem, QuotationStatus, Currency
 } from '../../types/crm';
-import { useCrmStore } from '../../lib/crmStore';
+import { useCrmStore, generateUniqueInvoiceNumber } from '../../lib/crmStore';
 import { exportService } from '../../lib/exportService';
 import { toast } from '../../lib/toastStore';
 import { InvoicePreviewModal } from './InvoicePreviewModal';
@@ -106,7 +106,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
 
   // New Invoice Form State
   const [newInvoice, setNewInvoice] = useState({
-    invoiceNumber: `INV-${new Date().getFullYear()}-00${invoices.length + 1}`,
+    invoiceNumber: generateUniqueInvoiceNumber(invoices),
+    currency: 'INR' as Currency,
     quotationId: undefined as string | undefined,
     quotationNumber: undefined as string | undefined,
     discountAmount: 0,
@@ -337,6 +338,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
 
     addInvoice({
       invoiceNumber: newInvoice.invoiceNumber,
+      currency: newInvoice.currency || 'INR',
       quotationId: newInvoice.quotationId,
       quotationNumber: newInvoice.quotationNumber,
       clientId: newInvoice.clientId,
@@ -493,7 +495,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
             <Plus size={14} /> Create Quotation
           </button>
           <button
-            onClick={() => setIsInvoiceModalOpen(true)}
+            onClick={() => {
+              setNewInvoice(prev => ({
+                ...prev,
+                invoiceNumber: generateUniqueInvoiceNumber(invoices)
+              }));
+              setIsInvoiceModalOpen(true);
+            }}
             className="px-4 py-2 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-bold text-xs flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
           >
             <Plus size={15} /> Create Invoice
@@ -1647,10 +1655,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Invoice Number *</label>
-                  <input type="text" required value={newInvoice.invoiceNumber} onChange={(e) => setNewInvoice({ ...newInvoice, invoiceNumber: e.target.value })} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black font-mono" />
+                  <input type="text" required value={newInvoice.invoiceNumber} onChange={(e) => setNewInvoice({ ...newInvoice, invoiceNumber: e.target.value })} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black font-mono text-xs" />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Currency</label>
+                  <select
+                    value={newInvoice.currency}
+                    onChange={(e) => setNewInvoice({ ...newInvoice, currency: e.target.value as Currency })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none cursor-pointer font-bold text-xs"
+                  >
+                    <option value="INR">₹ INR (India)</option>
+                    <option value="USD">$ USD (Global)</option>
+                    <option value="EUR">€ EUR (Europe)</option>
+                    <option value="GBP">£ GBP (UK)</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Client Account *</label>

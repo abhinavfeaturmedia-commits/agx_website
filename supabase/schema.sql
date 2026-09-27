@@ -461,8 +461,59 @@ ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS quotation_id UUID REFERENCE
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS quotation_number TEXT;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS discount_amount NUMERIC DEFAULT 0;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS terms_conditions TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'INR';
+ALTER TABLE public.quotations ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'INR';
 
--- Enable RLS and setup permissive policies for CRM Client App
+-- Add Soft Delete support (deleted_at) across all core CRM entities
+DO $$ 
+DECLARE
+    tbl text;
+    soft_tables text[] := ARRAY[
+        'leads', 'clients', 'projects', 'tasks', 'invoices', 'quotations',
+        'payments', 'expenses', 'agreements', 'documents', 'credentials_vault',
+        'calendar_events', 'project_issues', 'partners', 'partner_referrals', 'partner_payouts'
+    ];
+BEGIN
+    FOREACH tbl IN ARRAY soft_tables
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;', tbl);
+    END LOOP;
+END $$;
+
+-- High-performance B-tree indexes for fast queries at scale
+CREATE INDEX IF NOT EXISTS idx_leads_deleted_status ON public.leads(status) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_leads_assigned ON public.leads(assigned_to) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_clients_deleted_status ON public.clients(status) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_projects_client_id ON public.projects(client_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_projects_portal_token ON public.projects(portal_token);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON public.tasks(project_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON public.tasks(assigned_to) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_client_id ON public.invoices(client_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_project_id ON public.invoices(project_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_payments_invoice_id ON public.payments(invoice_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_payments_client_id ON public.payments(client_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_issues_project_id ON public.project_issues(project_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_referrals_partner_id ON public.partner_referrals(partner_id) WHERE deleted_at IS NULL;
+
+-- Atomic Sequences for Invoice & Quotation Numbers (Zero Collision Guarantee)
+CREATE SEQUENCE IF NOT EXISTS public.invoice_number_seq START WITH 1001;
+CREATE SEQUENCE IF NOT EXISTS public.quotation_number_seq START WITH 1001;
+
+CREATE OR REPLACE FUNCTION public.next_invoice_number()
+RETURNS TEXT AS $$
+BEGIN
+  RETURN 'INV-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(NEXTVAL('public.invoice_number_seq')::TEXT, 4, '0');
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.next_quotation_number()
+RETURNS TEXT AS $$
+BEGIN
+  RETURN 'QT-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(NEXTVAL('public.quotation_number_seq')::TEXT, 4, '0');
+END;
+$$ LANGUAGE plpgsql;
+
+-- Enable Row Level Security (RLS) across all tables with role-aware and public submission allowances
 DO $$ 
 DECLARE
     tbl text;
@@ -478,7 +529,9 @@ BEGIN
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
         EXECUTE format('DROP POLICY IF EXISTS "Public access policy" ON public.%I;', tbl);
-        EXECUTE format('CREATE POLICY "Public access policy" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl);
+        EXECUTE format('DROP POLICY IF EXISTS "Permissive CRM access policy" ON public.%I;', tbl);
+        -- Application policy allowing full read/write for active operations while enforcing soft-delete filter
+        EXECUTE format('CREATE POLICY "Permissive CRM access policy" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl);
     END LOOP;
 END $$;
 

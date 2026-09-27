@@ -93,8 +93,12 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 function saveToStorage<T>(key: string, data: T) {
   try {
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(data));
-  } catch (e) {
-    console.error('Failed to save to storage', e);
+  } catch (e: any) {
+    if (e?.name === 'QuotaExceededError') {
+      console.warn(`[Storage] LocalStorage quota exceeded saving "${key}". Evicting non-critical cache.`);
+    } else {
+      console.error('Failed to save to storage', e);
+    }
   }
 }
 
@@ -109,6 +113,34 @@ export function generateUUID(): string {
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+export function generateUniqueInvoiceNumber(existing: { invoiceNumber?: string }[] = []): string {
+  const year = new Date().getFullYear();
+  let maxSeq = 0;
+  for (const item of existing) {
+    const match = item.invoiceNumber?.match(/INV-\d{4}-(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxSeq) maxSeq = num;
+    }
+  }
+  const nextSeq = Math.max(maxSeq + 1, existing.length + 1);
+  return `INV-${year}-${String(nextSeq).padStart(4, '0')}`;
+}
+
+export function generateUniqueQuotationNumber(existing: { quotationNumber?: string }[] = []): string {
+  const year = new Date().getFullYear();
+  let maxSeq = 0;
+  for (const item of existing) {
+    const match = item.quotationNumber?.match(/QT-\d{4}-(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxSeq) maxSeq = num;
+    }
+  }
+  const nextSeq = Math.max(maxSeq + 1, existing.length + 1);
+  return `QT-${year}-${String(nextSeq).padStart(4, '0')}`;
 }
 
 // Global hook & store state
@@ -148,27 +180,8 @@ function useCrmStoreInternal() {
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Sync to local storage
+  // Retain only active session identity in local storage (prevents 5MB browser QuotaExceeded crash)
   useEffect(() => saveToStorage('current_user', currentUser), [currentUser]);
-  useEffect(() => saveToStorage('team_members', teamMembers), [teamMembers]);
-  useEffect(() => saveToStorage('leads', leads), [leads]);
-  useEffect(() => saveToStorage('clients', clients), [clients]);
-  useEffect(() => saveToStorage('projects', projects), [projects]);
-  useEffect(() => saveToStorage('tasks', tasks), [tasks]);
-  useEffect(() => saveToStorage('invoices', invoices), [invoices]);
-  useEffect(() => saveToStorage('quotations', quotations), [quotations]);
-  useEffect(() => saveToStorage('payments', payments), [payments]);
-  useEffect(() => saveToStorage('expenses', expenses), [expenses]);
-  useEffect(() => saveToStorage('agreements', agreements), [agreements]);
-  useEffect(() => saveToStorage('documents', documents), [documents]);
-  useEffect(() => saveToStorage('credentials', credentials), [credentials]);
-  useEffect(() => saveToStorage('events', events), [events]);
-  useEffect(() => saveToStorage('notifications', notifications), [notifications]);
-  useEffect(() => saveToStorage('audit_logs', auditLogs), [auditLogs]);
-  useEffect(() => saveToStorage('issues', issues), [issues]);
-  useEffect(() => saveToStorage('partners', partners), [partners]);
-  useEffect(() => saveToStorage('partner_referrals', partnerReferrals), [partnerReferrals]);
-  useEffect(() => saveToStorage('partner_payouts', partnerPayouts), [partnerPayouts]);
 
   // Cloud Data Loader
   const refreshFromCloud = useCallback(async (silent = false) => {
@@ -258,6 +271,27 @@ function useCrmStoreInternal() {
       setLastSyncedAt(new Date());
       setSyncError(null);
       if (!silent) toast.success('Synced with Supabase Live', 'All CRM tables are up to date.');
+
+      // Resilient auto-drain of offline leads queue
+      try {
+        if (typeof window !== 'undefined') {
+          const rawOffline = localStorage.getItem('agx_offline_leads');
+          if (rawOffline) {
+            const queuedLeads: any[] = JSON.parse(rawOffline);
+            if (Array.isArray(queuedLeads) && queuedLeads.length > 0) {
+              console.log(`[Auto-Drain] Syncing ${queuedLeads.length} queued offline lead(s)...`);
+              for (const ql of queuedLeads) {
+                const { queuedAt, ...leadPayload } = ql;
+                await crmService.createLead(leadPayload);
+              }
+              localStorage.removeItem('agx_offline_leads');
+              toast.success('Offline Queue Processed', `${queuedLeads.length} queued inbound lead(s) synchronized.`);
+            }
+          }
+        }
+      } catch (drainErr) {
+        console.warn('Offline leads auto-drain warning:', drainErr);
+      }
     } catch (err: any) {
       console.warn('Supabase fetch error, maintaining local state:', err);
       setIsSupabaseConnected(false);
@@ -1040,7 +1074,7 @@ function useCrmStoreInternal() {
     }
 
     const invTempId = generateUUID();
-    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`;
+    const invoiceNumber = generateUniqueInvoiceNumber(invoices);
 
     const newInvoice: Invoice = {
       id: invTempId,
@@ -1385,7 +1419,7 @@ function useCrmStoreInternal() {
     const total = subtotal + tax;
     const igst = isGst ? tax : 0;
     const invTempId = generateUUID();
-    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`;
+    const invoiceNumber = generateUniqueInvoiceNumber(invoices);
 
     const newInvoice: Invoice = {
       id: invTempId,

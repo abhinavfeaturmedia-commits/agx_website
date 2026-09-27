@@ -251,6 +251,40 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
   const [lossReasonOption, setLossReasonOption] = useState<string>('Budget Constraint / Price Too High');
   const [customLossReason, setCustomLossReason] = useState<string>('');
 
+  // Bulk Actions Multi-Select State
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedLeadIds(filteredLeads.map(l => l.id));
+    } else {
+      setSelectedLeadIds([]);
+    }
+  };
+
+  const toggleSelectLead = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedLeadIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkStatusChange = (status: LeadStatus) => {
+    if (selectedLeadIds.length === 0) return;
+    selectedLeadIds.forEach(id => updateLeadStatus(id, status));
+    toast.success('Bulk Stage Update', `Updated ${selectedLeadIds.length} lead(s) to ${status}`);
+    setSelectedLeadIds([]);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedLeadIds.length === 0) return;
+    if (window.confirm(`Move ${selectedLeadIds.length} selected lead(s) to Trash?`)) {
+      selectedLeadIds.forEach(id => deleteLead(id));
+      toast.warning('Bulk Action Complete', `Moved ${selectedLeadIds.length} lead(s) to Trash`);
+      setSelectedLeadIds([]);
+    }
+  };
+
   // Dynamic filter options extraction
   const dynamicServices = useMemo(() => {
     const set = new Set<string>();
@@ -1175,10 +1209,56 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
       {/* Row 4: Table List View */}
       {viewMode === 'list' && (
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Bulk Actions Floating Bar */}
+          {selectedLeadIds.length > 0 && (
+            <div className="bg-gray-900 text-white p-3 px-5 flex items-center justify-between gap-3 border-b border-gray-800 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-[#CCFF00] text-black font-extrabold text-xs flex items-center justify-center">
+                  {selectedLeadIds.length}
+                </span>
+                <span className="text-xs font-bold text-gray-200">leads selected</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) handleBulkStatusChange(e.target.value as LeadStatus);
+                  }}
+                  defaultValue=""
+                  className="bg-gray-800 border border-gray-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg outline-none cursor-pointer"
+                >
+                  <option value="" disabled>Change Stage...</option>
+                  {STAGE_ORDER.concat(['LOST']).map(st => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleBulkDelete}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Trash2 size={13} /> Move to Trash
+                </button>
+                <button
+                  onClick={() => setSelectedLeadIds([])}
+                  className="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-gray-50 border-b border-gray-100 text-gray-400 font-bold uppercase text-[10px] tracking-wider">
                 <tr>
+                  <th className="py-3.5 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={filteredLeads.length > 0 && selectedLeadIds.length === filteredLeads.length}
+                      onChange={handleSelectAll}
+                      className="rounded border-gray-300 text-black focus:ring-black cursor-pointer"
+                    />
+                  </th>
                   <th className="py-3.5 px-4">Company & Lead</th>
                   <th className="py-3.5 px-3">Service Offering</th>
                   <th className="py-3.5 px-3">Deal Value</th>
@@ -1192,7 +1272,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
               <tbody className="divide-y divide-gray-100 text-gray-700">
                 {filteredLeads.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-gray-400 text-xs">
+                    <td colSpan={9} className="py-12 text-center text-gray-400 text-xs">
                       No leads match the specified filter criteria.
                     </td>
                   </tr>
@@ -1211,6 +1291,14 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
                         onClick={() => setActiveLeadForDetails(lead)}
                         className="hover:bg-gray-50/80 transition-colors cursor-pointer group"
                       >
+                        <td className="py-3.5 px-3 text-center" onClick={(e) => toggleSelectLead(lead.id, e)}>
+                          <input
+                            type="checkbox"
+                            checked={selectedLeadIds.includes(lead.id)}
+                            onChange={() => {}}
+                            className="rounded border-gray-300 text-black focus:ring-black cursor-pointer"
+                          />
+                        </td>
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-3">
                             <div className={`w-8 h-8 rounded-xl bg-gradient-to-tr ${getMonogramGradient(lead.company || lead.name)} text-white font-extrabold text-xs flex items-center justify-center shadow-2xs shrink-0`}>
