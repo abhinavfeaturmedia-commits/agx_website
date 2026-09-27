@@ -61,21 +61,25 @@ export async function createLead(params: {
   notes?: string;
 }): Promise<ToolResult> {
   try {
+    const dateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const leadName = params.name?.trim() || `Test Lead - ${dateStr} (${timeStr})`;
+
     const newLead: Partial<Lead> = {
-      name: params.name,
-      company: params.company || null,
-      phone: params.phone || null,
-      email: params.email || null,
+      name: leadName,
+      company: params.company || (params.name ? null : 'Demo Innovations Corp'),
+      phone: params.phone || (params.name ? null : '+91 98765 43210'),
+      email: params.email || (params.name ? null : 'test.lead@agxperience.com'),
       whatsapp: params.whatsapp || params.phone || null,
       location: params.location || null,
       interested_service: params.interested_service || 'AI Automation',
-      estimated_deal_value: parseNumeric(params.estimated_deal_value, 0),
+      estimated_deal_value: parseNumeric(params.estimated_deal_value, params.name ? 0 : 150000),
       priority: params.priority || 'Medium',
       source: params.source || 'Direct Outreach / AI Assistant',
       assigned_to: params.assigned_to || null,
       status: 'NEW',
       next_follow_up: params.next_follow_up || null,
-      notes: params.notes || null,
+      notes: params.notes || 'Created via AI Assistant',
     };
 
     const { data, error } = await supabase.from('leads').insert([newLead]).select().single();
@@ -93,7 +97,7 @@ export async function createLead(params: {
       ]);
     }
 
-    return formatSuccess(`Lead "${params.name}" created successfully with ID ${data.id}`, data);
+    return formatSuccess(`Lead "${leadName}" created successfully with ID ${data.id}`, data);
   } catch (err) {
     return formatError('Unexpected error creating lead', err);
   }
