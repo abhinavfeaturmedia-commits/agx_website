@@ -17,6 +17,19 @@ interface ApiResponse<T = any> {
   notice?: string;
 }
 
+const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('agx_crm_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  return headers;
+};
+
 export const apiClient = {
   /**
    * Check if backend API and database are online
@@ -38,7 +51,7 @@ export const apiClient = {
   async get<T = any>(endpoint: string): Promise<ApiResponse<T>> {
     try {
       const res = await fetch(`${API_BASE}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: getAuthHeaders()
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       return await res.json();
@@ -55,7 +68,7 @@ export const apiClient = {
     try {
       const res = await fetch(`${API_BASE}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
@@ -73,7 +86,7 @@ export const apiClient = {
     try {
       const res = await fetch(`${API_BASE}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
@@ -91,7 +104,7 @@ export const apiClient = {
     try {
       const res = await fetch(`${API_BASE}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
+        headers: getAuthHeaders()
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       return await res.json();

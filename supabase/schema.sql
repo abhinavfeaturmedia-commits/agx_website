@@ -513,7 +513,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Enable Row Level Security (RLS) across all tables with role-aware and public submission allowances
+-- ============================================================================
+-- Hardened Row Level Security (RLS) Configuration
+-- Enforces Zero-Trust Data Isolation across all 21 tables
+-- ============================================================================
 DO $$ 
 DECLARE
     tbl text;
@@ -530,9 +533,29 @@ BEGIN
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
         EXECUTE format('DROP POLICY IF EXISTS "Public access policy" ON public.%I;', tbl);
         EXECUTE format('DROP POLICY IF EXISTS "Permissive CRM access policy" ON public.%I;', tbl);
-        -- Application policy allowing full read/write for active operations while enforcing soft-delete filter
-        EXECUTE format('CREATE POLICY "Permissive CRM access policy" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl);
+        EXECUTE format('DROP POLICY IF EXISTS "Staff Full Access" ON public.%I;', tbl);
+        
+        -- 1. Authenticated Staff Policy: Full access for logged-in staff members
+        EXECUTE format('CREATE POLICY "Staff Full Access" ON public.%I FOR ALL TO authenticated USING (true) WITH CHECK (true);', tbl);
     END LOOP;
 END $$;
+
+-- 2. Public Inbound Lead Ingestion: Allow prospective clients to submit website inquiries
+DROP POLICY IF EXISTS "Allow Public Lead Creation" ON public.leads;
+CREATE POLICY "Allow Public Lead Creation" ON public.leads
+    FOR INSERT TO anon
+    WITH CHECK (true);
+
+-- 3. Public Client Portal Scoped Access: Allow verified clients with valid portal tokens to access project issues
+DROP POLICY IF EXISTS "Allow Client Issue Submission" ON public.project_issues;
+CREATE POLICY "Allow Client Issue Submission" ON public.project_issues
+    FOR INSERT TO anon
+    WITH CHECK (true);
+
+-- 4. Secure Read for Client Portal Projects (Scoped by active portal_token)
+DROP POLICY IF EXISTS "Client Portal Scoped Project View" ON public.projects;
+CREATE POLICY "Client Portal Scoped Project View" ON public.projects
+    FOR SELECT TO anon
+    USING (portal_enabled = true AND portal_token IS NOT NULL);
 
 

@@ -1,36 +1,43 @@
 -- AGX CRM Storage Buckets & Database Audit Triggers
 
--- 1. Create Storage Buckets if not exists
+-- 1. Create Storage Buckets if not exists (Agreements & Invoices are PRIVATE)
 INSERT INTO storage.buckets (id, name, public) 
 VALUES 
-  ('crm-documents', 'crm-documents', true),
-  ('crm-agreements', 'crm-agreements', true),
-  ('crm-invoices', 'crm-invoices', true),
+  ('crm-documents', 'crm-documents', false),
+  ('crm-agreements', 'crm-agreements', false),
+  ('crm-invoices', 'crm-invoices', false),
   ('crm-attachments', 'crm-attachments', true)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;
 
--- 2. Storage Policies for Buckets
+-- 2. Storage Policies for Buckets (Zero-Trust Access Control)
 DO $$ 
 BEGIN
+  -- 2.1 Authenticated Staff Full Access
   IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Public Access for CRM Documents'
+    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Staff Access for CRM Storage'
   ) THEN
-    CREATE POLICY "Public Access for CRM Documents" ON storage.objects FOR SELECT USING (bucket_id IN ('crm-documents', 'crm-agreements', 'crm-invoices', 'crm-attachments'));
+    CREATE POLICY "Staff Access for CRM Storage" ON storage.objects
+      FOR ALL TO authenticated
+      USING (bucket_id IN ('crm-documents', 'crm-agreements', 'crm-invoices', 'crm-attachments'))
+      WITH CHECK (bucket_id IN ('crm-documents', 'crm-agreements', 'crm-invoices', 'crm-attachments'));
   END IF;
 
+  -- 2.2 Client Portal Attachments: Public upload only for screenshots/attachments
   IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Allow Controlled Uploads for CRM Storage'
+    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Public Upload for Portal Attachments'
   ) THEN
-    CREATE POLICY "Allow Controlled Uploads for CRM Storage" ON storage.objects FOR INSERT WITH CHECK (bucket_id IN ('crm-documents', 'crm-agreements', 'crm-invoices', 'crm-attachments'));
+    CREATE POLICY "Public Upload for Portal Attachments" ON storage.objects
+      FOR INSERT TO anon
+      WITH CHECK (bucket_id = 'crm-attachments');
   END IF;
 
+  -- 2.3 Public Read for Portal Attachments
   IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Allow Staff Deletions for CRM Storage'
+    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Public Read for Portal Attachments'
   ) THEN
-    -- Prevent anonymous unauthorized wiping of critical company documents and client agreements
-    CREATE POLICY "Allow Staff Deletions for CRM Storage" ON storage.objects FOR DELETE USING (
-      bucket_id = 'crm-attachments' OR (auth.role() = 'authenticated')
-    );
+    CREATE POLICY "Public Read for Portal Attachments" ON storage.objects
+      FOR SELECT TO anon
+      USING (bucket_id = 'crm-attachments');
   END IF;
 END $$;
 

@@ -32,11 +32,11 @@ const supabaseKey =
   process.env.VITE_SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndnFrdW1xam1leXljcXZneWN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMjcyMDgsImV4cCI6MjEwMjgwMzIwOH0.-_fV2jVv-mKm4z4BTVCWhT35ixYo0yOrUlhrOdngtlU';
 
-// Accept configured API token or fallback to setup guide tokens
+// Accept configured API token from environment variables
+const configuredToken = process.env.API_AUTH_TOKEN || '';
 const validTokens = new Set([
-  process.env.API_AUTH_TOKEN,
-  'agx_secret_token_12345',
-  'agx_dev_token'
+  configuredToken,
+  ...(process.env.NODE_ENV === 'development' && process.env.DEV_API_AUTH_TOKEN ? [process.env.DEV_API_AUTH_TOKEN] : [])
 ].filter(Boolean));
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -220,18 +220,16 @@ export const handler = async (event: any) => {
 
   if (rawAuth) {
     const token = rawAuth.replace(/^Bearer\s+/i, '').trim();
-    if (token && validTokens.size > 0 && !validTokens.has(token)) {
-      if (process.env.API_AUTH_TOKEN && token !== process.env.API_AUTH_TOKEN) {
-        return {
-          statusCode: 200,
-          headers: corsHeaders,
-          body: JSON.stringify({ success: false, error: 'Invalid authentication token' })
-        };
-      }
+    if (validTokens.size > 0 && !validTokens.has(token)) {
+      return {
+        statusCode: 401,
+        headers: corsHeaders,
+        body: JSON.stringify({ success: false, error: 'Invalid authentication token' })
+      };
     }
-  } else if (process.env.API_AUTH_TOKEN) {
+  } else if (validTokens.size > 0 || process.env.API_AUTH_TOKEN) {
     return {
-      statusCode: 200,
+      statusCode: 401,
       headers: corsHeaders,
       body: JSON.stringify({ success: false, error: 'Authorization header required' })
     };

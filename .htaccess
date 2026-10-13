@@ -1,30 +1,45 @@
-# ============================================================================
-# Hostinger LiteSpeed / Apache Configuration for agxperience.com
-# ============================================================================
+# Prevent Directory Browsing
+Options -Indexes
+
+# 1. Protect Sensitive Files & Dotfiles from Public Direct Download
+<FilesMatch "(^\.|\.env|\.git|credentials\.json|package\.json|package-lock\.json|server\.js|tsconfig\.json|.*\.sql$|.*\.md$|.*\.zip$)">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+  </IfModule>
+</FilesMatch>
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
-  # 1. Force HTTPS
+  # 2. Block direct HTTP access to internal server directories
+  RewriteRule ^(\.git|\.tmp|directives|execution|database|server|mcp-server|node_modules) - [F,L]
+
+  # 3. Force HTTPS (Crucial for Cloudflare Full Strict Mode)
   RewriteCond %{HTTPS} off
   RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-  # 2. Allow existing files and directories to be served directly
+  # 4. Allow existing valid public files and directories to be served
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # 3. Pass API requests or route through index.html for Single-Page Application
+  # 5. Route Single-Page Application requests to index.html
   RewriteRule ^ index.html [L]
 </IfModule>
 
-# Security Headers & MIME Types
+# Security Headers & MIME Protections
 <IfModule mod_headers.c>
   Header set X-Content-Type-Options "nosniff"
   Header set X-Frame-Options "SAMEORIGIN"
   Header set X-XSS-Protection "1; mode=block"
   Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+  Header set Permissions-Policy "camera=(), microphone=(), geolocation=()"
 </IfModule>
 
 # Browser Caching for Fast Assets

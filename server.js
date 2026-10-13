@@ -20,12 +20,42 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-// Middleware
+// Security & CORS Configuration
+const allowedOrigins = [
+  'https://agxperience.com',
+  'https://www.agxperience.com',
+  'https://agxperience.netlify.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173'
+];
+
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    // Allow server-to-server, mobile or curl (no origin) or allowed origins
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key']
 }));
+
+// HTTP Security Headers (Defense in Depth)
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
@@ -36,6 +66,116 @@ if (process.env.NODE_ENV !== 'production') {
     next();
   });
 }
+
+// ----------------------------------------------------------------------------
+// Cryptographic JWT & Password Verification Helpers
+// ----------------------------------------------------------------------------
+const JWT_SECRET = process.env.JWT_SECRET || 'agx_super_secure_jwt_random_key_replace_this_with_random_string';
+
+function base64UrlEncode(str) {
+  return Buffer.from(str).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+function base64UrlDecode(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  return Buffer.from(str, 'base64').toString('utf8');
+}
+
+function signJwt(payload, expiresInSeconds = 7 * 24 * 3600) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+  const fullPayload = { ...payload, exp, iat: Math.floor(Date.now() / 1000) };
+
+  const encodedHeader = base64UrlEncode(JSON.stringify(header));
+  const encodedPayload = base64UrlEncode(JSON.stringify(fullPayload));
+  const signature = crypto
+    .createHmac('sha256', JWT_SECRET)
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+
+  return `${encodedHeader}.${encodedPayload}.${signature}`;
+}
+
+function verifyJwt(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [encodedHeader, encodedPayload, signature] = parts;
+
+  const expectedSig = crypto
+    .createHmac('sha256', JWT_SECRET)
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+
+  try {
+    const bufA = Buffer.from(signature);
+    const bufB = Buffer.from(expectedSig);
+    if (bufA.length !== bufB.length || !crypto.timingSafeEqual(bufA, bufB)) {
+      return null;
+    }
+    const payload = JSON.parse(base64UrlDecode(encodedPayload));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      return null;
+    }
+    return payload;
+  } catch (_) {
+    return null;
+  }
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+  return `pbkdf2:100000:${salt}:${hash}`;
+}
+
+function verifyPassword(password, storedHash) {
+  if (!storedHash || !password) return false;
+  if (storedHash.startsWith('pbkdf2:')) {
+    const parts = storedHash.split(':');
+    if (parts.length === 4) {
+      const iterations = parseInt(parts[1], 10);
+      const salt = parts[2];
+      const originalHash = parts[3];
+      const checkHash = crypto.pbkdf2Sync(password, salt, iterations, 64, 'sha512').toString('hex');
+      const bufA = Buffer.from(originalHash);
+      const bufB = Buffer.from(checkHash);
+      return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+    }
+  }
+  // Safe comparison if legacy plaintext comparison during migration
+  const bufA = Buffer.from(password);
+  const bufB = Buffer.from(storedHash);
+  if (bufA.length === bufB.length) {
+    return crypto.timingSafeEqual(bufA, bufB);
+  }
+  return false;
+}
+
+// ----------------------------------------------------------------------------
+// Authentication Middleware for Protected Staff & CRM Endpoints
+// ----------------------------------------------------------------------------
+const authenticateStaff = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Staff authentication required' });
+  }
+
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const user = verifyJwt(token);
+  if (!user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or expired staff session' });
+  }
+
+  req.user = user;
+  next();
+};
 
 // ----------------------------------------------------------------------------
 // Health & Diagnostic Endpoints
@@ -52,7 +192,7 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
-app.get('/api/db-status', (req, res) => {
+app.get('/api/db-status', authenticateStaff, (req, res) => {
   res.json(getDbStatus());
 });
 
@@ -61,30 +201,35 @@ app.get('/api/db-status', (req, res) => {
 // ----------------------------------------------------------------------------
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: 'Email is required' });
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: 'Email and password are required' });
   }
 
   try {
-    const rows = await query('SELECT * FROM profiles WHERE email = ? AND deleted_at IS NULL LIMIT 1', [email]);
+    const trimmedEmail = email.trim().toLowerCase();
+    const rows = await query('SELECT * FROM profiles WHERE LOWER(email) = ? AND deleted_at IS NULL LIMIT 1', [trimmedEmail]);
     if (!rows || rows.length === 0) {
-      // Return safe demo fallback if profiles table is empty during initial setup
-      return res.json({
-        success: true,
-        user: {
-          id: '00000000-0000-0000-0000-000000000001',
-          email,
-          fullName: 'Super Admin',
-          role: 'Super Admin',
-          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-          department: 'Leadership'
-        },
-        token: 'agx_jwt_' + crypto.randomBytes(16).toString('hex')
-      });
+      return res.status(401).json({ success: false, error: 'Invalid email or password' });
     }
 
     const user = rows[0];
+    if (user.is_active === 0 || user.is_active === false) {
+      return res.status(403).json({ success: false, error: 'Account is deactivated. Contact Super Admin.' });
+    }
+
+    if (user.password_hash) {
+      const isValid = verifyPassword(password, user.password_hash);
+      if (!isValid) {
+        return res.status(401).json({ success: false, error: 'Invalid email or password' });
+      }
+    } else {
+      // First-time setup for seeded user: automatically upgrade to PBKDF2 hash
+      const newHash = hashPassword(password);
+      await execute('UPDATE profiles SET password_hash = ? WHERE id = ?', [newHash, user.id]);
+    }
+
     const permissions = typeof user.permissions === 'string' ? JSON.parse(user.permissions) : (user.permissions || {});
+    const token = signJwt({ id: user.id, email: user.email, role: user.role });
 
     res.json({
       success: true,
@@ -97,17 +242,20 @@ app.post('/api/auth/login', async (req, res) => {
         department: user.department,
         permissions
       },
-      token: 'agx_jwt_' + crypto.randomBytes(16).toString('hex')
+      token
     });
   } catch (err) {
     console.error('[Auth Error]', err.message);
-    res.status(500).json({ error: 'Authentication service error', details: err.message });
+    res.status(500).json({ success: false, error: 'Authentication service error' });
   }
 });
 
 // ----------------------------------------------------------------------------
 // Generic Helper for CRM Table CRUD
 // ----------------------------------------------------------------------------
+// Enforce staff authentication on all CRM endpoints
+app.use('/api/crm', authenticateStaff);
+
 const registerCrudRoutes = (moduleName, tableName, idPrefix = '') => {
   // GET all records (excluding soft-deleted)
   app.get(`/api/crm/${moduleName}`, async (req, res) => {
@@ -139,16 +287,21 @@ const registerCrudRoutes = (moduleName, tableName, idPrefix = '') => {
         data.id = crypto.randomUUID ? crypto.randomUUID() : (idPrefix + crypto.randomBytes(12).toString('hex'));
       }
 
-      // Stringify JSON fields
+      // Sanitize columns: strictly allow letters, digits, and underscores
+      const sanitizedData = {};
       for (const [key, val] of Object.entries(data)) {
-        if (typeof val === 'object' && val !== null) {
-          data[key] = JSON.stringify(val);
+        if (/^[a-zA-Z0-9_]+$/.test(key)) {
+          if (typeof val === 'object' && val !== null) {
+            sanitizedData[key] = JSON.stringify(val);
+          } else {
+            sanitizedData[key] = val;
+          }
         }
       }
 
-      const keys = Object.keys(data).map(k => `\`${k}\``).join(', ');
-      const placeholders = Object.keys(data).map(() => '?').join(', ');
-      const values = Object.values(data);
+      const keys = Object.keys(sanitizedData).map(k => `\`${k}\``).join(', ');
+      const placeholders = Object.keys(sanitizedData).map(() => '?').join(', ');
+      const values = Object.values(sanitizedData);
 
       await execute(`INSERT INTO \`${tableName}\` (${keys}) VALUES (${placeholders})`, values);
       res.status(201).json({ success: true, id: data.id, data: req.body });
@@ -165,14 +318,20 @@ const registerCrudRoutes = (moduleName, tableName, idPrefix = '') => {
       const data = { ...req.body };
       delete data.id;
 
+      // Sanitize columns: strictly allow letters, digits, and underscores
+      const sanitizedData = {};
       for (const [key, val] of Object.entries(data)) {
-        if (typeof val === 'object' && val !== null) {
-          data[key] = JSON.stringify(val);
+        if (/^[a-zA-Z0-9_]+$/.test(key)) {
+          if (typeof val === 'object' && val !== null) {
+            sanitizedData[key] = JSON.stringify(val);
+          } else {
+            sanitizedData[key] = val;
+          }
         }
       }
 
-      const assignments = Object.keys(data).map(k => `\`${k}\` = ?`).join(', ');
-      const values = [...Object.values(data), id];
+      const assignments = Object.keys(sanitizedData).map(k => `\`${k}\` = ?`).join(', ');
+      const values = [...Object.values(sanitizedData), id];
 
       await execute(`UPDATE \`${tableName}\` SET ${assignments} WHERE id = ?`, values);
       res.json({ success: true, id, data: req.body });

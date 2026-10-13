@@ -69,79 +69,51 @@ export const authService = {
         return { profile: null, error: new Error('Please enter both email and password.') };
       }
 
-      // 1. Check if user exists in profiles
-      const { data: profileRow, error: profileErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .ilike('email', trimmedEmail)
-        .maybeSingle();
-
-      if (profileRow) {
-        // Check if account is suspended / deactivated
-        if (profileRow.is_active === false) {
-          return {
-            profile: null,
-            error: new Error('Your staff account has been deactivated. Please contact your Super Admin.')
+      // 1. Try secure backend server authentication first (Express + MySQL + JWT)
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: trimmedEmail, password: trimmedPass })
+        });
+        const resData = await res.json().catch(() => null);
+        if (res.ok && resData && resData.success && resData.user) {
+          const staffProfile: UserProfile = {
+            id: resData.user.id,
+            email: resData.user.email,
+            fullName: resData.user.fullName,
+            role: resData.user.role as UserRole,
+            department: resData.user.department,
+            phone: resData.user.phone,
+            avatarUrl: resData.user.avatarUrl,
+            isActive: true,
+            permissions: resData.user.permissions || {},
+            lastActiveAt: new Date().toISOString()
           };
+          this.setStaffSession(staffProfile, resData.token);
+          return { profile: staffProfile, error: null };
+        } else if (res.status === 401 || res.status === 403) {
+          return { profile: null, error: new Error(resData?.error || 'Invalid email or password.') };
         }
-
-        // Validate password:
-        // Priority 1: Supabase native Auth sign-in
-        let isAuthenticated = false;
-        const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-          email: trimmedEmail,
-          password: trimmedPass
-        }).catch(() => ({ data: null, error: true }));
-
-        if (authData && authData.user) {
-          isAuthenticated = true;
-        } else if (profileRow.password_hash) {
-          // Priority 2: Fallback to seeded password hash / password verification
-          if (profileRow.password_hash === trimmedPass) {
-            isAuthenticated = true;
-          }
-        }
-
-        if (!isAuthenticated) {
-          return {
-            profile: null,
-            error: new Error('Incorrect password. Please verify your credentials and try again.')
-          };
-        }
-
-        const staffProfile: UserProfile = {
-          id: profileRow.id,
-          email: profileRow.email,
-          fullName: profileRow.full_name,
-          role: profileRow.role as UserRole,
-          department: profileRow.department,
-          phone: profileRow.phone,
-          avatarUrl: profileRow.avatar_url,
-          passwordHash: undefined, // Never expose password hash in frontend state
-          isActive: profileRow.is_active !== false,
-          permissions: profileRow.permissions || {},
-          lastActiveAt: new Date().toISOString()
-        };
-
-        this.setStaffSession(staffProfile);
-        return { profile: staffProfile, error: null };
+      } catch (_) {
+        // Backend offline or running in Supabase-only mode, continue to Supabase auth
       }
 
-      // 2. Try Supabase Auth login if not found in profiles directly
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // 2. Try Supabase native Auth sign-in
+      const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
         password: trimmedPass
       });
 
-      if (!error && data.user) {
+      if (!authErr && authData.user) {
         const profile = await this.getCurrentUserProfile();
         if (profile) {
-          this.setStaffSession(profile);
+          this.setStaffSession(profile, authData.session?.access_token);
           return { profile, error: null };
         }
       }
 
-      return { profile: null, error: error || new Error('No staff account found with this email address. Please contact your Super Admin.') };
+      return { profile: null, error: authErr || new Error('Incorrect credentials. Please verify and try again.') };
     } catch (err: any) {
       return { profile: null, error: err };
     }
@@ -214,11 +186,14 @@ export const authService = {
     return null;
   },
 
-  setStaffSession(profile: UserProfile): void {
+  setStaffSession(profile: UserProfile, token?: string): void {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem('agx_crm_authenticated', 'true');
       localStorage.setItem('agx_crm_current_user', JSON.stringify(profile));
+      if (token) {
+        localStorage.setItem('agx_crm_token', token);
+      }
     } catch (e) {
       console.warn('Error saving staff session:', e);
     }
@@ -229,6 +204,7 @@ export const authService = {
     try {
       localStorage.removeItem('agx_crm_authenticated');
       localStorage.removeItem('agx_crm_current_user');
+      localStorage.removeItem('agx_crm_token');
     } catch (e) {
       console.warn('Error clearing staff session:', e);
     }

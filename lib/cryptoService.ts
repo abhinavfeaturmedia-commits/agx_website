@@ -63,8 +63,7 @@ export const cryptoService = {
 
     try {
       if (typeof window === 'undefined' || !window.crypto || !window.crypto.subtle) {
-        // Fallback for non-crypto environments
-        return `${ENC_PREFIX}b64:${btoa(plaintext)}`;
+        throw new Error('Web Crypto API is not available in this environment');
       }
 
       const key = await getCryptoKey();
@@ -82,8 +81,8 @@ export const cryptoService = {
 
       return `${ENC_PREFIX}${ivHex}:${cipherHex}`;
     } catch (err) {
-      console.warn('Crypto encryption fallback:', err);
-      return `${ENC_PREFIX}b64:${btoa(plaintext)}`;
+      console.error('Vault encryption failed:', err);
+      throw new Error('Failed to encrypt secret securely.');
     }
   },
 
