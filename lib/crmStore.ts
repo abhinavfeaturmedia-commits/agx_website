@@ -418,6 +418,18 @@ function useCrmStoreInternal() {
       probability: newProbability,
       lossReason: effectiveLossReason
     }).catch(err => console.warn('Supabase update lead status error:', err));
+
+    // Deterministic Workflow Automation Hook: Lead moved to WON
+    if (newStatus === 'WON' && oldStatus !== 'WON' && !lead.convertedClientId) {
+      setTimeout(() => {
+        convertLeadToClient(leadId, {
+          createAgreement: false,
+          createInitialInvoice: true,
+          milestoneSplit: '40/30/30'
+        });
+        toast.success('⚡ Automation: Deal Won Engine', `${lead.name} automatically initialized as Client, Project & Kickoff Tasks.`);
+      }, 100);
+    }
   };
 
   const deleteLead = (leadId: string) => {
@@ -616,6 +628,53 @@ function useCrmStoreInternal() {
       if (options?.createInitialInvoice && savedMilestones.length > 0) {
         createInvoiceFromMilestone(savedProject.id, savedMilestones[0].id);
       }
+
+      // Deterministic Automation: Auto-generate 3 starter kickoff tasks
+      const starterTasks: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[] = [
+        {
+          title: 'Technical Discovery & Architecture Alignment',
+          description: `Conduct technical alignment and verify third-party credentials for ${savedClient.company}.`,
+          clientId: savedClient.id,
+          clientName: savedClient.company,
+          projectId: savedProject.id,
+          projectName: savedProject.name,
+          assignedTo: accountMgr,
+          priority: 'High',
+          status: 'TO DO',
+          dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          estimatedHours: 6,
+          actualHours: 0
+        },
+        {
+          title: 'Workspace, Repository & Cloud Environment Provisioning',
+          description: `Configure repository, staging endpoints, and database connection pools for ${savedClient.company}.`,
+          clientId: savedClient.id,
+          clientName: savedClient.company,
+          projectId: savedProject.id,
+          projectName: savedProject.name,
+          assignedTo: accountMgr,
+          priority: 'Medium',
+          status: 'TO DO',
+          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          estimatedHours: 4,
+          actualHours: 0
+        },
+        {
+          title: 'Milestones & Deliverables Roadmap Sign-Off',
+          description: `Lock in delivery schedule and client sign-off checkpoints for all ${savedMilestones.length} milestones.`,
+          clientId: savedClient.id,
+          clientName: savedClient.company,
+          projectId: savedProject.id,
+          projectName: savedProject.name,
+          assignedTo: accountMgr,
+          priority: 'High',
+          status: 'TO DO',
+          dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          estimatedHours: 4,
+          actualHours: 0
+        }
+      ];
+      starterTasks.forEach(t => addTask(t));
 
       // Link and reconcile partner referrals if lead originated from a partner
       const matchingRefs = partnerReferrals.filter(r => 
@@ -863,6 +922,18 @@ function useCrmStoreInternal() {
       return p;
     }));
     toast.success('Milestone Updated', 'Progress saved.');
+
+    // Deterministic Automation: Auto-invoice upon Milestone Completion
+    if (updates.status === 'Completed') {
+      const proj = projects.find(p => p.id === projectId);
+      const targetMilestone = proj?.milestones?.find(m => m.id === milestoneId);
+      if (proj && targetMilestone && !targetMilestone.isBilled && !targetMilestone.invoiceId) {
+        setTimeout(() => {
+          createInvoiceFromMilestone(projectId, milestoneId);
+          toast.success('⚡ Automation: Milestone Invoiced', `Draft Invoice automatically generated for "${targetMilestone.title}".`);
+        }, 150);
+      }
+    }
 
     crmService.updateMilestone(milestoneId, updates).catch(err => console.warn('Supabase update milestone error:', err));
   };
@@ -1152,6 +1223,31 @@ function useCrmStoreInternal() {
   const updateInvoice = (invoiceId: string, updates: Partial<Invoice>) => {
     setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, ...updates } : i));
     toast.success('Invoice Updated', 'Invoice changes saved.');
+
+    // Deterministic Automation: Reconcile payment & partner commission when invoice marked Paid
+    if (updates.status === 'Paid') {
+      const inv = invoices.find(i => i.id === invoiceId);
+      if (inv && inv.status !== 'Paid' && (inv.paidAmount || 0) < inv.total) {
+        const remainingToPay = inv.total - (inv.paidAmount || 0);
+        setTimeout(() => {
+          recordPayment({
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            clientId: inv.clientId,
+            clientName: inv.clientName,
+            projectId: inv.projectId,
+            projectName: inv.projectName,
+            amount: remainingToPay,
+            paymentDate: new Date().toISOString().split('T')[0],
+            paymentMethod: 'Bank Transfer',
+            transactionId: `AUTO-REMIT-${Date.now().toString().slice(-6)}`,
+            status: 'Paid',
+            notes: `[Workflow Automation] Auto-reconciled when invoice #${inv.invoiceNumber} was marked Paid.`
+          });
+          toast.success('⚡ Automation: Payment Reconciled', `Project budget & partner commission automatically credited!`);
+        }, 100);
+      }
+    }
 
     crmService.updateInvoice(invoiceId, updates).catch(err => console.warn('Supabase update invoice error:', err));
   };

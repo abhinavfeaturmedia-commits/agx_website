@@ -12,20 +12,8 @@
     }
   ],
   "components": {
-    "schemas": {},
-    "securitySchemes": {
-      "BearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
-      }
-    }
+    "schemas": {}
   },
-  "security": [
-    {
-      "BearerAuth": []
-    },
-    {}
-  ],
   "paths": {
     "/api/tools/get_daily_briefing": {
       "post": {

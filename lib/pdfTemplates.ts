@@ -1,5 +1,4 @@
-// Centralized High-Fidelity AGX Brand PDF & Document Template Engine
-import { Invoice, Quotation } from '../types/crm';
+import { Invoice, Quotation, Partner, PartnerPayout } from '../types/crm';
 import { AGX_BRANDMARK_BASE64 } from './agxLogoBase64';
 
 // Official AGX Corporate & Commercial Identity Constants (Verified via MSME Udyam & Maharashtra Shops & Establishment)
@@ -1509,3 +1508,201 @@ export function renderQuotationHtml(quotation: Quotation): string {
     </html>
   `;
 }
+
+/**
+ * Renders complete HTML for a Partner Commission Disbursement & Tax Payout Voucher
+ */
+export function renderPartnerPayoutVoucherHtml(payout: PartnerPayout, partner: Partner): string {
+  const grossAmount = payout.amount || 0;
+  const tdsRate = payout.tdsRate !== undefined ? payout.tdsRate : 0.05; // 5% standard Indian commission TDS
+  const tdsAmount = payout.tdsAmount !== undefined ? payout.tdsAmount : Math.round(grossAmount * tdsRate);
+  const netAmount = payout.netDisbursed !== undefined ? payout.netDisbursed : Math.max(0, grossAmount - tdsAmount);
+  const amountWords = numberToIndianWords(netAmount);
+
+  const voucherNum = payout.voucherNumber || ('VOUCHER-AGX-' + (payout.id ? payout.id.slice(0, 8).toUpperCase() : Date.now().toString().slice(-6)));
+  const utrRef = payout.transactionRef || payout.utrNumber || 'CONFIRMED-BANK-REMITTANCE';
+  const payoutDateFormatted = formatDisplayDate(payout.payoutDate || payout.createdAt);
+  const panTaxId = payout.panTaxId || partner.payoutDetails?.panTaxId || 'Unregistered / On File';
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>${voucherNum} &bull; Partner Commission Voucher &bull; ${AGX_BRAND.companyName}</title>
+      <style>
+        ${DOCUMENT_CSS}
+      </style>
+    </head>
+    <body>
+      <div class="page-container">
+        <!-- Brand Header Horizon -->
+        <header class="brand-header">
+          <div class="brand-left">
+            ${getAgxLogoSvg(48)}
+            <div class="brand-details">
+              <h1>${AGX_BRAND.companyName}</h1>
+              <div class="company-legal">${AGX_BRAND.legalEntity} &bull; ${AGX_BRAND.tagline}</div>
+              <div class="company-meta">
+                MSME Reg: <strong>${AGX_BRAND.udyamRegNo}</strong> &bull; Shop Lic: <strong>${AGX_BRAND.gumastaRegNo}</strong><br>
+                PAN: <strong>${AGX_BRAND.pan}</strong> &bull; ${AGX_BRAND.addressLine1}, ${AGX_BRAND.addressLine2}<br>
+                Email: <strong>${AGX_BRAND.billingEmail}</strong> &bull; Web: <strong>${AGX_BRAND.website}</strong>
+              </div>
+            </div>
+          </div>
+          <div class="doc-badge-column">
+            <span class="doc-type-pill">COMMISSION PAYOUT VOUCHER</span>
+            <div class="doc-id">${voucherNum}</div>
+            <div class="doc-date-line">Date: <strong>${payoutDateFormatted}</strong></div>
+            <div class="doc-date-line">Status: <span class="status-dot status-dot-paid" style="display:inline-block; margin-right:4px;"></span><strong>DISBURSED / COMPLETED</strong></div>
+          </div>
+        </header>
+
+        <!-- Beneficiary & Remittance Grid -->
+        <div class="parties-grid">
+          <div class="party-card party-seller">
+            <div class="party-label">Disbursing Principal</div>
+            <div class="party-name">${AGX_BRAND.enterpriseName}</div>
+            <div class="party-lines">
+              <div>Proprietor: <strong>${AGX_BRAND.proprietor}</strong></div>
+              <div>MSME Category: <strong>${AGX_BRAND.msmeCategory}</strong></div>
+              <div>Bank: <strong>${AGX_BRAND.bank.bankName}</strong></div>
+              <div>A/C: <strong>${AGX_BRAND.bank.accountNumber}</strong> (${AGX_BRAND.bank.accountType})</div>
+              <div>IFSC: <strong>${AGX_BRAND.bank.ifsc}</strong></div>
+            </div>
+          </div>
+
+          <div class="party-card party-client">
+            <div class="party-label">Beneficiary Partner / Affiliate</div>
+            <div class="party-name">${partner.name}</div>
+            <div class="party-lines">
+              <div>Entity: <strong>${partner.company || 'Individual Partner / Consultant'}</strong></div>
+              <div>Referral ID: <strong style="font-family:'JetBrains Mono',monospace;">${partner.referralCode}</strong></div>
+              <div>Email: <strong>${partner.email}</strong> &bull; Phone: <strong>${partner.phone || 'N/A'}</strong></div>
+              <div>PAN / Tax ID: <strong style="font-family:'JetBrains Mono',monospace;">${panTaxId}</strong></div>
+              <div>Disbursement Method: <strong>${payout.paymentMethod}</strong></div>
+              ${partner.payoutDetails?.upiId ? `<div>UPI ID: <strong style="font-family:'JetBrains Mono',monospace;">${partner.payoutDetails.upiId}</strong></div>` : ''}
+              ${partner.payoutDetails?.accountNumber ? `<div>Bank A/C: <strong style="font-family:'JetBrains Mono',monospace;">${partner.payoutDetails.accountNumber}</strong> &bull; IFSC: <strong>${partner.payoutDetails.ifsc || ''}</strong></div>` : ''}
+              <div>Transaction UTR / Ref: <strong style="font-family:'JetBrains Mono',monospace; color:#2563EB;">${utrRef}</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Voucher Breakdown Table -->
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 44px; text-align: center;">#</th>
+              <th>Description / Referral Remittance Schedule</th>
+              <th style="width: 140px; text-align: center;">Statutory Provision</th>
+              <th style="width: 120px; text-align: right;">Gross Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-center font-mono">01</td>
+              <td>
+                <div class="item-desc-title">Affiliate & Partner Referral Commission Remittance</div>
+                <div class="item-desc-sub">
+                  Commercial referral fee earned on closed deals under AGX Partner Program.<br>
+                  ${payout.notes ? '<em>Note: ' + payout.notes + '</em>' : ''}
+                </div>
+              </td>
+              <td class="text-center font-mono text-muted">Sec 194H (Commission/Brokerage)</td>
+              <td class="text-right font-mono font-bold">₹${grossAmount.toLocaleString()}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Amount In Words & Financial Summary Ledger -->
+        <div class="bottom-financial-band">
+          <div class="words-container">
+            <div class="words-label">Net Disbursed Amount in Words</div>
+            <div class="words-text">${amountWords}</div>
+            <div class="legal-disclaimer" style="margin-top: 14px;">
+              &bull; This document certifies that commission payment of <strong>₹${netAmount.toLocaleString()}</strong> has been remitted to the partner bank/UPI account.<br>
+              &bull; Tax Deducted at Source (TDS), where applicable, is deposited to the credit of the Central Government of India under PAN ${panTaxId}.<br>
+              &bull; Beneficiary is responsible for filing appropriate statutory returns in their respective assessment jurisdiction.
+            </div>
+          </div>
+
+          <div class="totals-ledger">
+            <div class="ledger-lines-group">
+              <div class="ledger-line">
+                <span>Gross Commission Earned</span>
+                <span>₹${grossAmount.toLocaleString()}</span>
+              </div>
+              <div class="ledger-line" style="color: #DC2626;">
+                <span>Less: TDS u/s 194H (${(tdsRate * 100).toFixed(0)}%)</span>
+                <span>- ₹${tdsAmount.toLocaleString()}</span>
+              </div>
+              <div class="ledger-divider"></div>
+              <div class="ledger-line grand">
+                <span>Net Amount Disbursed</span>
+                <span style="font-size: 16px; color: #16A34A; font-weight: 700;">₹${netAmount.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Executive Signatures -->
+        <div class="signatures-grid">
+          <div class="signature-block">
+            <div class="sig-header">
+              <span>For ${AGX_BRAND.enterpriseName} (Principal)</span>
+              <span class="msme-verified-badge">&check; MSME VERIFIED</span>
+            </div>
+            <div class="sig-image-container">
+              <img src="${AGX_BRAND.signaturePath}" alt="Signature of ${AGX_BRAND.proprietor}" />
+            </div>
+            <div class="sig-divider">
+              <div class="sig-name">${AGX_BRAND.proprietor}</div>
+              <div class="sig-title">${AGX_BRAND.designation} &bull; ${AGX_BRAND.enterpriseName}</div>
+              <div class="sig-validation">&check; Authorised Signatory &amp; Finance Controller</div>
+            </div>
+          </div>
+
+          <div class="signature-block">
+            <div class="sig-header">
+              <span>Partner Acknowledgment</span>
+              <span class="sig-party-tag">${partner.name}</span>
+            </div>
+            <div class="counterparty-body">
+              <div class="counterparty-lines">
+                <div class="cp-row"><span class="cp-label">Recipient Partner:</span><span class="cp-dots"></span></div>
+                <div class="cp-row"><span class="cp-label">Date Received:</span><span class="cp-dots"></span></div>
+                <div class="cp-row"><span class="cp-label">UTR Confirmed:</span><span class="cp-dots"></span></div>
+              </div>
+              <div class="counterparty-stamp-box">
+                <span>Beneficiary Voucher Confirmation</span>
+                <span class="seal-placeholder">Partner Signature</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="page-footer">
+          <div>Generated via <strong>AGX Business OS</strong> &bull; Partner Remittance Record &bull; Strictly Confidential</div>
+          <div>Page 1 of 1 &bull; ${AGX_BRAND.website}</div>
+        </footer>
+      </div>
+
+      <script>
+        function triggerPrint() {
+          setTimeout(function() {
+            window.focus();
+            window.print();
+          }, 300);
+        }
+        if (document.readyState === 'complete') {
+          triggerPrint();
+        } else {
+          window.addEventListener('load', triggerPrint);
+        }
+      </script>
+    </body>
+    </html>
+  `;
+}
+

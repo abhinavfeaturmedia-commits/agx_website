@@ -1,6 +1,6 @@
 // Data Export & Dynamic Invoice & Quotation PDF Generator Service
-import { Invoice, Quotation } from '../types/crm';
-import { renderInvoiceHtml, renderQuotationHtml } from './pdfTemplates';
+import { Invoice, Quotation, Partner, PartnerPayout } from '../types/crm';
+import { renderInvoiceHtml, renderQuotationHtml, renderPartnerPayoutVoucherHtml } from './pdfTemplates';
 
 /**
  * Universal print handler that handles both popups and blocked-popup iframe fallbacks
@@ -51,6 +51,12 @@ export const exportService = {
   // Generate & Print/Download Professional AGX Quotation / Commercial Proposal PDF
   generateQuotationPdf(quotation: Quotation) {
     const html = renderQuotationHtml(quotation);
+    printHtmlDocument(html);
+  },
+
+  // Generate & Print/Download Official AGX Partner Commission Payout Voucher & Tax Receipt PDF
+  generatePartnerPayoutVoucherPdf(payout: PartnerPayout, partner: Partner) {
+    const html = renderPartnerPayoutVoucherHtml(payout, partner);
     printHtmlDocument(html);
   },
 

@@ -1,0 +1,1304 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AGX CRM Cloud AI API",
+    "description": "24/7 Cloud API for managing AGX CRM leads, clients, projects, tasks, calendar events, finance, issues, vault, and partners directly through conversational AI on ChatGPT, Claude, and Gemini.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://agxperience.netlify.app",
+      "description": "Production Netlify Cloud Server (24/7 Available)"
+    }
+  ],
+  "components": {
+    "schemas": {},
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    },
+    {}
+  ],
+  "paths": {
+    "/api/tools/get_daily_briefing": {
+      "post": {
+        "summary": "10-second morning briefing on urgent tasks, follow-ups, and receivables",
+        "operationId": "getDailyBriefing",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Daily briefing summary"
+          }
+        }
+      }
+    },
+    "/api/tools/get_financial_summary": {
+      "post": {
+        "summary": "Total invoiced, collected revenue, outstanding balances, and margin",
+        "operationId": "getFinancialSummary",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Financial summary report"
+          }
+        }
+      }
+    },
+    "/api/tools/search_leads": {
+      "post": {
+        "summary": "Search leads by name, company, email, phone, or status",
+        "operationId": "searchLeads",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Search term across name, company, email, or phone"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "NEW, CONTACTED, QUALIFIED, PROPOSAL SENT, NEGOTIATION, WON, LOST"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "Low, Medium, High, Urgent"
+                  },
+                  "limit": {
+                    "type": "number",
+                    "description": "Max results to return"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of matching leads"
+          }
+        }
+      }
+    },
+    "/api/tools/create_lead": {
+      "post": {
+        "summary": "Create a new prospect/lead in AGX CRM with contact details and deal value",
+        "operationId": "createLead",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Contact person full name"
+                  },
+                  "company": {
+                    "type": "string",
+                    "description": "Company name"
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Phone number"
+                  },
+                  "email": {
+                    "type": "string",
+                    "description": "Email address"
+                  },
+                  "location": {
+                    "type": "string",
+                    "description": "City or country"
+                  },
+                  "interested_service": {
+                    "type": "string",
+                    "description": "Service interest (e.g. AI Automation, Web App)"
+                  },
+                  "estimated_deal_value": {
+                    "description": "Estimated commercial deal value in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "Low, Medium, High, Urgent"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Initial conversation summary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created lead details"
+          }
+        }
+      }
+    },
+    "/api/tools/update_lead": {
+      "post": {
+        "summary": "Move deal across pipeline stages (NEW -> QUALIFIED -> WON) and set follow-ups",
+        "operationId": "updateLead",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Lead UUID"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Lead contact or company name"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "NEW, CONTACTED, QUALIFIED, PROPOSAL SENT, NEGOTIATION, WON, LOST"
+                  },
+                  "estimated_deal_value": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "Low, Medium, High, Urgent"
+                  },
+                  "next_follow_up": {
+                    "type": "string",
+                    "description": "ISO date for next scheduled follow-up"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Status update notes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated lead details"
+          }
+        }
+      }
+    },
+    "/api/tools/log_lead_activity": {
+      "post": {
+        "summary": "Log a call, WhatsApp message, meeting summary, or note for a lead",
+        "operationId": "logLeadActivity",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "notes"
+                ],
+                "properties": {
+                  "lead_id": {
+                    "type": "string"
+                  },
+                  "lead_name": {
+                    "type": "string"
+                  },
+                  "activity_type": {
+                    "type": "string",
+                    "description": "Call, WhatsApp, Email, Meeting, Note, Status Change"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Conversation summary"
+                  },
+                  "set_next_follow_up": {
+                    "type": "string",
+                    "description": "Optional ISO date for next touchpoint"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Activity logged confirmation"
+          }
+        }
+      }
+    },
+    "/api/tools/convert_lead_to_client": {
+      "post": {
+        "summary": "Deal Won pipeline: convert lead to client, start project, and assign onboarding tasks",
+        "operationId": "convertLeadToClient",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "lead_id": {
+                    "type": "string"
+                  },
+                  "lead_name": {
+                    "type": "string",
+                    "description": "Lead name to convert"
+                  },
+                  "project_name": {
+                    "type": "string",
+                    "description": "Project title"
+                  },
+                  "project_value": {
+                    "description": "Total project commercial value in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "service_type": {
+                    "type": "string",
+                    "description": "Custom AI Agent, Automation, etc."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Won deal conversion report"
+          }
+        }
+      }
+    },
+    "/api/tools/search_clients": {
+      "post": {
+        "summary": "Search client accounts, lifetime revenue, and contacts",
+        "operationId": "searchClients",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Client name or company"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Active, Inactive, On Hold"
+                  },
+                  "limit": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of clients"
+          }
+        }
+      }
+    },
+    "/api/tools/create_client": {
+      "post": {
+        "summary": "Create a new client profile",
+        "operationId": "createClient",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "company"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Client contact person"
+                  },
+                  "company": {
+                    "type": "string",
+                    "description": "Business/Company legal name"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "gst_tax_id": {
+                    "type": "string",
+                    "description": "GSTIN or Tax ID"
+                  },
+                  "total_value": {
+                    "description": "Initial account value (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created client details"
+          }
+        }
+      }
+    },
+    "/api/tools/update_client": {
+      "post": {
+        "summary": "Update client profile details, address, tax ID, phone, or status",
+        "operationId": "updateClient",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Client contact or company name to search"
+                  },
+                  "company": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "gst_tax_id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Active, Inactive, On Hold"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated client details"
+          }
+        }
+      }
+    },
+    "/api/tools/list_projects": {
+      "post": {
+        "summary": "List and filter projects by status, manager, or client",
+        "operationId": "listProjects",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "description": "PLANNING, IN PROGRESS, TESTING, CLIENT REVIEW, COMPLETED"
+                  },
+                  "client_name": {
+                    "type": "string"
+                  },
+                  "project_manager": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of projects"
+          }
+        }
+      }
+    },
+    "/api/tools/create_project": {
+      "post": {
+        "summary": "Create a new client project with budget and deadline",
+        "operationId": "createProject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Project title"
+                  },
+                  "client_name": {
+                    "type": "string",
+                    "description": "Client name"
+                  },
+                  "service_type": {
+                    "type": "string",
+                    "description": "Custom AI Agent, Automation, etc."
+                  },
+                  "project_value": {
+                    "description": "Total value in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "description": "Due date (YYYY-MM-DD)"
+                  },
+                  "project_manager": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created project details"
+          }
+        }
+      }
+    },
+    "/api/tools/update_project": {
+      "post": {
+        "summary": "Update project progress %, status, delivery date, or PM",
+        "operationId": "updateProject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Project title"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "PLANNING, IN PROGRESS, TESTING, CLIENT REVIEW, COMPLETED"
+                  },
+                  "progress": {
+                    "type": "number",
+                    "description": "Completion % (0 to 100)"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "project_manager": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated project details"
+          }
+        }
+      }
+    },
+    "/api/tools/manage_milestones": {
+      "post": {
+        "summary": "Create or update project milestones with target deadlines and amounts",
+        "operationId": "manageMilestones",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "create or update (default create)"
+                  },
+                  "project_name": {
+                    "type": "string",
+                    "description": "Project name"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Milestone title"
+                  },
+                  "amount": {
+                    "description": "Commercial amount in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "description": "Due date (YYYY-MM-DD)"
+                  },
+                  "progress": {
+                    "type": "number",
+                    "description": "Milestone progress % (0 to 100)"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Pending, In Progress, Completed"
+                  },
+                  "is_invoiced": {
+                    "type": "boolean",
+                    "description": "Whether milestone has been billed"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Milestone details"
+          }
+        }
+      }
+    },
+    "/api/tools/get_tasks": {
+      "post": {
+        "summary": "Get tasks filtered by status, priority, due today, or assignee",
+        "operationId": "getTasks",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "description": "TO DO, IN PROGRESS, IN REVIEW, COMPLETED, BLOCKED"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "Low, Medium, High, Urgent"
+                  },
+                  "assigned_to": {
+                    "type": "string"
+                  },
+                  "due_today": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of tasks"
+          }
+        }
+      }
+    },
+    "/api/tools/create_task": {
+      "post": {
+        "summary": "Create a new task linked to project, client, or lead",
+        "operationId": "createTask",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "Task title"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "project_name": {
+                    "type": "string"
+                  },
+                  "assigned_to": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "Low, Medium, High, Urgent"
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "description": "Due date (YYYY-MM-DD)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created task details"
+          }
+        }
+      }
+    },
+    "/api/tools/update_task": {
+      "post": {
+        "summary": "Update task status, mark completed, or log actual hours",
+        "operationId": "updateTask",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Task title to match"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "TO DO, IN PROGRESS, IN REVIEW, COMPLETED, BLOCKED"
+                  },
+                  "actual_hours": {
+                    "type": "number"
+                  },
+                  "assigned_to": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated task details"
+          }
+        }
+      }
+    },
+    "/api/tools/manage_invoices": {
+      "post": {
+        "summary": "Create milestone invoices, list existing invoices, or chase overdue collections",
+        "operationId": "manageInvoices",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "create, list, or get_overdue (default create if amount provided, else list)"
+                  },
+                  "client_name": {
+                    "type": "string",
+                    "description": "Client name"
+                  },
+                  "amount": {
+                    "description": "Invoice subtotal amount in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "due_days": {
+                    "type": "number",
+                    "description": "Days until due (default 14)"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Filter by Draft, Sent, Paid, Partially Paid, Overdue"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invoice report or created invoice details"
+          }
+        }
+      }
+    },
+    "/api/tools/manage_quotations": {
+      "post": {
+        "summary": "Generate proposals with 18% GST calculation or list existing quotations",
+        "operationId": "manageQuotations",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "create or list (default create if amount provided, else list)"
+                  },
+                  "client_name": {
+                    "type": "string",
+                    "description": "Client or Lead name"
+                  },
+                  "amount": {
+                    "description": "Quotation subtotal amount in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "valid_days": {
+                    "type": "number",
+                    "description": "Quotation validity in days"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Filter by Draft, Sent, Accepted, Declined"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Quotation details or list of quotations"
+          }
+        }
+      }
+    },
+    "/api/tools/record_payment": {
+      "post": {
+        "summary": "Record received payment, mark invoice paid, and update client balance",
+        "operationId": "recordPayment",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "amount"
+                ],
+                "properties": {
+                  "invoice_number": {
+                    "type": "string",
+                    "description": "Invoice number (e.g. INV-2026-0001)"
+                  },
+                  "client_name": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "description": "Amount received in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "payment_method": {
+                    "type": "string",
+                    "description": "UPI, Bank Transfer, Stripe, Wire"
+                  },
+                  "transaction_id": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment receipt confirmation"
+          }
+        }
+      }
+    },
+    "/api/tools/manage_issues": {
+      "post": {
+        "summary": "Create bug/QA tickets, list issues, or mark tickets resolved with technical notes",
+        "operationId": "manageIssues",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "create, list, or resolve"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Issue summary"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Detailed bug reproduction steps"
+                  },
+                  "project_name": {
+                    "type": "string"
+                  },
+                  "ticket_number": {
+                    "type": "string",
+                    "description": "Ticket code (e.g. ISSUE-2026-001)"
+                  },
+                  "resolution_notes": {
+                    "type": "string",
+                    "description": "Technical fix explanation"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "description": "Low, Medium, High, Critical"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "REPORTED, IN REVIEW, IN PROGRESS, RESOLVED, CLOSED"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Issue ticket details or list"
+          }
+        }
+      }
+    },
+    "/api/tools/manage_expenses": {
+      "post": {
+        "summary": "Record company expenses, SaaS tools, cloud infrastructure, or list expenses",
+        "operationId": "manageExpenses",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "record or list"
+                  },
+                  "amount": {
+                    "description": "Amount spent in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string",
+                    "description": "Developer Cost, SaaS Tools, Infrastructure/Cloud, Marketing/Ads, Office, Other"
+                  },
+                  "vendor": {
+                    "type": "string",
+                    "description": "Vendor name (e.g. OpenAI, AWS, Google)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Expense record or list"
+          }
+        }
+      }
+    },
+    "/api/tools/manage_vault": {
+      "post": {
+        "summary": "Look up client staging credentials or securely save new platform credentials in vault",
+        "operationId": "manageVault",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "query or store (default query if reading, store if saving password/api_key)"
+                  },
+                  "platform_or_client": {
+                    "type": "string",
+                    "description": "Service or client name to look up"
+                  },
+                  "platform_name": {
+                    "type": "string",
+                    "description": "Service name to store (e.g. Supabase, AWS)"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "api_key": {
+                    "type": "string"
+                  },
+                  "environment": {
+                    "type": "string",
+                    "description": "Production, Staging, Sandbox"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Vault credential details"
+          }
+        }
+      }
+    },
+    "/api/tools/manage_agreements": {
+      "post": {
+        "summary": "Generate standardized NDAs, MSAs, and SOWs or list existing signed contracts",
+        "operationId": "manageAgreements",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "generate or list"
+                  },
+                  "party_name": {
+                    "type": "string",
+                    "description": "Client company name"
+                  },
+                  "contract_type": {
+                    "type": "string",
+                    "description": "Mutual NDA, Master Service Agreement, Statement of Work, Retainer"
+                  },
+                  "commercial_terms": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Draft, Sent, Signed, Expired"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Generated agreement contract or list"
+          }
+        }
+      }
+    },
+    "/api/tools/manage_partners": {
+      "post": {
+        "summary": "Register affiliate partners, attribute client referrals, calculate commissions, or log payouts",
+        "operationId": "managePartners",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "register, referral, commissions, or payout"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Partner agency/contact name"
+                  },
+                  "partner_code": {
+                    "type": "string",
+                    "description": "Referral code"
+                  },
+                  "client_name": {
+                    "type": "string",
+                    "description": "Referred client name"
+                  },
+                  "deal_value": {
+                    "description": "Deal commercial value in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "amount": {
+                    "description": "Payout amount in INR (Accepts number or currency string e.g. 200000 or \"₹2,00,000\")",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Partner program details"
+          }
+        }
+      }
+    },
+    "/api/tools/manage_calendar": {
+      "post": {
+        "summary": "Fetch upcoming meetings, schedule client appointments, or process meeting transcripts",
+        "operationId": "manageCalendar",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "get_events, schedule, or transcript"
+                  },
+                  "days_ahead": {
+                    "type": "number",
+                    "description": "Days forward to check meetings"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Meeting subject"
+                  },
+                  "start_time": {
+                    "type": "string",
+                    "description": "Meeting datetime"
+                  },
+                  "client_name": {
+                    "type": "string"
+                  },
+                  "transcript_or_notes": {
+                    "type": "string",
+                    "description": "Raw meeting transcript to auto-file"
+                  },
+                  "action_items": {
+                    "type": "string",
+                    "description": "Agreed next steps"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Calendar schedule or parsed transcript summary"
+          }
+        }
+      }
+    },
+    "/api/tools/manage_team": {
+      "post": {
+        "summary": "Broadcast team dashboard notifications, inspect team workload capacity, or query audit logs",
+        "operationId": "manageTeam",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "notify, workload, or audit (default notify if title/message provided)"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Notification title"
+                  },
+                  "message": {
+                    "type": "string",
+                    "description": "Notification body"
+                  },
+                  "notification_type": {
+                    "type": "string",
+                    "description": "info, warning, success, urgent"
+                  },
+                  "user_name": {
+                    "type": "string",
+                    "description": "Filter audit logs by user"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Team notification, workload summary, or audit trail"
+          }
+        }
+      }
+    }
+  }
+}

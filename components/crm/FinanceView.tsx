@@ -5,7 +5,8 @@ import {
   CreditCard, CheckCircle2, ArrowUpRight, ArrowDownRight, X,
   PieChart, Shield, Calculator, Download, Edit3, Trash2, Printer,
   Receipt, Building, Briefcase, Filter, Layers, DollarSign,
-  AlertCircle, CheckCircle, Clock, Percent, ArrowRight, RefreshCw, Send, Sparkles, Tag
+  AlertCircle, CheckCircle, Clock, Percent, ArrowRight, RefreshCw, Send, Sparkles, Tag,
+  MessageSquare, Mail
 } from 'lucide-react';
 import {
   Invoice, Payment, Expense, InvoiceStatus, PaymentStatus, ExpenseCategory, GstType,
@@ -17,6 +18,7 @@ import { toast } from '../../lib/toastStore';
 import { InvoicePreviewModal } from './InvoicePreviewModal';
 import { QuotationPreviewModal } from './QuotationPreviewModal';
 import { QuotationModal } from './QuotationModal';
+import { analyzeInvoiceDunning, getDunningRadarMetrics, DunningStage } from '../../lib/dunningService';
 
 interface FinanceViewProps {
   store: ReturnType<typeof useCrmStore>;
@@ -50,6 +52,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
   const [selectedClientFilter, setSelectedClientFilter] = useState<string>('All');
   const [selectedInvoiceStatus, setSelectedInvoiceStatus] = useState<string>('All');
   const [selectedInvoiceTypeFilter, setSelectedInvoiceTypeFilter] = useState<'All' | 'GST' | 'Non-GST'>('All');
+  const [dunningStageFilter, setDunningStageFilter] = useState<'ALL' | 'UPCOMING_3_DAYS' | 'DUE_TODAY' | 'OVERDUE_3_DAYS' | 'CRITICAL_OVERDUE_7_DAYS'>('ALL');
+  const dunningRadar = useMemo(() => getDunningRadarMetrics(invoices), [invoices]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('All');
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string>('All');
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('All');
@@ -229,9 +233,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
         (selectedInvoiceTypeFilter === 'GST' && inv.isGst !== false) ||
         (selectedInvoiceTypeFilter === 'Non-GST' && inv.isGst === false);
 
-      return matchesSearch && matchesStatus && matchesClient && matchesType;
+      const matchesDunning = dunningStageFilter === 'ALL' || analyzeInvoiceDunning(inv).stage === dunningStageFilter;
+
+      return matchesSearch && matchesStatus && matchesClient && matchesType && matchesDunning;
     });
-  }, [invoices, searchQuery, selectedInvoiceStatus, selectedClientFilter, selectedInvoiceTypeFilter]);
+  }, [invoices, searchQuery, selectedInvoiceStatus, selectedClientFilter, selectedInvoiceTypeFilter, dunningStageFilter]);
 
   // Filtered Quotations
   const filteredQuotations = useMemo(() => {
@@ -658,6 +664,56 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
             </div>
           </div>
 
+          {/* Automated Receivables Dunning Overview Card */}
+          {dunningRadar.hasActionableItems && (
+            <div className="double-bezel-outer card-tactile">
+              <div className="double-bezel-inner p-5 bg-gradient-to-r from-slate-900 via-gray-900 to-black text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#CCFF00]/10 border border-[#CCFF00]/30 flex items-center justify-center text-[#CCFF00] shrink-0">
+                    <Clock size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-white/50">Collections & Follow-Up Radar</span>
+                      <span className="px-2 py-0.5 rounded-full bg-[#CCFF00]/15 text-[#CCFF00] font-bold text-[9px] font-mono border border-[#CCFF00]/30">
+                        {dunningRadar.items.length} Unpaid Receivables
+                      </span>
+                    </div>
+                    <div className="text-sm font-bold text-white mt-1">
+                      Overdue at Risk: <strong className="text-rose-400 font-mono text-base">₹{dunningRadar.totalOverdueAmount.toLocaleString('en-IN')}</strong> &bull; Total Outstanding: <strong className="text-[#CCFF00] font-mono">₹{dunningRadar.totalOutstanding.toLocaleString('en-IN')}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-xs font-mono">
+                    <span className="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">
+                      {dunningRadar.upcoming.length} Due Soon
+                    </span>
+                    <span className="px-2 py-1 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] font-bold">
+                      {dunningRadar.dueToday.length} Due Today
+                    </span>
+                    <span className="px-2 py-1 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold">
+                      {dunningRadar.overdue3.length + dunningRadar.critical7.length} Overdue
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActiveTab('Invoices');
+                      if (dunningRadar.overdue3.length + dunningRadar.critical7.length > 0) {
+                        setDunningStageFilter('OVERDUE_3_DAYS');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-[#CCFF00]/10 flex items-center gap-1"
+                  >
+                    <span>Manage Collections</span>
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Recent Invoices */}
             <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
@@ -1030,6 +1086,78 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
       {/* TAB 2: INVOICES */}
       {activeTab === 'Invoices' && (
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden space-y-3 p-4">
+          {/* Automated Payment Dunning Radar Control Strip */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-gray-900 via-slate-900 to-black text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-md mb-2">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-[#CCFF00] shrink-0">
+                <Clock size={18} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-white/50">Receivables Dunning Radar</span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] font-bold text-[9px] border border-[#CCFF00]/20 font-mono">
+                    Deterministic Engine
+                  </span>
+                </div>
+                <h4 className="text-xs sm:text-sm font-bold text-white mt-0.5">
+                  Outstanding: <strong className="text-[#CCFF00]">₹{dunningRadar.totalOutstanding.toLocaleString('en-IN')}</strong> &bull; Overdue at Risk: <strong className="text-rose-400">₹{dunningRadar.totalOverdueAmount.toLocaleString('en-IN')}</strong>
+                </h4>
+              </div>
+            </div>
+
+            {/* Dunning Stage Quick Filter Buttons */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => setDunningStageFilter(dunningStageFilter === 'UPCOMING_3_DAYS' ? 'ALL' : 'UPCOMING_3_DAYS')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                  dunningStageFilter === 'UPCOMING_3_DAYS'
+                    ? 'bg-amber-400 text-black border-amber-400'
+                    : 'bg-white/5 hover:bg-white/10 text-amber-300 border-amber-400/20'
+                }`}
+              >
+                Due in 3d ({dunningRadar.upcoming.length})
+              </button>
+              <button
+                onClick={() => setDunningStageFilter(dunningStageFilter === 'DUE_TODAY' ? 'ALL' : 'DUE_TODAY')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                  dunningStageFilter === 'DUE_TODAY'
+                    ? 'bg-orange-400 text-black border-orange-400'
+                    : 'bg-white/5 hover:bg-white/10 text-orange-300 border-orange-400/20'
+                }`}
+              >
+                Due Today ({dunningRadar.dueToday.length})
+              </button>
+              <button
+                onClick={() => setDunningStageFilter(dunningStageFilter === 'OVERDUE_3_DAYS' ? 'ALL' : 'OVERDUE_3_DAYS')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                  dunningStageFilter === 'OVERDUE_3_DAYS'
+                    ? 'bg-rose-500 text-white border-rose-500'
+                    : 'bg-white/5 hover:bg-white/10 text-rose-300 border-rose-400/20'
+                }`}
+              >
+                Overdue 1-6d ({dunningRadar.overdue3.length})
+              </button>
+              <button
+                onClick={() => setDunningStageFilter(dunningStageFilter === 'CRITICAL_OVERDUE_7_DAYS' ? 'ALL' : 'CRITICAL_OVERDUE_7_DAYS')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                  dunningStageFilter === 'CRITICAL_OVERDUE_7_DAYS'
+                    ? 'bg-red-600 text-white border-red-600'
+                    : 'bg-white/5 hover:bg-white/10 text-red-400 border-red-500/30'
+                }`}
+              >
+                Critical 7d+ ({dunningRadar.critical7.length})
+              </button>
+              {dunningStageFilter !== 'ALL' && (
+                <button
+                  onClick={() => setDunningStageFilter('ALL')}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                >
+                  Reset Filter
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pb-3 border-b border-gray-100">
             <div className="relative w-full sm:w-80">
               <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1111,97 +1239,127 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ store, onNavigate, ini
                     </td>
                   </tr>
                 ) : (
-                  filteredInvoices.map((inv) => (
-                    <tr key={inv.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-extrabold text-gray-900">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span>{inv.invoiceNumber}</span>
-                          {inv.quotationNumber && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const q = quotations.find(quote => quote.id === inv.quotationId || quote.quotationNumber === inv.quotationNumber);
-                                if (q) setPreviewQuotation(q);
-                              }}
-                              className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-indigo-100 flex items-center gap-0.5"
-                              title="View linked quotation"
-                            >
-                              <Tag size={9} /> Quote {inv.quotationNumber}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <div
-                          onClick={() => inv.clientId && onNavigate('clients', inv.clientId)}
-                          className="font-bold text-gray-900 hover:text-indigo-600 cursor-pointer"
-                        >
-                          {inv.clientName}
-                        </div>
-                        <div className="text-[10px] text-gray-400">{inv.projectName || 'Service Engagement'}</div>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold inline-flex items-center gap-1 ${
-                          inv.isGst !== false
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-gray-100 text-gray-700 border border-gray-200'
-                        }`}>
-                          {inv.isGst !== false ? `GST ${inv.taxRate || 18}% (${inv.gstType || 'IGST'})` : 'Non-GST'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3 text-gray-600 font-medium">{inv.dueDate}</td>
-                      <td className="py-3.5 px-3 text-gray-600">
-                        <div>₹{inv.subtotal?.toLocaleString('en-IN')}</div>
-                        {inv.discountAmount ? (
-                          <div className="text-[10px] text-emerald-600">-₹{inv.discountAmount.toLocaleString('en-IN')} disc.</div>
-                        ) : null}
-                      </td>
-                      <td className="py-3.5 px-3 font-semibold text-gray-700">
-                        {inv.isGst !== false ? `₹${(inv.tax || 0).toLocaleString('en-IN')}` : '₹0 (Exempt)'}
-                      </td>
-                      <td className="py-3.5 px-3 font-extrabold text-gray-900">₹{inv.total.toLocaleString('en-IN')}</td>
-                      <td className="py-3.5 px-3">
-                        <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
-                          inv.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' :
-                          inv.status === 'Overdue' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {inv.status}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                  filteredInvoices.map((inv) => {
+                    const dunning = analyzeInvoiceDunning(inv);
+                    return (
+                      <tr key={inv.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-3.5 px-4 font-extrabold text-gray-900">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span>{inv.invoiceNumber}</span>
+                            {inv.quotationNumber && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const q = quotations.find(quote => quote.id === inv.quotationId || quote.quotationNumber === inv.quotationNumber);
+                                  if (q) setPreviewQuotation(q);
+                                }}
+                                className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-indigo-100 flex items-center gap-0.5"
+                                title="View linked quotation"
+                              >
+                                <Tag size={9} /> Quote {inv.quotationNumber}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div
+                            onClick={() => inv.clientId && onNavigate('clients', inv.clientId)}
+                            className="font-bold text-gray-900 hover:text-indigo-600 cursor-pointer"
+                          >
+                            {inv.clientName}
+                          </div>
+                          <div className="text-[10px] text-gray-400">{inv.projectName || 'Service Engagement'}</div>
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold inline-flex items-center gap-1 ${
+                            inv.isGst !== false
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-gray-100 text-gray-700 border border-gray-200'
+                          }`}>
+                            {inv.isGst !== false ? `GST ${inv.taxRate || 18}% (${inv.gstType || 'IGST'})` : 'Non-GST'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="text-gray-700 font-medium text-xs">{inv.dueDate}</div>
                           {inv.status !== 'Paid' && (
-                            <button
-                              onClick={() => handleOpenRecordPaymentForInvoice(inv)}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] cursor-pointer"
-                            >
-                              Collect
-                            </button>
+                            <div className="mt-1">
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${dunning.badgeColor}`}>
+                                {dunning.stageLabel}
+                              </span>
+                            </div>
                           )}
-                          <button
-                            onClick={() => handleDownloadInvoicePdf(inv)}
-                            className="px-2.5 py-1 rounded-lg bg-black hover:bg-gray-800 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer"
-                          >
-                            <Printer size={11} /> PDF
-                          </button>
-                          <button
-                            onClick={() => setEditingInvoice(inv)}
-                            className="p-1 text-gray-400 hover:text-black rounded cursor-pointer"
-                            title="Edit Invoice"
-                          >
-                            <Edit3 size={13} />
-                          </button>
-                          <button
-                            onClick={() => setInvoiceToDelete(inv)}
-                            className="p-1 text-gray-400 hover:text-rose-600 rounded cursor-pointer"
-                            title="Delete Invoice"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="py-3.5 px-3 text-gray-600">
+                          <div>₹{inv.subtotal?.toLocaleString('en-IN')}</div>
+                          {inv.discountAmount ? (
+                            <div className="text-[10px] text-emerald-600">-₹{inv.discountAmount.toLocaleString('en-IN')} disc.</div>
+                          ) : null}
+                        </td>
+                        <td className="py-3.5 px-3 font-semibold text-gray-700">
+                          {inv.isGst !== false ? `₹${(inv.tax || 0).toLocaleString('en-IN')}` : '₹0 (Exempt)'}
+                        </td>
+                        <td className="py-3.5 px-3 font-extrabold text-gray-900">₹{inv.total.toLocaleString('en-IN')}</td>
+                        <td className="py-3.5 px-3">
+                          <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                            inv.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' :
+                            inv.status === 'Overdue' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            {inv.status !== 'Paid' && (
+                              <>
+                                <button
+                                  onClick={() => handleOpenRecordPaymentForInvoice(inv)}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] cursor-pointer"
+                                >
+                                  Collect
+                                </button>
+                                <a
+                                  href={dunning.whatsappUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[10px] inline-flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                                  title={`Send WhatsApp Reminder (${dunning.stageLabel})`}
+                                >
+                                  <MessageSquare size={11} /> WA
+                                </a>
+                                <a
+                                  href={dunning.mailtoUrl}
+                                  className="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] inline-flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                                  title={`Send Email Reminder (${dunning.stageLabel})`}
+                                >
+                                  <Mail size={11} /> Email
+                                </a>
+                              </>
+                            )}
+                            <button
+                              onClick={() => handleDownloadInvoicePdf(inv)}
+                              className="px-2.5 py-1 rounded-lg bg-black hover:bg-gray-800 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                            >
+                              <Printer size={11} /> PDF
+                            </button>
+                            <button
+                              onClick={() => setEditingInvoice(inv)}
+                              className="p-1 text-gray-400 hover:text-black rounded cursor-pointer"
+                              title="Edit Invoice"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button
+                              onClick={() => setInvoiceToDelete(inv)}
+                              className="p-1 text-gray-400 hover:text-rose-600 rounded cursor-pointer"
+                              title="Delete Invoice"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

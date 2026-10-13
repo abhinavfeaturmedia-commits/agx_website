@@ -1,5 +1,6 @@
-// Supabase Data Service Layer for AGX CRM & Business Operating System
+// Supabase & Hostinger Node.js Data Service Layer for AGX CRM & Business Operating System
 import { supabase } from './supabase';
+import { apiClient } from './apiClient';
 import {
   Lead, LeadStatus, LeadActivity, LeadActivityType, Client, Project, ProjectMilestone, ProjectStatus,
   Task, TaskStatus, Invoice, InvoiceItem, Payment, Expense, Agreement, DocumentItem,
@@ -914,9 +915,16 @@ export const crmService = {
   // Connection Health
   async checkConnection(): Promise<{ ok: boolean; message?: string }> {
     try {
+      const health = await apiClient.checkHealth();
+      if (health.online) {
+        return { ok: true, message: `Node.js + MySQL (${(health as any).database?.database || 'connected'})` };
+      }
+    } catch (_) {}
+
+    try {
       const { error } = await supabase.from('profiles').select('id').limit(1);
       if (error) throw error;
-      return { ok: true };
+      return { ok: true, message: 'Supabase Live' };
     } catch (e: any) {
       return { ok: false, message: e?.message || 'Connection failed' };
     }
@@ -947,6 +955,58 @@ export const crmService = {
 
   // Full Initial Fetch
   async fetchAllData() {
+    // 1. Try Node.js Express + MySQL API first if available on Hostinger
+    try {
+      const apiRes = await apiClient.get<any>('/crm/all');
+      if (apiRes && apiRes.success && apiRes.data) {
+        const d = apiRes.data;
+        const leadActivities = (d.leadActivities || []).map(mapLeadActivityFromDb);
+        const milestones = (d.milestones || []).map(mapMilestoneFromDb);
+        const clients = (d.clients || []).filter((r: any) => !r.deleted_at).map(mapClientFromDb);
+        const projects = (d.projects || []).filter((r: any) => !r.deleted_at).map((p: any) => mapProjectFromDb(p, milestones));
+        const invoices = (d.invoices || []).filter((r: any) => !r.deleted_at).map((i: any) => mapInvoiceFromDb(i, projects));
+        const leads = (d.leads || []).filter((r: any) => !r.deleted_at).map((l: any) => mapLeadFromDb(l, leadActivities));
+        const tasks = (d.tasks || []).filter((r: any) => !r.deleted_at).map((t: any) => mapTaskFromDb(t, clients, projects, leads));
+        const payments = (d.payments || []).filter((r: any) => !r.deleted_at).map((p: any) => mapPaymentFromDb(p, clients, projects, invoices));
+        const expenses = (d.expenses || []).filter((r: any) => !r.deleted_at).map((e: any) => mapExpenseFromDb(e, clients, projects));
+        const agreements = (d.agreements || []).filter((r: any) => !r.deleted_at).map((a: any) => mapAgreementFromDb(a, clients, projects, leads));
+        const documents = (d.documents || []).filter((r: any) => !r.deleted_at).map((doc: any) => mapDocumentFromDb(doc, clients, projects, leads));
+        const credentials = (d.credentials || []).filter((r: any) => !r.deleted_at).map((c: any) => mapCredentialFromDb(c, clients, projects));
+        const events = (d.events || []).filter((r: any) => !r.deleted_at).map((e: any) => mapCalendarEventFromDb(e, leads));
+        const notifications = (d.notifications || []).map(mapNotificationFromDb);
+        const auditLogs = (d.auditLogs || []).map(mapAuditLogFromDb);
+        const partners = (d.partners || []).filter((r: any) => !r.deleted_at).map(mapPartnerFromDb);
+        const partnerReferrals = (d.partnerReferrals || []).filter((r: any) => !r.deleted_at).map((r: any) => mapPartnerReferralFromDb(r, partners));
+        const partnerPayouts = (d.partnerPayouts || []).filter((r: any) => !r.deleted_at).map((p: any) => mapPartnerPayoutFromDb(p, partners));
+        const quotations = (d.quotations || []).filter((r: any) => !r.deleted_at).map((q: any) => mapQuotationFromDb(q, leads, clients, projects));
+
+        return {
+          profiles: (d.profiles || []).map(mapProfileFromDb),
+          leads,
+          leadActivities,
+          clients,
+          projects,
+          tasks,
+          invoices,
+          quotations,
+          payments,
+          expenses,
+          agreements,
+          documents,
+          credentials,
+          events,
+          notifications,
+          auditLogs,
+          partners,
+          partnerReferrals,
+          partnerPayouts
+        };
+      }
+    } catch (nodeErr) {
+      console.warn('[crmService] Node.js MySQL API unavailable, falling back to Supabase:', nodeErr);
+    }
+
+    // 2. Supabase Cloud Fallback Fetch
     const [
       profilesRes,
       leadsRes,
@@ -2050,6 +2110,13 @@ export const crmService = {
 
   // --- Project Issues / Client Tickets ---
   async fetchAllIssues(): Promise<ProjectIssue[]> {
+    try {
+      const apiRes = await apiClient.get<any>('/crm/issues');
+      if (apiRes && apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
+        return apiRes.data.map(mapIssueFromDb);
+      }
+    } catch (_) {}
+
     try {
       const { data, error } = await supabase.from('project_issues').select('*').order('created_at', { ascending: false });
       if (error) {

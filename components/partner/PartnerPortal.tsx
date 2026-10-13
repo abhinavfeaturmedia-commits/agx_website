@@ -8,12 +8,13 @@ import {
   MessageSquare, ChevronDown, CheckCheck, Send, Zap, Award, Sliders,
   ArrowDownRight, Eye, EyeOff, KeyRound, Percent, DollarSign, CheckCircle, User, Lock, Bell, Globe
 } from 'lucide-react';
-import { Partner, PartnerReferral, PartnerPayout, PartnerPayoutDetails } from '../../types/crm';
+import { Partner, PartnerReferral, PartnerPayout, PartnerPayoutDetails, calculatePartnerTier } from '../../types/crm';
 import { useCrmStore } from '../../lib/crmStore';
 import { authService } from '../../lib/authService';
 import { toast } from '../../lib/toastStore';
 import { supabase } from '../../lib/supabase';
 import { mapPartnerFromDb } from '../../lib/crmService';
+import { exportService } from '../../lib/exportService';
 import { BorderBeam } from 'border-beam';
 import { ThinkingOrb } from 'thinking-orbs';
 import { BotAvatar } from 'bot-avatars';
@@ -264,6 +265,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
   const wonDealsCount = myReferrals.filter(
     r => r.dealStatus === 'WON' || r.dealStatus === 'IN PROGRESS' || r.dealStatus === 'COMPLETED'
   ).length;
+  const partnerTier = useMemo(() => calculatePartnerTier(wonDealsCount), [wonDealsCount]);
   const winRate = totalReferredClients > 0 ? Math.round((wonDealsCount / totalReferredClients) * 100) : 0;
 
   const totalPipelineValue = myReferrals.reduce((acc, r) => acc + (r.dealValue || 0), 0);
@@ -788,6 +790,94 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
           </div>
         </section>
 
+        {/* TIER MILESTONE PROGRESSION & GAMIFICATION CARD */}
+        <section className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#111625] via-[#0D111D] to-[#080B12] border border-white/10 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-32 bg-gradient-to-l from-[#CCFF00]/[0.05] to-transparent rounded-full blur-2xl pointer-events-none" />
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+            <div className="flex items-center gap-3.5">
+              <div 
+                className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg shadow-inner shrink-0 border"
+                style={{ 
+                  backgroundColor: `${partnerTier.tierColor}18`, 
+                  color: partnerTier.tierColor,
+                  borderColor: `${partnerTier.tierColor}35`
+                }}
+              >
+                <Award size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase font-mono tracking-widest text-white/50">Commission Tier</span>
+                  <span 
+                    className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border font-mono"
+                    style={{ 
+                      backgroundColor: `${partnerTier.tierColor}15`, 
+                      color: partnerTier.tierColor,
+                      borderColor: `${partnerTier.tierColor}30`
+                    }}
+                  >
+                    {partnerTier.badgeLabel}
+                  </span>
+                </div>
+                <h4 className="text-sm sm:text-base font-bold text-white mt-1">
+                  {partnerTier.nextTier ? (
+                    <span>
+                      Refer <strong className="text-[#CCFF00] font-black">{partnerTier.dealsNeededForNextTier} more client{partnerTier.dealsNeededForNextTier > 1 ? 's' : ''}</strong> to unlock the <strong>{partnerTier.nextTier} Tier ({partnerTier.nextTier === 'Gold' ? '20%' : '15%'})</strong>!
+                    </span>
+                  ) : (
+                    <span className="text-[#CCFF00]">
+                      Max Gold Tier Unlocked! You receive top-tier 20% on all closed client contracts.
+                    </span>
+                  )}
+                </h4>
+              </div>
+            </div>
+
+            {/* Badges Matrix */}
+            <div className="flex items-center gap-2">
+              <div className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all ${
+                partnerTier.tier === 'Bronze' 
+                  ? 'bg-[#D97706]/20 border-[#D97706]/40 text-[#D97706] shadow-sm' 
+                  : 'bg-white/[0.03] border-white/10 text-white/35'
+              }`}>
+                <span>🥉 Bronze</span>
+                <span className="font-mono text-[10px]">10%</span>
+              </div>
+              <div className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all ${
+                partnerTier.tier === 'Silver' 
+                  ? 'bg-[#94A3B8]/20 border-[#94A3B8]/40 text-white shadow-sm' 
+                  : 'bg-white/[0.03] border-white/10 text-white/35'
+              }`}>
+                <span>🥈 Silver</span>
+                <span className="font-mono text-[10px]">15%</span>
+              </div>
+              <div className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all ${
+                partnerTier.tier === 'Gold' 
+                  ? 'bg-[#EAB308]/20 border-[#EAB308]/40 text-[#EAB308] shadow-sm' 
+                  : 'bg-white/[0.03] border-white/10 text-white/35'
+              }`}>
+                <span>🥇 Gold</span>
+                <span className="font-mono text-[10px]">20%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Milestone Progress Bar */}
+          <div className="mt-4 pt-3.5 border-t border-white/[0.06] space-y-1.5 relative z-10">
+            <div className="flex justify-between items-center text-[11px] font-mono">
+              <span className="text-white/50">{wonDealsCount} Closed Deals On Record</span>
+              <span className="text-[#CCFF00] font-semibold">{partnerTier.progressPercent}% to {partnerTier.nextTier ? `${partnerTier.nextTier} Tier` : 'Max Tier'}</span>
+            </div>
+            <div className="h-2.5 w-full bg-white/[0.05] rounded-full overflow-hidden p-0.5 border border-white/[0.08]">
+              <div 
+                className="h-full rounded-full transition-all duration-700 bg-gradient-to-r from-[#CCFF00] via-emerald-400 to-[#CCFF00]"
+                style={{ width: `${Math.max(4, partnerTier.progressPercent)}%` }}
+              />
+            </div>
+          </div>
+        </section>
+
         {/* 4 HIGH-CONTRAST METRICS PILLARS */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
           {/* Card 1: Clients & Win Rate */}
@@ -1161,12 +1251,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                       <th className="py-3.5 px-5">Reference / UTR</th>
                       <th className="py-3.5 px-5">Status</th>
                       <th className="py-3.5 px-5">Notes</th>
+                      <th className="py-3.5 px-5 text-right">Tax Voucher</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/[0.04]">
                     {myPayouts.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-14 text-center text-white/40 text-xs">
+                        <td colSpan={7} className="py-14 text-center text-white/40 text-xs">
                           No commission payouts logged yet. When your referred clients make milestone payments, your available balance unlocks for withdrawal.
                         </td>
                       </tr>
@@ -1191,6 +1282,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                             </span>
                           </td>
                           <td className="py-4 px-5 text-white/50 text-[11px] max-w-xs truncate">{p.notes || '—'}</td>
+                          <td className="py-4 px-5 text-right">
+                            {p.status === 'Completed' ? (
+                              <button
+                                onClick={() => exportService.generatePartnerPayoutVoucherPdf(p, partner)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.06] hover:bg-[#CCFF00] hover:text-black text-white/80 border border-white/10 text-[11px] font-bold transition-all cursor-pointer shadow-xs"
+                                title="Download Official Tax Voucher (PDF)"
+                              >
+                                <Download size={12} />
+                                <span>Voucher</span>
+                              </button>
+                            ) : (
+                              <span className="text-white/30 text-[10px] font-mono">Pending</span>
+                            )}
+                          </td>
                         </tr>
                       ))
                     )}

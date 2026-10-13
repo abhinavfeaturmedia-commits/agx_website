@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Handshake, Users, DollarSign, IndianRupee, Wallet, Search, Filter, Plus, Edit2,
   Trash2, ExternalLink, CheckCircle2, AlertCircle, Clock, ArrowUpRight,
-  Sparkles, Shield, ChevronRight, X, Phone, Mail, Building, CreditCard, TrendingUp
+  Sparkles, Shield, ChevronRight, X, Phone, Mail, Building, CreditCard, TrendingUp, Download
 } from 'lucide-react';
 import { Partner, PartnerReferral, PartnerPayout } from '../../types/crm';
 import { useCrmStore } from '../../lib/crmStore';
 import { toast } from '../../lib/toastStore';
+import { exportService } from '../../lib/exportService';
 
 function formatLastLogin(dateStr?: string): { relative: string; full: string; isRecent: boolean } {
   if (!dateStr) return { relative: 'Never', full: 'No login record', isRecent: false };
@@ -667,6 +668,16 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                             }`}>
                               {p.transactionRef || p.status}
                             </span>
+                            {p.status === 'Completed' && selectedPartner && (
+                              <button
+                                onClick={() => exportService.generatePartnerPayoutVoucherPdf(p, selectedPartner)}
+                                className="px-2 py-1 bg-gray-100 hover:bg-black hover:text-[#CCFF00] text-gray-700 rounded-lg text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1"
+                                title="Download Official Tax Voucher (PDF)"
+                              >
+                                <Download size={11} />
+                                <span>Voucher</span>
+                              </button>
+                            )}
                             {p.status === 'Pending' && (
                               <button
                                 onClick={() => handleApprovePayout(p.id)}

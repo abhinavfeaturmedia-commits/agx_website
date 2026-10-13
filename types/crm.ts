@@ -660,6 +660,60 @@ export interface PartnerReferral {
   updatedAt?: string;
 }
 
+export type PartnerTierName = 'Bronze' | 'Silver' | 'Gold';
+
+export interface PartnerTierInfo {
+  tier: PartnerTierName;
+  commissionRate: number; // 0.10 for Bronze, 0.15 for Silver, 0.20 for Gold
+  closedDealsCount: number;
+  nextTier?: PartnerTierName;
+  dealsNeededForNextTier: number;
+  progressPercent: number; // 0 to 100
+  tierColor: string;
+  badgeLabel: string;
+}
+
+export const calculatePartnerTier = (closedDealsCount: number): PartnerTierInfo => {
+  const safeCount = Math.max(0, closedDealsCount || 0);
+  if (safeCount >= 10) {
+    return {
+      tier: 'Gold',
+      commissionRate: 0.20,
+      closedDealsCount: safeCount,
+      dealsNeededForNextTier: 0,
+      progressPercent: 100,
+      tierColor: '#EAB308', // Amber/Gold
+      badgeLabel: 'Gold Partner (20%)'
+    };
+  }
+  if (safeCount >= 4) {
+    const dealsNeeded = 10 - safeCount;
+    const progress = Math.min(100, Math.round(((safeCount - 4) / 6) * 100));
+    return {
+      tier: 'Silver',
+      commissionRate: 0.15,
+      closedDealsCount: safeCount,
+      nextTier: 'Gold',
+      dealsNeededForNextTier: dealsNeeded,
+      progressPercent: progress,
+      tierColor: '#94A3B8', // Silver Slate
+      badgeLabel: 'Silver Partner (15%)'
+    };
+  }
+  const dealsNeeded = 4 - safeCount;
+  const progress = Math.min(100, Math.round((safeCount / 4) * 100));
+  return {
+    tier: 'Bronze',
+    commissionRate: 0.10,
+    closedDealsCount: safeCount,
+    nextTier: 'Silver',
+    dealsNeededForNextTier: dealsNeeded,
+    progressPercent: progress,
+    tierColor: '#D97706', // Bronze Amber
+    badgeLabel: 'Bronze Partner (10%)'
+  };
+};
+
 export interface PartnerPayout {
   id: string;
   partnerId: string;
@@ -670,6 +724,13 @@ export interface PartnerPayout {
   transactionRef?: string;
   status: 'Pending' | 'Completed' | 'Failed';
   notes?: string;
+  tdsRate?: number; // e.g. 0.05 for 5% TDS
+  tdsAmount?: number;
+  netDisbursed?: number;
+  voucherNumber?: string;
+  utrNumber?: string;
+  panTaxId?: string;
   createdAt: string;
 }
+
 

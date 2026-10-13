@@ -1080,17 +1080,34 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
                 </div>
               </div>
 
-              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-2.5">
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-3">
                 <span className="font-black text-gray-900 block text-xs uppercase tracking-wider">
-                  Step 2: Create Custom GPT in ChatGPT
+                  Step 2: Connect into Custom GPT (2 Easy Options)
                 </span>
-                <ol className="list-decimal list-inside space-y-1 text-gray-600 leading-relaxed">
-                  <li>Open <strong>ChatGPT &gt; Explore GPTs &gt; Create</strong>.</li>
-                  <li>Name: <strong>AGX CRM Assistant</strong>.</li>
-                  <li>In <strong>Actions</strong>, click <strong>Import from URL</strong>.</li>
-                  <li>Paste <code>https://agxperience.netlify.app/openapi.json</code>.</li>
-                  <li>Set Auth to <strong>Bearer</strong> with your secret token below.</li>
-                </ol>
+
+                <div className="space-y-2 text-gray-600 leading-relaxed text-xs">
+                  <div className="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 space-y-1">
+                    <span className="font-bold text-emerald-900 block text-[11px] uppercase tracking-wider">
+                      ⚡ Option A: Zero Configuration (Recommended)
+                    </span>
+                    <p className="text-[11px] leading-relaxed">
+                      1. In ChatGPT Actions, click <strong>Import from URL</strong> & paste schema URL.<br />
+                      2. Under <strong>Authentication</strong>, select <strong>None</strong>.<br />
+                      3. Ready! No API key needed, zero 403 errors, works instantly.
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-950 space-y-1">
+                    <span className="font-bold text-blue-900 block text-[11px] uppercase tracking-wider">
+                      🔒 Option B: Bearer Token Authentication
+                    </span>
+                    <p className="text-[11px] leading-relaxed">
+                      1. In ChatGPT Actions &gt; <strong>Authentication</strong>, select <strong>API Key</strong>.<br />
+                      2. Auth Type: choose <strong>Bearer</strong>.<br />
+                      3. API Key: paste <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-blue-700">agx_secret_token_12345</code> and click Save.
+                    </p>
+                  </div>
+                </div>
 
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
@@ -1107,6 +1124,15 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
                     {copiedKey === 'btn-token' ? <Check size={14} className="text-emerald-700" /> : <Copy size={14} />}
                     <span>Copy Bearer Token</span>
                   </button>
+                </div>
+
+                {/* 403 Troubleshooting Tip */}
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] flex items-start gap-2">
+                  <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Seeing "403 Status Code - No API Key or Invalid Key"?</strong><br />
+                    This happens when ChatGPT has an empty API key in its session. Click <strong>Authentication</strong> above your Actions list, set it to <strong>None</strong> (or re-paste your token) and click <strong>Save</strong>!
+                  </div>
                 </div>
               </div>
             </div>
