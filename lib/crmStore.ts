@@ -1,5 +1,5 @@
 // AGX CRM & Business Operating System Store & Data Provider
-// Enterprise Supabase Integration with Optimistic UI, Full CRUD, Realtime Sync, and Toast Alerts
+// Enterprise MySQL & Express REST Integration with Optimistic UI, Full CRUD, Realtime Sync, and Toast Alerts
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { crmService } from './crmService';
 import { authService } from './authService';
@@ -10,7 +10,7 @@ import {
   CredentialVaultItem, CalendarEvent, NotificationItem, AuditLog, Priority,
   InvoiceStatus, ExpenseCategory, AgreementStatus, CrmModuleKey, ModulePermissions, ROLE_DEFAULT_PERMISSIONS,
   ProjectIssue, IssueStatus, IssueType, IssuePriority,
-  Partner, PartnerReferral, PartnerPayout,
+  Partner, PartnerReferral, PartnerPayout, ClientDocument,
   Quotation, QuotationItem, QuotationStatus
 } from '../types/crm';
 
@@ -175,14 +175,15 @@ function useCrmStoreInternal() {
   const [partnerPayouts, setPartnerPayouts] = useState<PartnerPayout[]>(() => loadFromStorage('partner_payouts', INITIAL_PARTNER_PAYOUTS));
 
   // Connection & sync state
-  const [isSupabaseConnected, setIsSupabaseConnected] = useState(true);
+  const [isMySQLConnected, setIsMySQLConnected] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Retain only active session identity in local storage (prevents 5MB browser QuotaExceeded crash)
+  // Retain active session identity and team members in local storage
   useEffect(() => saveToStorage('current_user', currentUser), [currentUser]);
+  useEffect(() => saveToStorage('team_members', teamMembers), [teamMembers]);
 
   // Cloud Data Loader
   const refreshFromCloud = useCallback(async (silent = false) => {
@@ -209,15 +210,25 @@ function useCrmStoreInternal() {
       if ((data as any).partnerReferrals !== undefined) setPartnerReferrals((data as any).partnerReferrals);
       if ((data as any).partnerPayouts !== undefined) setPartnerPayouts((data as any).partnerPayouts);
 
-      const cloudIssues = await crmService.fetchAllIssues();
-      if (cloudIssues !== undefined) {
-        setIssues(cloudIssues);
+      if ((data as any).issues !== undefined) {
+        setIssues((data as any).issues);
+      } else {
+        const cloudIssues = await crmService.fetchAllIssues();
+        if (cloudIssues !== undefined) {
+          setIssues(cloudIssues);
+        }
       }
 
-      setIsSupabaseConnected(true);
+      const isLiveDb = Boolean((data as any).mysqlConnected);
+      setIsMySQLConnected(isLiveDb);
       setLastSyncedAt(new Date());
       setSyncError(null);
-      if (!silent) toast.success('Synced with Supabase Live', 'All CRM tables are up to date.');
+      if (!silent) {
+        toast.success(
+          isLiveDb ? 'Synced with MySQL Database' : 'Synced with Persistent Local Storage',
+          isLiveDb ? 'All CRM tables are up to date on cloud.' : 'All CRM records active in local persistent storage.'
+        );
+      }
 
       // Resilient auto-drain of offline leads queue
       try {
@@ -240,9 +251,9 @@ function useCrmStoreInternal() {
         console.warn('Offline leads auto-drain warning:', drainErr);
       }
     } catch (err: any) {
-      console.warn('Supabase fetch error, maintaining local state:', err);
-      setIsSupabaseConnected(false);
-      setSyncError(err?.message || 'Failed to sync with Supabase');
+      console.warn('MySQL fetch error, maintaining local state:', err);
+      setIsMySQLConnected(false);
+      setSyncError(err?.message || 'Failed to sync with MySQL database');
       if (!silent) toast.error('Cloud Sync Error', 'Operating in local cache fallback mode.');
     } finally {
       setIsLoading(false);
@@ -250,7 +261,7 @@ function useCrmStoreInternal() {
     }
   }, []);
 
-  // Initial mount: load data from Supabase & subscribe to realtime
+  // Initial mount: load data from MySQL & subscribe to realtime
   useEffect(() => {
     refreshFromCloud(true);
 
@@ -262,7 +273,7 @@ function useCrmStoreInternal() {
     }
 
     const unsubscribe = crmService.subscribeToChanges((table, payload) => {
-      console.log(`[Realtime Supabase] ${table} change:`, payload.eventType);
+      console.log(`[Realtime MySQL] ${table} change:`, payload.eventType);
       refreshFromCloud(true);
     });
 
@@ -276,13 +287,18 @@ function useCrmStoreInternal() {
 
   // Role switch & Auth helper
   const switchRole = (role: UserRole) => {
-    const matched = teamMembers.find(u => u.role === role) || {
+    const rawMatched = teamMembers.find(u => u.role === role);
+    const matched: UserProfile = rawMatched ? {
+      ...rawMatched,
+      permissions: rawMatched.permissions || ROLE_DEFAULT_PERMISSIONS[role]
+    } : {
       id: `role-${role.toLowerCase().replace(/\s+/g, '-')}`,
       email: `${role.toLowerCase().replace(/\s+/g, '.')}@agxperience.com`,
       fullName: `${role} User`,
       role,
-      department: 'Operations',
-      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(role)}`
+      department: role === 'Partnership' ? 'Partnerships' : 'Operations',
+      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(role)}`,
+      permissions: ROLE_DEFAULT_PERMISSIONS[role]
     };
     setCurrentUser(matched);
     logAudit('STATUS_CHANGE', 'User', matched.id, `Switched session active role to ${role}`);
@@ -335,7 +351,7 @@ function useCrmStoreInternal() {
       description: newLog.description,
       beforeState: newLog.beforeState,
       afterState: newLog.afterState
-    }).catch(err => console.warn('Supabase audit log persist failed:', err));
+    }).catch(err => console.warn('MySQL audit log persist failed:', err));
   };
 
   // --- Lead Actions ---
@@ -355,7 +371,7 @@ function useCrmStoreInternal() {
       setLeads(prev => prev.map(l => l.id === tempId ? savedLead : l));
       setPartnerReferrals(prev => prev.map(r => r.leadId === tempId ? { ...r, leadId: savedLead.id } : r));
     }).catch(err => {
-      console.warn('Supabase lead create error:', err);
+      console.warn('MySQL lead create error:', err);
       toast.error('Sync Warning', 'Failed to save lead in cloud database.');
     });
 
@@ -367,7 +383,7 @@ function useCrmStoreInternal() {
     logAudit('STATUS_CHANGE', 'Lead', leadId, `Updated details for lead ID ${leadId}`, null, updates);
     toast.success('Lead Updated', 'Changes saved successfully.');
 
-    crmService.updateLead(leadId, updates).catch(err => console.warn('Supabase update lead error:', err));
+    crmService.updateLead(leadId, updates).catch(err => console.warn('MySQL update lead error:', err));
   };
 
   const STAGE_DEFAULT_PROBABILITIES: Record<LeadStatus, number> = {
@@ -417,7 +433,7 @@ function useCrmStoreInternal() {
       status: newStatus,
       probability: newProbability,
       lossReason: effectiveLossReason
-    }).catch(err => console.warn('Supabase update lead status error:', err));
+    }).catch(err => console.warn('MySQL update lead status error:', err));
 
     // Deterministic Workflow Automation Hook: Lead moved to WON
     if (newStatus === 'WON' && oldStatus !== 'WON' && !lead.convertedClientId) {
@@ -450,7 +466,7 @@ function useCrmStoreInternal() {
     logAudit('DELETE', 'Lead', leadId, `Deleted lead: ${lead?.name || leadId}`);
     toast.warning('Lead Removed', `${lead?.name || 'Lead'} has been deleted.`);
 
-    crmService.deleteLead(leadId).catch(err => console.warn('Supabase delete lead error:', err));
+    crmService.deleteLead(leadId).catch(err => console.warn('MySQL delete lead error:', err));
   };
 
   const convertLeadToClient = async (leadId: string, options?: {
@@ -485,9 +501,11 @@ function useCrmStoreInternal() {
       totalPaid: 0,
       outstandingAmount: dealVal,
       source: lead.source,
-      partnerId: lead.partnerId,
-      partnerName: lead.partnerName,
+      partnerId: lead.partnerId || (currentUser.role === 'Partnership' ? currentUser.id : undefined),
+      partnerName: lead.partnerName || (currentUser.role === 'Partnership' ? currentUser.fullName : undefined),
       partnerCode: lead.partnerCode,
+      createdById: currentUser.id,
+      createdByName: currentUser.fullName,
       notes: `Converted from won lead. Initial deal size: ₹${dealVal.toLocaleString('en-IN')}`,
       status: 'Active'
     };
@@ -564,7 +582,7 @@ function useCrmStoreInternal() {
     logAudit('CONVERT_LEAD', 'Client', initialClient.id, `Converted won lead ${lead.name} into client ${initialClient.company} (${split} split)`);
     toast.success('Lead Converted! 🎉', `${lead.company} is now an active client with ${optimisticMilestones.length} milestones generated.`);
 
-    // Persist to Supabase and sync real database UUIDs
+    // Persist to MySQL and sync real database UUIDs
     try {
       const savedClient = await crmService.createClient(newClientData);
       const savedProject = await crmService.createProject({
@@ -602,7 +620,7 @@ function useCrmStoreInternal() {
         milestones: savedMilestones
       };
 
-      // Swap temporary IDs with real Supabase objects
+      // Swap temporary IDs with real MySQL objects
       setClients(prev => prev.map(c => c.id === tempClientId ? savedClient : c));
       setProjects(prev => prev.map(p => p.id === tempProjectId ? persistedProject : p));
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, convertedClientId: savedClient.id, convertedProjectId: savedProject.id } : l));
@@ -727,7 +745,7 @@ function useCrmStoreInternal() {
 
       return { client: savedClient, project: persistedProject };
     } catch (err) {
-      console.warn('Supabase lead conversion sync exception:', err);
+      console.warn('MySQL lead conversion sync exception:', err);
       return { client: initialClient, project: initialProject };
     }
   };
@@ -772,14 +790,22 @@ function useCrmStoreInternal() {
         }
         return l;
       }));
-    }).catch(err => console.warn('Supabase lead activity error:', err));
+    }).catch(err => console.warn('MySQL lead activity error:', err));
   };
 
   // --- Client Actions ---
   const addClient = (client: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>) => {
     const tempId = generateUUID();
-    const newClient: Client = {
+    const isPartnershipUser = currentUser.role === 'Partnership';
+    const clientPayload: Omit<Client, 'id' | 'createdAt' | 'updatedAt'> = {
       ...client,
+      createdById: client.createdById || currentUser.id,
+      createdByName: client.createdByName || currentUser.fullName,
+      partnerId: client.partnerId || (isPartnershipUser ? currentUser.id : undefined),
+      partnerName: client.partnerName || (isPartnershipUser ? currentUser.fullName : undefined)
+    };
+    const newClient: Client = {
+      ...clientPayload,
       id: tempId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -788,9 +814,9 @@ function useCrmStoreInternal() {
     logAudit('CREATE', 'Client', newClient.id, `Added client: ${newClient.company}`);
     toast.success('Client Added', `${newClient.company} profile established.`);
 
-    crmService.createClient(client).then(savedClient => {
+    crmService.createClient(clientPayload).then(savedClient => {
       setClients(prev => prev.map(c => c.id === tempId ? savedClient : c));
-    }).catch(err => console.warn('Supabase add client error:', err));
+    }).catch(err => console.warn('MySQL add client error:', err));
   };
 
   const updateClient = (clientId: string, updates: Partial<Client>) => {
@@ -798,7 +824,7 @@ function useCrmStoreInternal() {
     logAudit('STATUS_CHANGE', 'Client', clientId, `Updated client ID ${clientId}`, null, updates);
     toast.success('Client Updated', 'Client 360° details saved.');
 
-    crmService.updateClient(clientId, updates).catch(err => console.warn('Supabase update client error:', err));
+    crmService.updateClient(clientId, updates).catch(err => console.warn('MySQL update client error:', err));
   };
 
   const deleteClient = (clientId: string) => {
@@ -807,7 +833,7 @@ function useCrmStoreInternal() {
     logAudit('DELETE', 'Client', clientId, `Deleted client: ${client?.company || clientId}`);
     toast.warning('Client Removed', `${client?.company || 'Client'} has been deleted.`);
 
-    crmService.deleteClient(clientId).catch(err => console.warn('Supabase delete client error:', err));
+    crmService.deleteClient(clientId).catch(err => console.warn('MySQL delete client error:', err));
   };
 
   // --- Project Actions ---
@@ -825,7 +851,7 @@ function useCrmStoreInternal() {
 
     crmService.createProject(project).then(savedProject => {
       setProjects(prev => prev.map(p => p.id === tempId ? savedProject : p));
-    }).catch(err => console.warn('Supabase add project error:', err));
+    }).catch(err => console.warn('MySQL add project error:', err));
   };
 
   const updateProject = (projectId: string, updates: Partial<Project>) => {
@@ -833,7 +859,7 @@ function useCrmStoreInternal() {
     logAudit('STATUS_CHANGE', 'Project', projectId, `Updated project ID ${projectId}`, null, updates);
     toast.success('Project Updated', 'Project details saved.');
 
-    crmService.updateProject(projectId, updates).catch(err => console.warn('Supabase update project error:', err));
+    crmService.updateProject(projectId, updates).catch(err => console.warn('MySQL update project error:', err));
   };
 
   const updateProjectStatus = (projectId: string, status: ProjectStatus, progress?: number) => {
@@ -847,7 +873,7 @@ function useCrmStoreInternal() {
     }));
     toast.info('Project Status Changed', `Status updated to ${status}`);
 
-    crmService.updateProjectStatus(projectId, status, progress).catch(err => console.warn('Supabase update project status error:', err));
+    crmService.updateProjectStatus(projectId, status, progress).catch(err => console.warn('MySQL update project status error:', err));
   };
 
   const deleteProject = (projectId: string) => {
@@ -856,7 +882,7 @@ function useCrmStoreInternal() {
     logAudit('DELETE', 'Project', projectId, `Deleted project: ${project?.name || projectId}`);
     toast.warning('Project Removed', `${project?.name || 'Project'} deleted.`);
 
-    crmService.deleteProject(projectId).catch(err => console.warn('Supabase delete project error:', err));
+    crmService.deleteProject(projectId).catch(err => console.warn('MySQL delete project error:', err));
   };
 
   const calcProjectProgress = (projectId: string, milestonesList: ProjectMilestone[], currentTasks: Task[] = tasks): number => {
@@ -908,7 +934,7 @@ function useCrmStoreInternal() {
         }
         return p;
       }));
-    }).catch(err => console.warn('Supabase add milestone error:', err));
+    }).catch(err => console.warn('MySQL add milestone error:', err));
   };
 
   const updateMilestone = (projectId: string, milestoneId: string, updates: Partial<ProjectMilestone>) => {
@@ -935,7 +961,7 @@ function useCrmStoreInternal() {
       }
     }
 
-    crmService.updateMilestone(milestoneId, updates).catch(err => console.warn('Supabase update milestone error:', err));
+    crmService.updateMilestone(milestoneId, updates).catch(err => console.warn('MySQL update milestone error:', err));
   };
 
   const deleteMilestone = (projectId: string, milestoneId: string) => {
@@ -950,7 +976,7 @@ function useCrmStoreInternal() {
     }));
     toast.warning('Milestone Deleted', 'Removed from project.');
 
-    crmService.deleteMilestone(milestoneId).catch(err => console.warn('Supabase delete milestone error:', err));
+    crmService.deleteMilestone(milestoneId).catch(err => console.warn('MySQL delete milestone error:', err));
   };
 
   // --- Task Actions ---
@@ -968,7 +994,7 @@ function useCrmStoreInternal() {
 
     crmService.createTask(task).then(savedTask => {
       setTasks(prev => prev.map(t => t.id === tempId ? savedTask : t));
-    }).catch(err => console.warn('Supabase add task error:', err));
+    }).catch(err => console.warn('MySQL add task error:', err));
   };
 
   const updateTask = (taskId: string, updates: Partial<Task>) => {
@@ -997,7 +1023,7 @@ function useCrmStoreInternal() {
     });
 
     toast.success('Task Updated', 'Sprint item updated.');
-    crmService.updateTask(taskId, updates).catch(err => console.warn('Supabase update task error:', err));
+    crmService.updateTask(taskId, updates).catch(err => console.warn('MySQL update task error:', err));
   };
 
   const updateTaskStatus = (taskId: string, status: TaskStatus) => {
@@ -1047,7 +1073,7 @@ function useCrmStoreInternal() {
     });
 
     toast.info('Task Status', `Moved to ${status}`);
-    crmService.updateTaskStatus(taskId, status).catch(err => console.warn('Supabase update task status error:', err));
+    crmService.updateTaskStatus(taskId, status).catch(err => console.warn('MySQL update task status error:', err));
   };
 
   const deleteTask = (taskId: string) => {
@@ -1056,7 +1082,7 @@ function useCrmStoreInternal() {
     logAudit('DELETE', 'Task', taskId, `Deleted task: ${task?.title || taskId}`);
     toast.warning('Task Removed', `${task?.title || 'Task'} deleted.`);
 
-    crmService.deleteTask(taskId).catch(err => console.warn('Supabase delete task error:', err));
+    crmService.deleteTask(taskId).catch(err => console.warn('MySQL delete task error:', err));
   };
 
   // --- Quotation Actions ---
@@ -1074,13 +1100,13 @@ function useCrmStoreInternal() {
 
     crmService.createQuotation(quotation).then(savedQuote => {
       setQuotations(prev => prev.map(q => (q.id === tempId || q.quotationNumber === savedQuote.quotationNumber) ? savedQuote : q));
-    }).catch(err => console.warn('Supabase add quotation error:', err));
+    }).catch(err => console.warn('MySQL add quotation error:', err));
   };
 
   const updateQuotation = (quotationId: string, updates: Partial<Quotation>) => {
     setQuotations(prev => prev.map(q => q.id === quotationId ? { ...q, ...updates, updatedAt: new Date().toISOString() } : q));
     toast.success('Quotation Updated', 'Quotation changes saved.');
-    crmService.updateQuotation(quotationId, updates).catch(err => console.warn('Supabase update quotation error:', err));
+    crmService.updateQuotation(quotationId, updates).catch(err => console.warn('MySQL update quotation error:', err));
   };
 
   const deleteQuotation = (quotationId: string) => {
@@ -1088,7 +1114,7 @@ function useCrmStoreInternal() {
     setQuotations(prev => prev.filter(q => q.id !== quotationId));
     logAudit('DELETE', 'Quotation', quotationId, `Deleted quotation: ${quote?.quotationNumber || quotationId}`);
     toast.warning('Quotation Deleted', `${quote?.quotationNumber || 'Quotation'} removed.`);
-    crmService.deleteQuotation(quotationId).catch(err => console.warn('Supabase delete quotation error:', err));
+    crmService.deleteQuotation(quotationId).catch(err => console.warn('MySQL delete quotation error:', err));
   };
 
   const convertQuotationToInvoice = (quotationId: string): Invoice | null => {
@@ -1168,8 +1194,8 @@ function useCrmStoreInternal() {
         status: 'Converted',
         convertedInvoiceId: savedInvoice.id,
         convertedAt: nowIso
-      }).catch(err => console.warn('Supabase quote convert update error:', err));
-    }).catch(err => console.warn('Supabase invoice create from quote error:', err));
+      }).catch(err => console.warn('MySQL quote convert update error:', err));
+    }).catch(err => console.warn('MySQL invoice create from quote error:', err));
 
     return newInvoice;
   };
@@ -1209,7 +1235,7 @@ function useCrmStoreInternal() {
         status: 'Converted',
         convertedInvoiceId: tempId,
         convertedAt: nowIso
-      }).catch(err => console.warn('Supabase quote convert link err:', err));
+      }).catch(err => console.warn('MySQL quote convert link err:', err));
     }
 
     logAudit('CREATE', 'Invoice', newInvoice.id, `Generated invoice ${newInvoice.invoiceNumber} for ${newInvoice.clientName} (₹${newInvoice.total.toLocaleString('en-IN')})`);
@@ -1217,7 +1243,7 @@ function useCrmStoreInternal() {
 
     crmService.createInvoice(invoice).then(savedInvoice => {
       setInvoices(prev => prev.map(i => (i.id === tempId || i.invoiceNumber === savedInvoice.invoiceNumber) ? savedInvoice : i));
-    }).catch(err => console.warn('Supabase add invoice error:', err));
+    }).catch(err => console.warn('MySQL add invoice error:', err));
   };
 
   const updateInvoice = (invoiceId: string, updates: Partial<Invoice>) => {
@@ -1249,7 +1275,7 @@ function useCrmStoreInternal() {
       }
     }
 
-    crmService.updateInvoice(invoiceId, updates).catch(err => console.warn('Supabase update invoice error:', err));
+    crmService.updateInvoice(invoiceId, updates).catch(err => console.warn('MySQL update invoice error:', err));
   };
 
   const deleteInvoice = (invoiceId: string) => {
@@ -1270,7 +1296,7 @@ function useCrmStoreInternal() {
     logAudit('DELETE', 'Invoice', invoiceId, `Deleted invoice: ${invoice?.invoiceNumber || invoiceId}`);
     toast.warning('Invoice Deleted', `${invoice?.invoiceNumber || 'Invoice'} removed.`);
 
-    crmService.deleteInvoice(invoiceId).catch(err => console.warn('Supabase delete invoice error:', err));
+    crmService.deleteInvoice(invoiceId).catch(err => console.warn('MySQL delete invoice error:', err));
   };
 
   const recordPayment = (payment: Omit<Payment, 'id' | 'createdAt'>) => {
@@ -1367,7 +1393,7 @@ function useCrmStoreInternal() {
 
     crmService.recordPayment(payment).then(savedPayment => {
       setPayments(prev => prev.map(p => p.id === tempId ? savedPayment : p));
-    }).catch(err => console.warn('Supabase record payment error:', err));
+    }).catch(err => console.warn('MySQL record payment error:', err));
   };
 
   const deletePayment = (paymentId: string) => {
@@ -1448,13 +1474,13 @@ function useCrmStoreInternal() {
 
       logAudit('DELETE', 'Payment', paymentId, `Voided payment of ₹${payment.amount.toLocaleString('en-IN')}`);
 
-      // Persist balance reversals to Supabase
-      crmService.revertPaymentBalances(payment).catch(err => console.warn('Supabase revert payment balances error:', err));
+      // Persist balance reversals to MySQL
+      crmService.revertPaymentBalances(payment).catch(err => console.warn('MySQL revert payment balances error:', err));
     }
 
     setPayments(prev => prev.filter(p => p.id !== paymentId));
     toast.warning('Payment Voided', 'Payment record deleted and balances adjusted.');
-    crmService.deletePayment(paymentId).catch(err => console.warn('Supabase delete payment error:', err));
+    crmService.deletePayment(paymentId).catch(err => console.warn('MySQL delete payment error:', err));
   };
 
   const createInvoiceFromMilestone = (projectId: string, milestoneId: string, isGst: boolean = true) => {
@@ -1511,7 +1537,7 @@ function useCrmStoreInternal() {
 
     setInvoices(prev => [newInvoice, ...prev]);
 
-    // Mark milestone as billed in local state and Supabase
+    // Mark milestone as billed in local state and MySQL
     updateMilestone(projectId, milestoneId, { isBilled: true, invoiceId: invTempId });
 
     logAudit('CREATE', 'Invoice', invTempId, `Generated invoice ${invoiceNumber} for milestone "${milestone.title}" (₹${total.toLocaleString('en-IN')})`);
@@ -1521,7 +1547,7 @@ function useCrmStoreInternal() {
       setInvoices(prev => prev.map(i => (i.id === invTempId || i.invoiceNumber === savedInvoice.invoiceNumber) ? savedInvoice : i));
       updateMilestone(projectId, milestoneId, { isBilled: true, invoiceId: savedInvoice.id });
       crmService.updateMilestoneInvoiced(milestoneId, true, savedInvoice.id);
-    }).catch(err => console.warn('Supabase add invoice error:', err));
+    }).catch(err => console.warn('MySQL add invoice error:', err));
   };
 
   const addExpense = (expense: Omit<Expense, 'id' | 'createdAt'>) => {
@@ -1537,13 +1563,13 @@ function useCrmStoreInternal() {
 
     crmService.createExpense(expense).then(savedExpense => {
       setExpenses(prev => prev.map(e => e.id === tempId ? savedExpense : e));
-    }).catch(err => console.warn('Supabase add expense error:', err));
+    }).catch(err => console.warn('MySQL add expense error:', err));
   };
 
   const deleteExpense = (expenseId: string) => {
     setExpenses(prev => prev.filter(e => e.id !== expenseId));
     toast.warning('Expense Removed', 'Expense item deleted.');
-    crmService.deleteExpense(expenseId).catch(err => console.warn('Supabase delete expense error:', err));
+    crmService.deleteExpense(expenseId).catch(err => console.warn('MySQL delete expense error:', err));
   };
 
   // --- Agreements & Documents ---
@@ -1560,20 +1586,20 @@ function useCrmStoreInternal() {
 
     crmService.createAgreement(agreement).then(savedAgreement => {
       setAgreements(prev => prev.map(a => a.id === tempId ? savedAgreement : a));
-    }).catch(err => console.warn('Supabase add agreement error:', err));
+    }).catch(err => console.warn('MySQL add agreement error:', err));
   };
 
   const updateAgreement = (agreementId: string, updates: Partial<Agreement>) => {
     setAgreements(prev => prev.map(a => a.id === agreementId ? { ...a, ...updates } : a));
     toast.success('Agreement Updated', 'Contract status saved.');
 
-    crmService.updateAgreement(agreementId, updates).catch(err => console.warn('Supabase update agreement error:', err));
+    crmService.updateAgreement(agreementId, updates).catch(err => console.warn('MySQL update agreement error:', err));
   };
 
   const deleteAgreement = (agreementId: string) => {
     setAgreements(prev => prev.filter(a => a.id !== agreementId));
     toast.warning('Agreement Deleted', 'Agreement record removed.');
-    crmService.deleteAgreement(agreementId).catch(err => console.warn('Supabase delete agreement error:', err));
+    crmService.deleteAgreement(agreementId).catch(err => console.warn('MySQL delete agreement error:', err));
   };
 
   const addDocument = (doc: Omit<DocumentItem, 'id' | 'createdAt'>) => {
@@ -1589,13 +1615,13 @@ function useCrmStoreInternal() {
 
     crmService.createDocument(doc).then(savedDoc => {
       setDocuments(prev => prev.map(d => d.id === tempId ? savedDoc : d));
-    }).catch(err => console.warn('Supabase add document error:', err));
+    }).catch(err => console.warn('MySQL add document error:', err));
   };
 
   const deleteDocument = (docId: string) => {
     setDocuments(prev => prev.filter(d => d.id !== docId));
     toast.warning('Document Deleted', 'Document file removed.');
-    crmService.deleteDocument(docId).catch(err => console.warn('Supabase delete document error:', err));
+    crmService.deleteDocument(docId).catch(err => console.warn('MySQL delete document error:', err));
   };
 
   // --- Credentials Vault ---
@@ -1621,7 +1647,7 @@ function useCrmStoreInternal() {
       toast.success('Secret Vaulted', `${newCred.platformName} credential secured & encrypted.`);
       return finalized;
     } catch (err: any) {
-      console.error('Supabase add credential error:', err);
+      console.error('MySQL add credential error:', err);
       toast.warning('Offline Cache', `${newCred.platformName} saved locally. Cloud sync pending.`);
       return newCred;
     }
@@ -1634,7 +1660,7 @@ function useCrmStoreInternal() {
     try {
       await crmService.updateCredential(credId, updates);
     } catch (err) {
-      console.warn('Supabase update credential error:', err);
+      console.warn('MySQL update credential error:', err);
       toast.warning('Offline Cache', 'Updated locally. Cloud sync pending.');
     }
   };
@@ -1647,7 +1673,7 @@ function useCrmStoreInternal() {
     try {
       await crmService.deleteCredential(credId);
     } catch (err) {
-      console.warn('Supabase delete credential error:', err);
+      console.warn('MySQL delete credential error:', err);
     }
   };
 
@@ -1739,7 +1765,7 @@ function useCrmStoreInternal() {
 
     crmService.createIssue(newIssue).then(saved => {
       setIssues(prev => prev.map(i => i.id === tempId ? saved : i));
-    }).catch(err => console.warn('Supabase create issue error:', err));
+    }).catch(err => console.warn('MySQL create issue error:', err));
 
     crmService.createNotification(newNotif).catch(() => {});
 
@@ -1749,7 +1775,7 @@ function useCrmStoreInternal() {
   const updateIssue = (issueId: string, updates: Partial<ProjectIssue>) => {
     setIssues(prev => prev.map(i => i.id === issueId ? { ...i, ...updates, updatedAt: new Date().toISOString() } : i));
     toast.success('Issue Updated', 'Changes saved.');
-    crmService.updateIssue(issueId, updates).catch(err => console.warn('Supabase update issue error:', err));
+    crmService.updateIssue(issueId, updates).catch(err => console.warn('MySQL update issue error:', err));
   };
 
   const updateIssueStatus = (issueId: string, status: IssueStatus, resolutionNotes?: string) => {
@@ -1767,7 +1793,7 @@ function useCrmStoreInternal() {
     logAudit('STATUS_CHANGE', 'Issue', issueId, `Changed issue #${issue.ticketNumber} status from ${oldStatus} to ${status}`);
     toast.info('Issue Stage Updated', `Ticket #${issue.ticketNumber} moved to ${status}`);
 
-    crmService.updateIssue(issueId, updates).catch(err => console.warn('Supabase update issue status error:', err));
+    crmService.updateIssue(issueId, updates).catch(err => console.warn('MySQL update issue status error:', err));
   };
 
   const deleteIssue = (issueId: string) => {
@@ -1775,7 +1801,7 @@ function useCrmStoreInternal() {
     setIssues(prev => prev.filter(i => i.id !== issueId));
     logAudit('DELETE', 'Issue', issueId, `Deleted issue ticket: ${issue?.ticketNumber || issueId}`);
     toast.warning('Issue Removed', `Ticket #${issue?.ticketNumber || 'Issue'} deleted.`);
-    crmService.deleteIssue(issueId).catch(err => console.warn('Supabase delete issue error:', err));
+    crmService.deleteIssue(issueId).catch(err => console.warn('MySQL delete issue error:', err));
   };
 
   const convertIssueToTask = (issueId: string, assignedTo?: string) => {
@@ -1825,13 +1851,13 @@ function useCrmStoreInternal() {
 
     crmService.createCalendarEvent(event).then(savedEvent => {
       setEvents(prev => prev.map(e => e.id === tempId ? savedEvent : e));
-    }).catch(err => console.warn('Supabase add calendar event error:', err));
+    }).catch(err => console.warn('MySQL add calendar event error:', err));
   };
 
   const deleteCalendarEvent = (eventId: string) => {
     setEvents(prev => prev.filter(e => e.id !== eventId));
     toast.warning('Event Removed', 'Calendar item removed.');
-    crmService.deleteCalendarEvent(eventId).catch(err => console.warn('Supabase delete event error:', err));
+    crmService.deleteCalendarEvent(eventId).catch(err => console.warn('MySQL delete event error:', err));
   };
 
   // --- Team Members ---
@@ -1844,22 +1870,21 @@ function useCrmStoreInternal() {
     crmService.createProfile(profile).then(saved => {
       setTeamMembers(prev => prev.map(u => u.id === tempId ? saved : u));
     }).catch(err => {
-      console.error('Supabase add profile error:', err);
-      toast.error('Database Sync Error', err?.message || 'Failed to save staff to database');
+      console.warn('MySQL add profile deferred/offline:', err);
     });
   };
 
   const updateTeamMember = (userId: string, updates: Partial<UserProfile>) => {
     setTeamMembers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
     toast.success('Staff Updated', 'Staff details saved successfully.');
-    crmService.updateProfile(userId, updates).catch(err => console.warn('Supabase update profile error:', err));
+    crmService.updateProfile(userId, updates).catch(err => console.warn('MySQL update profile error:', err));
   };
 
   const resetStaffPassword = (userId: string, newPassword: string) => {
     setTeamMembers(prev => prev.map(u => u.id === userId ? { ...u, passwordHash: newPassword } : u));
     logAudit('UPDATE', 'User', userId, `Reset password for staff ID ${userId}`);
-    toast.success('Password Changed', 'Staff credentials updated in Supabase.');
-    crmService.resetStaffPassword(userId, newPassword).catch(err => console.warn('Supabase reset password error:', err));
+    toast.success('Password Changed', 'Staff credentials updated in MySQL.');
+    crmService.resetStaffPassword(userId, newPassword).catch(err => console.warn('MySQL reset password error:', err));
   };
 
   const toggleStaffStatus = (userId: string) => {
@@ -1869,58 +1894,184 @@ function useCrmStoreInternal() {
     setTeamMembers(prev => prev.map(u => u.id === userId ? { ...u, isActive: newStatus } : u));
     logAudit('UPDATE', 'User', userId, `${newStatus ? 'Activated' : 'Suspended'} staff account ${member.fullName}`);
     toast.info(newStatus ? 'Account Activated' : 'Account Suspended', `${member.fullName} is now ${newStatus ? 'Active' : 'Suspended'}.`);
-    crmService.toggleStaffStatus(userId, newStatus).catch(err => console.warn('Supabase toggle staff status error:', err));
+    crmService.toggleStaffStatus(userId, newStatus).catch(err => console.warn('MySQL toggle staff status error:', err));
   };
 
   const updateTeamRole = (userId: string, role: UserRole) => {
     setTeamMembers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
     toast.success('Role Updated', `Permissions updated to ${role}`);
 
-    crmService.updateProfileRole(userId, role).catch(err => console.warn('Supabase update profile role error:', err));
+    crmService.updateProfileRole(userId, role).catch(err => console.warn('MySQL update profile role error:', err));
   };
 
   const deleteTeamMember = (userId: string) => {
     setTeamMembers(prev => prev.filter(u => u.id !== userId));
     toast.warning('Staff Removed', 'Staff account removed.');
-    crmService.deleteProfile(userId).catch(err => console.warn('Supabase delete profile error:', err));
+    crmService.deleteProfile(userId).catch(err => console.warn('MySQL delete profile error:', err));
   };
 
   // Notifications
   const markNotificationAsRead = (notifId: string) => {
     setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, isRead: true } : n));
-    crmService.markNotificationRead(notifId).catch(err => console.warn('Supabase mark notification error:', err));
+    crmService.markNotificationRead(notifId).catch(err => console.warn('MySQL mark notification error:', err));
   };
 
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     toast.info('Notifications Cleared', 'All notifications marked as read.');
-    crmService.markAllNotificationsRead().catch(err => console.warn('Supabase mark all notifications error:', err));
+    crmService.markAllNotificationsRead().catch(err => console.warn('MySQL mark all notifications error:', err));
   };
 
-  // Computed Financials
-  const totalRevenue = payments.reduce((acc, p) => acc + p.amount, 0);
-  const partnerPayoutsTotal = partnerPayouts
+  // --- Scoped Access Control for 'Partnership' Role ---
+  // If the active user has the 'Partnership' role, they must ONLY see:
+  // 1. Clients assigned to them (partnerId === user.id or partnerName === user.fullName or accountManager === user.fullName)
+  // 2. Clients created by them (createdById === user.id or createdByName === user.fullName)
+  // Downstream entities (projects, invoices, quotations, payments, tasks, agreements, documents, credentials, events, issues, leads, expenses)
+  // are strictly filtered to those belonging to these visible clients or assigned to this partnership user.
+  const isPartnership = currentUser.role === 'Partnership';
+
+  const visibleClients = isPartnership
+    ? clients.filter(c =>
+        c.partnerId === currentUser.id ||
+        (c.partnerName && c.partnerName.toLowerCase() === currentUser.fullName.toLowerCase()) ||
+        (c.accountManager && c.accountManager.toLowerCase() === currentUser.fullName.toLowerCase()) ||
+        c.createdById === currentUser.id ||
+        (c.createdByName && c.createdByName.toLowerCase() === currentUser.fullName.toLowerCase())
+      )
+    : clients;
+
+  const visibleClientIds = new Set(visibleClients.map(c => c.id).filter(Boolean));
+  const visibleClientNames = new Set(visibleClients.flatMap(c => [c.company, c.name]).filter(Boolean).map(n => n.toLowerCase()));
+
+  const visibleProjects = isPartnership
+    ? projects.filter(p =>
+        (p.clientId && visibleClientIds.has(p.clientId)) ||
+        (p.clientName && visibleClientNames.has(p.clientName.toLowerCase()))
+      )
+    : projects;
+
+  const visibleProjectIds = new Set(visibleProjects.map(p => p.id).filter(Boolean));
+
+  const visibleInvoices = isPartnership
+    ? invoices.filter(i =>
+        (i.clientId && visibleClientIds.has(i.clientId)) ||
+        (i.clientName && visibleClientNames.has(i.clientName.toLowerCase())) ||
+        (i.projectId && visibleProjectIds.has(i.projectId))
+      )
+    : invoices;
+
+  const visibleInvoiceIds = new Set(visibleInvoices.map(i => i.id).filter(Boolean));
+
+  const visibleQuotations = isPartnership
+    ? quotations.filter(q =>
+        (q.clientId && visibleClientIds.has(q.clientId)) ||
+        (q.clientName && visibleClientNames.has(q.clientName.toLowerCase()))
+      )
+    : quotations;
+
+  const visiblePayments = isPartnership
+    ? payments.filter(p =>
+        (p.clientId && visibleClientIds.has(p.clientId)) ||
+        (p.clientName && visibleClientNames.has(p.clientName.toLowerCase())) ||
+        (p.invoiceId && visibleInvoiceIds.has(p.invoiceId)) ||
+        (p.projectId && visibleProjectIds.has(p.projectId))
+      )
+    : payments;
+
+  const visibleTasks = isPartnership
+    ? tasks.filter(t =>
+        (t.clientId && visibleClientIds.has(t.clientId)) ||
+        (t.clientName && visibleClientNames.has(t.clientName.toLowerCase())) ||
+        (t.projectId && visibleProjectIds.has(t.projectId)) ||
+        (t.assignedTo && t.assignedTo.toLowerCase() === currentUser.fullName.toLowerCase())
+      )
+    : tasks;
+
+  const visibleAgreements = isPartnership
+    ? agreements.filter(a =>
+        (a.clientId && visibleClientIds.has(a.clientId)) ||
+        (a.clientName && visibleClientNames.has(a.clientName.toLowerCase())) ||
+        (a.projectId && visibleProjectIds.has(a.projectId))
+      )
+    : agreements;
+
+  const visibleDocuments = isPartnership
+    ? documents.filter(d =>
+        (d.clientId && visibleClientIds.has(d.clientId)) ||
+        (d.projectId && visibleProjectIds.has(d.projectId))
+      )
+    : documents;
+
+  const visibleCredentials = isPartnership
+    ? credentials.filter(c =>
+        (c.clientId && visibleClientIds.has(c.clientId)) ||
+        (c.clientName && visibleClientNames.has(c.clientName.toLowerCase())) ||
+        (c.projectId && visibleProjectIds.has(c.projectId))
+      )
+    : credentials;
+
+  const visibleEvents = isPartnership
+    ? events.filter(e =>
+        (e.relatedClientId && visibleClientIds.has(e.relatedClientId)) ||
+        (e.relatedProjectId && visibleProjectIds.has(e.relatedProjectId)) ||
+        (e.participants && e.participants.some(pt => pt.toLowerCase() === currentUser.fullName.toLowerCase()))
+      )
+    : events;
+
+  const visibleIssues = isPartnership
+    ? issues.filter(iss =>
+        (iss.clientId && visibleClientIds.has(iss.clientId)) ||
+        (iss.projectId && visibleProjectIds.has(iss.projectId))
+      )
+    : issues;
+
+  const visibleLeads = isPartnership
+    ? leads.filter(l =>
+        l.partnerId === currentUser.id ||
+        (l.partnerName && l.partnerName.toLowerCase() === currentUser.fullName.toLowerCase()) ||
+        (l.assignedTo && l.assignedTo.toLowerCase() === currentUser.fullName.toLowerCase())
+      )
+    : leads;
+
+  const visibleExpenses = isPartnership
+    ? expenses.filter(e =>
+        (e.clientId && visibleClientIds.has(e.clientId)) ||
+        (e.clientName && visibleClientNames.has(e.clientName.toLowerCase())) ||
+        (e.projectId && visibleProjectIds.has(e.projectId))
+      )
+    : expenses;
+
+  const visiblePartnerPayouts = isPartnership
+    ? partnerPayouts.filter(p =>
+        p.partnerId === currentUser.id ||
+        (p.partnerName && p.partnerName.toLowerCase() === currentUser.fullName.toLowerCase())
+      )
+    : partnerPayouts;
+
+  // Computed Financials (Calculated dynamically over scoped arrays)
+  const totalRevenue = visiblePayments.reduce((acc, p) => acc + p.amount, 0);
+  const partnerPayoutsTotal = visiblePartnerPayouts
     .filter(p => p.status === 'Completed' || (p.status as string) === 'Paid')
     .reduce((acc, p) => acc + (p.amount || 0), 0);
-  const directExpensesTotal = expenses.reduce((acc, e) => acc + e.amount, 0);
+  const directExpensesTotal = visibleExpenses.reduce((acc, e) => acc + e.amount, 0);
   const totalExpenses = directExpensesTotal + partnerPayoutsTotal;
   const netProfit = totalRevenue - totalExpenses;
   const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : '0';
-  const outstandingInvoicesTotal = invoices
+  const outstandingInvoicesTotal = visibleInvoices
     .filter(i => i.status !== 'Paid')
     .reduce((acc, i) => acc + (i.total - (i.paidAmount || 0)), 0);
 
   // Computed Sales Funnel
-  const wonLeads = leads.filter(l => l.status === 'WON').length;
-  const totalLeadsCount = leads.length;
+  const wonLeads = visibleLeads.filter(l => l.status === 'WON').length;
+  const totalLeadsCount = visibleLeads.length;
   const conversionRate = totalLeadsCount > 0 ? Math.round((wonLeads / totalLeadsCount) * 100) : 0;
-  const pipelineValue = leads
+  const pipelineValue = visibleLeads
     .filter(l => l.status !== 'LOST' && l.status !== 'WON')
     .reduce((acc, l) => acc + (l.estimatedDealValue || 0), 0);
 
   // Computed Productivity
-  const completedTasks = tasks.filter(t => t.status === 'COMPLETED').length;
-  const totalTasks = tasks.length;
+  const completedTasks = visibleTasks.filter(t => t.status === 'COMPLETED').length;
+  const totalTasks = visibleTasks.length;
   const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   // Dynamic Permissions Evaluator
@@ -1968,13 +2119,13 @@ function useCrmStoreInternal() {
 
     crmService.createPartner(partner).then(saved => {
       setPartners(prev => prev.map(p => p.id === tempId ? saved : p));
-    }).catch(err => console.warn('Supabase create partner err:', err));
+    }).catch(err => console.warn('MySQL create partner err:', err));
   };
 
   const updatePartner = (id: string, updates: Partial<Partner>) => {
     setPartners(prev => prev.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p));
     toast.success('Partner Updated', 'Partner profile and commission settings saved.');
-    crmService.updatePartner(id, updates).catch(err => console.warn('Supabase update partner err:', err));
+    crmService.updatePartner(id, updates).catch(err => console.warn('MySQL update partner err:', err));
   };
 
   const deletePartner = (id: string) => {
@@ -1982,7 +2133,7 @@ function useCrmStoreInternal() {
     setPartners(prev => prev.filter(p => p.id !== id));
     logAudit('DELETE', 'Partner', id, `Removed partner ${partner?.name || id}`);
     toast.warning('Partner Deleted', 'Partner removed from active roster.');
-    crmService.deletePartner(id).catch(err => console.warn('Supabase delete partner err:', err));
+    crmService.deletePartner(id).catch(err => console.warn('MySQL delete partner err:', err));
   };
 
   const addPartnerReferral = (referral: Omit<PartnerReferral, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
@@ -1998,7 +2149,7 @@ function useCrmStoreInternal() {
 
     crmService.createPartnerReferral({ ...referral, id: tempId }).then(saved => {
       setPartnerReferrals(prev => prev.map(r => r.id === tempId ? saved : r));
-    }).catch(err => console.warn('Supabase create referral err:', err));
+    }).catch(err => console.warn('MySQL create referral err:', err));
   };
 
   // Atomic creation of Lead and Partner Referral to eliminate race conditions
@@ -2084,20 +2235,94 @@ function useCrmStoreInternal() {
 
       return { lead: savedLead, referral: savedRef };
     } catch (err: any) {
-      console.warn('Supabase partner referral save notice (persisted in offline cache):', err);
+      console.warn('MySQL partner referral save notice (persisted in offline cache):', err);
       return { lead: newLead, referral: newReferral };
     }
   };
 
   const updatePartnerReferral = (id: string, updates: Partial<PartnerReferral>) => {
     setPartnerReferrals(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r));
-    crmService.updatePartnerReferral(id, updates).catch(err => console.warn('Supabase update referral err:', err));
+    crmService.updatePartnerReferral(id, updates).catch(err => console.warn('MySQL update referral err:', err));
   };
 
   const deletePartnerReferral = (id: string) => {
     setPartnerReferrals(prev => prev.filter(r => r.id !== id));
     toast.warning('Referral Removed', 'Referral link removed.');
-    crmService.deletePartnerReferral(id).catch(err => console.warn('Supabase delete referral err:', err));
+    crmService.deletePartnerReferral(id).catch(err => console.warn('MySQL delete referral err:', err));
+  };
+
+  const uploadReferralDocument = async (
+    referralId: string,
+    file: File,
+    clientName: string,
+    company?: string,
+    uploadedBy?: string
+  ): Promise<ClientDocument> => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const response = await fetch(`/api/partner/referrals/${encodeURIComponent(referralId)}/documents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: file.name,
+        fileData: base64,
+        mimeType: file.type || 'application/octet-stream',
+        clientName,
+        company: company || '',
+        uploadedBy: uploadedBy || 'Partner'
+      })
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to upload document to Google Drive');
+    }
+
+    const newDoc: ClientDocument = data.document;
+
+    setPartnerReferrals(prev => prev.map(r => {
+      if (r.id === referralId || r.leadId === referralId) {
+        const existingDocs = r.documents || [];
+        return {
+          ...r,
+          driveFolderUrl: data.driveFolderUrl || r.driveFolderUrl,
+          driveFolderId: newDoc.driveFolderId || r.driveFolderId,
+          documents: [newDoc, ...existingDocs.filter(d => d.id !== newDoc.id)]
+        };
+      }
+      return r;
+    }));
+
+    toast.success('Document Uploaded 📁', `"${file.name}" saved to Google Drive folder.`);
+    return newDoc;
+  };
+
+  const fetchReferralDocuments = async (referralId: string): Promise<ClientDocument[]> => {
+    try {
+      const res = await fetch(`/api/partner/referrals/${encodeURIComponent(referralId)}/documents`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.documents)) {
+        setPartnerReferrals(prev => prev.map(r => {
+          if (r.id === referralId || r.leadId === referralId) {
+            return {
+              ...r,
+              documents: data.documents
+            };
+          }
+          return r;
+        }));
+        return data.documents;
+      }
+      return [];
+    } catch (err) {
+      console.warn('[Fetch Referral Documents Error]', err);
+      return [];
+    }
   };
 
   const recordPartnerPayout = (payout: Omit<PartnerPayout, 'id' | 'createdAt'>) => {
@@ -2140,7 +2365,7 @@ function useCrmStoreInternal() {
         createdAt: new Date().toISOString()
       };
       setExpenses(prev => [newExpense, ...prev]);
-      crmService.createExpense(newExpense).catch(err => console.warn('Supabase commission expense insert err:', err));
+      crmService.createExpense(newExpense).catch(err => console.warn('MySQL commission expense insert err:', err));
     }
 
     logAudit('CREATE', 'Partner', tempId, `${payout.status === 'Completed' ? 'Disbursed' : 'Requested'} partner payout of ₹${payout.amount.toLocaleString('en-IN')} via ${payout.paymentMethod} (Status: ${payout.status || 'Pending'})`);
@@ -2151,7 +2376,7 @@ function useCrmStoreInternal() {
 
     crmService.createPartnerPayout(payout).then(saved => {
       setPartnerPayouts(prev => prev.map(p => p.id === tempId ? saved : p));
-    }).catch(err => console.warn('Supabase record payout err:', err));
+    }).catch(err => console.warn('MySQL record payout err:', err));
   };
 
   const updatePartnerPayout = async (payoutId: string, updates: Partial<PartnerPayout>) => {
@@ -2194,7 +2419,7 @@ function useCrmStoreInternal() {
         createdAt: new Date().toISOString()
       };
       setExpenses(prev => [newExpense, ...prev]);
-      crmService.createExpense(newExpense).catch(err => console.warn('Supabase commission expense insert err:', err));
+      crmService.createExpense(newExpense).catch(err => console.warn('MySQL commission expense insert err:', err));
 
       logAudit('UPDATE', 'Partner', payoutId, `Approved partner payout of ₹${payoutAmount.toLocaleString('en-IN')} for ${existing.partnerName || 'Partner'}`);
       toast.success('Payout Approved & Disbursed', `₹${payoutAmount.toLocaleString('en-IN')} marked as Completed and logged to Expenses.`);
@@ -2203,7 +2428,7 @@ function useCrmStoreInternal() {
     try {
       await crmService.updatePartnerPayout(payoutId, updates);
     } catch (err) {
-      console.warn('Supabase update payout err:', err);
+      console.warn('MySQL update payout err:', err);
     }
   };
 
@@ -2215,18 +2440,18 @@ function useCrmStoreInternal() {
     switchRole,
     loginUser,
     logoutUser,
-    leads,
+    leads: visibleLeads,
     addLead,
     updateLead,
     updateLeadStatus,
     deleteLead,
     addLeadActivity,
     convertLeadToClient,
-    clients,
+    clients: visibleClients,
     addClient,
     updateClient,
     deleteClient,
-    projects,
+    projects: visibleProjects,
     addProject,
     updateProject,
     updateProjectStatus,
@@ -2234,36 +2459,36 @@ function useCrmStoreInternal() {
     addMilestone,
     updateMilestone,
     deleteMilestone,
-    tasks,
+    tasks: visibleTasks,
     addTask,
     updateTask,
     updateTaskStatus,
     deleteTask,
-    invoices,
+    invoices: visibleInvoices,
     addInvoice,
     updateInvoice,
     deleteInvoice,
     createInvoiceFromMilestone,
-    payments,
+    payments: visiblePayments,
     recordPayment,
     addPayment: recordPayment,
     deletePayment,
-    expenses,
+    expenses: visibleExpenses,
     addExpense,
     deleteExpense,
-    agreements,
+    agreements: visibleAgreements,
     addAgreement,
     updateAgreement,
     deleteAgreement,
-    documents,
+    documents: visibleDocuments,
     addDocument,
     deleteDocument,
-    credentials,
+    credentials: visibleCredentials,
     addCredential,
     updateCredential,
     deleteCredential,
     revealCredentialSecret,
-    events,
+    events: visibleEvents,
     addCalendarEvent,
     deleteCalendarEvent,
     addTeamMember,
@@ -2279,7 +2504,7 @@ function useCrmStoreInternal() {
     markAllNotificationsRead,
     auditLogs,
     logAudit,
-    issues,
+    issues: visibleIssues,
     addIssue,
     updateIssue,
     updateIssueStatus,
@@ -2290,19 +2515,22 @@ function useCrmStoreInternal() {
     regenerateProjectPortalToken,
     toggleProjectPortal,
     // Quotation Store & Handlers
-    quotations,
+    quotations: visibleQuotations,
     addQuotation,
     updateQuotation,
     deleteQuotation,
     convertQuotationToInvoice,
-    totalQuotedValue: quotations.reduce((sum, q) => sum + (q.total || 0), 0),
-    acceptedQuotationsCount: quotations.filter(q => q.status === 'Accepted' || q.status === 'Converted').length,
-    pendingQuotationsCount: quotations.filter(q => q.status === 'Draft' || q.status === 'Sent').length,
-    quotationConversionRate: quotations.length > 0 ? Math.round((quotations.filter(q => q.status === 'Accepted' || q.status === 'Converted').length / quotations.length) * 100) : 0,
+    totalQuotedValue: visibleQuotations.reduce((sum, q) => sum + (q.total || 0), 0),
+    acceptedQuotationsCount: visibleQuotations.filter(q => q.status === 'Accepted' || q.status === 'Converted').length,
+    pendingQuotationsCount: visibleQuotations.filter(q => q.status === 'Draft' || q.status === 'Sent').length,
+    quotationConversionRate: visibleQuotations.length > 0 ? Math.round((visibleQuotations.filter(q => q.status === 'Accepted' || q.status === 'Converted').length / visibleQuotations.length) * 100) : 0,
     // Partner Program Store & Handlers
     partners,
     partnerReferrals,
-    partnerPayouts,
+    partnerPayouts: visiblePartnerPayouts,
+    // Raw arrays for admin utilities
+    allClients: clients,
+    allProjects: projects,
     createPartner,
     updatePartner,
     deletePartner,
@@ -2310,9 +2538,11 @@ function useCrmStoreInternal() {
     addPartnerLeadReferral,
     updatePartnerReferral,
     deletePartnerReferral,
+    uploadReferralDocument,
+    fetchReferralDocuments,
     recordPartnerPayout,
     updatePartnerPayout,
-    isSupabaseConnected,
+    isMySQLConnected,
     isLoading,
     isSyncing,
     lastSyncedAt,

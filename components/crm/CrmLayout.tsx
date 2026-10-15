@@ -47,7 +47,7 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
   const {
     currentUser, switchRole, notifications, markNotificationAsRead,
     markAllNotificationsRead, leads, clients, projects, tasks, invoices, credentials, issues,
-    isSupabaseConnected, isSyncing, lastSyncedAt, refreshFromCloud, logoutUser
+    isMySQLConnected, isSyncing, lastSyncedAt, refreshFromCloud, logoutUser
   } = store;
 
   const [activeRoute, setActiveRoute] = useState<string>('dashboard');
@@ -190,8 +190,8 @@ export const CrmLayout: React.FC<CrmLayoutProps> = ({ onLogout, onBackToWebsite 
           {/* Cloud Sync Status */}
           <div className="flex items-center justify-between px-3 py-2 bg-white/5 rounded-2xl border border-white/5 text-[11px]">
             <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${isSupabaseConnected ? 'bg-[#CCFF00] animate-pulse shadow-[0_0_6px_#CCFF00]' : 'bg-amber-400'}`} />
-              <span className="text-gray-300 font-medium">Supabase Cloud</span>
+              <span className={`w-2 h-2 rounded-full ${isMySQLConnected ? 'bg-[#CCFF00] animate-pulse shadow-[0_0_6px_#CCFF00]' : 'bg-amber-400'}`} />
+              <span className="text-gray-300 font-medium">MySQL Database</span>
             </div>
             <button
               onClick={() => refreshFromCloud()}

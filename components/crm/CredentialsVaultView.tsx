@@ -949,7 +949,7 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
                     required
                     value={newCred.platformName}
                     onChange={(e) => setNewCred({ ...newCred, platformName: e.target.value })}
-                    placeholder="e.g. Supabase DB Prod"
+                    placeholder="e.g. MySQL DB Prod"
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black"
                   />
                 </div>
@@ -959,7 +959,7 @@ export const CredentialsVaultView: React.FC<CredentialsVaultViewProps> = ({ stor
                     type="url"
                     value={newCred.serviceUrl}
                     onChange={(e) => setNewCred({ ...newCred, serviceUrl: e.target.value })}
-                    placeholder="https://app.supabase.com"
+                    placeholder="https://hostinger.com/cpanel"
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black"
                   />
                 </div>

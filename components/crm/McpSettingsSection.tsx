@@ -59,7 +59,7 @@ const CONNECTED_ACCOUNTS: ConnectedAccount[] = [
     iconBg: 'bg-amber-50 text-amber-600 border-amber-200',
     iconColor: '#D97706',
     description: 'Subprocess communication via stdio JSON-RPC. Look for the hammer icon to manage leads, tasks, and financials directly in chat.',
-    capabilities: ['Full CRUD Access', 'Instant Supabase Sync', 'Lead & Deal Pipeline', 'Financial Analytics']
+    capabilities: ['Full CRUD Access', 'Instant MySQL Sync', 'Lead & Deal Pipeline', 'Financial Analytics']
   },
   {
     id: 'antigravity',
@@ -153,7 +153,7 @@ const INITIAL_AI_LOGS: AiActivityLog[] = [
     timestamp: '22 mins ago',
     aiPlatform: 'Cursor',
     toolUsed: 'update_task',
-    summary: 'Updated task "Verify Supabase MCP connection" to COMPLETED',
+    summary: 'Updated task "Verify MySQL MCP connection" to COMPLETED',
     status: 'Success'
   }
 ];
@@ -288,7 +288,7 @@ const MCP_TOOLS_CATALOG = [
 ];
 
 export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store }) => {
-  const { leads, clients, projects, tasks, isSupabaseConnected } = store;
+  const { leads, clients, projects, tasks, isMySQLConnected } = store;
 
   const [activeGuideTab, setActiveGuideTab] = useState<GuideTab>('claude');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -316,7 +316,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
       await store.refreshFromCloud();
       const latency = Math.round(performance.now() - start);
       setPingLatency(latency > 0 ? latency : 18);
-      toast.success('MCP Bridge Healthy', `Supabase & MCP server responded in ${latency || 18}ms.`);
+      toast.success('MCP Bridge Healthy', `MySQL & MCP server responded in ${latency || 18}ms.`);
 
       const newLog: AiActivityLog = {
         id: `log-${Date.now()}`,
@@ -328,7 +328,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
       };
       setAiLogs(prev => [newLog, ...prev.slice(0, 5)]);
     } catch (err: any) {
-      toast.error('Ping Failed', err?.message || 'Could not reach Supabase.');
+      toast.error('Ping Failed', err?.message || 'Could not reach MySQL database.');
     } finally {
       setIsTestingPing(false);
     }
@@ -361,8 +361,8 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
         "c:/Users/Abhinav/Documents/Antigravity Files/agx_website/mcp-server/dist/index.js"
       ],
       "env": {
-        "SUPABASE_URL": "https://lgvqkumqjmeyycqvgycv.supabase.co",
-        "SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        "API_BASE_URL": "http://localhost:3000/api",
+        "DATABASE_ENGINE": "mysql"
       }
     }
   }
@@ -430,7 +430,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
               <div className="px-3">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
                   <Database size={13} className="text-emerald-600" />
-                  <span>Supabase PostgreSQL</span>
+                  <span>MySQL Database Engine</span>
                 </div>
                 <span className="text-[11px] font-mono text-gray-500">
                   Latency: <strong className="text-gray-900">{pingLatency ? `${pingLatency}ms` : '--'}</strong>
@@ -557,7 +557,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
               <span className="text-xs font-black uppercase tracking-wider">3. The Hands (CRM Data)</span>
             </div>
             <p className="text-xs text-neutral-400 leading-relaxed">
-              Your live Supabase PostgreSQL database holding all sales leads, team tasks, projects, and invoices.
+              Your live MySQL / Hostinger database holding all sales leads, team tasks, projects, and invoices.
             </p>
           </div>
         </div>
@@ -789,7 +789,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
               <Bot className="text-amber-600 shrink-0 mt-0.5" size={18} />
               <div>
                 <strong className="font-black block text-amber-900 mb-0.5">Claude Desktop Integration (Windows & Mac):</strong>
-                Claude Desktop launches the AGX MCP server as a local background process on your machine. Everything you ask Claude to update (leads, tasks, projects) takes effect immediately in your live Supabase CRM database!
+                Claude Desktop launches the AGX MCP server as a local background process on your machine. Everything you ask Claude to update (leads, tasks, projects) takes effect immediately in your live MySQL CRM database!
               </div>
             </div>
 
@@ -1318,7 +1318,7 @@ export const McpSettingsSection: React.FC<McpSettingsSectionProps> = ({ store })
             },
             {
               q: 'How do I test if my connection works right now?',
-              a: 'Click the "Test Connection" button at the very top of this page. If Supabase responds in green, your database credentials and API bridge are 100% operational.'
+              a: 'Click the "Test Connection" button at the very top of this page. If the MySQL database responds in green, your database credentials and API bridge are 100% operational.'
             }
           ].map((item, idx) => (
             <div key={idx} className="p-4 bg-white hover:bg-gray-50/60 transition-colors">

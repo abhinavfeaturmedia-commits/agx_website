@@ -1,23 +1,26 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Handshake, Users, IndianRupee, Wallet, ArrowUpRight, Copy, Check,
-  Plus, LogOut, ArrowLeft, TrendingUp, Clock, CheckCircle2, AlertCircle,
-  ExternalLink, Sparkles, Building, Phone, Mail, FileText, ChevronRight,
-  CreditCard, Shield, Download, RefreshCw, QrCode, Share2, Calculator,
+  LayoutDashboard, Users, IndianRupee, Wallet, Sparkles, CreditCard,
+  ArrowUpRight, Copy, Check, Plus, LogOut, ArrowLeft, TrendingUp, Clock,
+  CheckCircle2, AlertCircle, ExternalLink, Building, Phone, Mail, FileText,
+  ChevronRight, Shield, Download, RefreshCw, QrCode, Share2, Calculator,
   MessageSquare, ChevronDown, CheckCheck, Send, Zap, Award, Sliders,
-  ArrowDownRight, Eye, EyeOff, KeyRound, Percent, DollarSign, CheckCircle, User, Lock, Bell, Globe
+  ArrowDownRight, Eye, EyeOff, KeyRound, Percent, DollarSign, CheckCircle,
+  User, Lock, Bell, Globe, Search, Layers, Briefcase, UserCheck, CheckSquare,
+  HelpCircle, ArrowRight, Scale, Folder, UploadCloud, File, Paperclip, Loader2, Trash2
 } from 'lucide-react';
-import { Partner, PartnerReferral, PartnerPayout, PartnerPayoutDetails, calculatePartnerTier } from '../../types/crm';
+import { Partner, PartnerReferral, PartnerPayout, PartnerPayoutDetails, ClientDocument, calculatePartnerTier, getEffectivePartnerRate } from '../../types/crm';
 import { useCrmStore } from '../../lib/crmStore';
 import { authService } from '../../lib/authService';
 import { toast } from '../../lib/toastStore';
-import { supabase } from '../../lib/supabase';
+import { apiClient } from '../../lib/apiClient';
 import { mapPartnerFromDb } from '../../lib/crmService';
 import { exportService } from '../../lib/exportService';
 import { BorderBeam } from 'border-beam';
 import { ThinkingOrb } from 'thinking-orbs';
 import { BotAvatar } from 'bot-avatars';
+import { PartnerTermsModal } from './PartnerTermsModal';
 
 interface PartnerPortalProps {
   initialPartner?: Partner | null;
@@ -25,6 +28,8 @@ interface PartnerPortalProps {
   onBackToWebsite: () => void;
   onLogout: () => void;
 }
+
+type PartnerTab = 'dashboard' | 'referrals' | 'payouts' | 'toolkit' | 'settings';
 
 export const PartnerPortal: React.FC<PartnerPortalProps> = ({
   initialPartner,
@@ -44,18 +49,21 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
 
   const [partner, setPartner] = useState<Partner | null>(activeSessionPartner || null);
 
-
   if (!partner) {
     return null;
   }
 
-  // Active navigation tab
-  const [activeTab, setActiveTab] = useState<'referrals' | 'payouts' | 'toolkit' | 'settings'>('referrals');
+  // Active navigation tab (matching Admin CRM views)
+  const [activeTab, setActiveTab] = useState<PartnerTab>('dashboard');
 
-  // Modals state
+  // Modals & Drawers state
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isMobileMoreOpen, setIsMobileMoreOpen] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
 
   // Clipboard copy state
   const [copiedCode, setCopiedCode] = useState(false);
@@ -75,10 +83,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
   const [newProjectType, setNewProjectType] = useState('AI Automation Blueprint');
   const [newDealValue, setNewDealValue] = useState('75000');
   const [newNotes, setNewNotes] = useState('');
+  const [newReferralFiles, setNewReferralFiles] = useState<File[]>([]);
+
+  // Referral Document & Google Drive Vault State
+  const [expandedDocReferralId, setExpandedDocReferralId] = useState<string | null>(null);
+  const [uploadingReferralId, setUploadingReferralId] = useState<string | null>(null);
+  const [dragActiveReferralId, setDragActiveReferralId] = useState<string | null>(null);
 
   // Payout Request Form State
   const [payoutRequestAmount, setPayoutRequestAmount] = useState('');
   const [payoutNotes, setPayoutNotes] = useState('');
+
+  // Interactive Commission Simulator State
+  const [simDealValue, setSimDealValue] = useState<number>(150000);
+  const [showStandardTiersWhenCustom, setShowStandardTiersWhenCustom] = useState(false);
 
   // Editable Partner Profile State
   const [editName, setEditName] = useState(partner.name || '');
@@ -121,45 +139,48 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
-  // Track whether this partner account already has a password set (false for first-time Google OAuth accounts)
   const [hasExistingPassword, setHasExistingPassword] = useState<boolean>(() => {
     return Boolean(partner.hasPassword || partner.passwordHash || (partner.payoutDetails as any)?.passwordHash);
   });
 
+  // Time-of-day greeting
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
+
   // Real-time dynamic password strength meter
   const passwordStrength = useMemo(() => {
-    if (!newPassword) return { score: 0, label: '', color: 'bg-white/10', text: 'text-white/40' };
+    if (!newPassword) return { score: 0, label: '', color: 'bg-gray-200', text: 'text-gray-400' };
     let score = 0;
     if (newPassword.length >= 8) score += 1;
     if (/[0-9]/.test(newPassword)) score += 1;
     if (/[a-z]/.test(newPassword) && /[A-Z]/.test(newPassword)) score += 1;
     if (/[^A-Za-z0-9]/.test(newPassword)) score += 1;
 
-    if (score <= 1) return { score: 1, label: 'Weak', color: 'bg-rose-500', text: 'text-rose-400' };
-    if (score === 2) return { score: 2, label: 'Fair', color: 'bg-amber-500', text: 'text-amber-400' };
-    if (score === 3) return { score: 3, label: 'Good', color: 'bg-blue-500', text: 'text-blue-400' };
-    return { score: 4, label: 'Strong', color: 'bg-[#CCFF00]', text: 'text-[#CCFF00]' };
+    if (score <= 1) return { score: 1, label: 'Weak', color: 'bg-rose-500', text: 'text-rose-500' };
+    if (score === 2) return { score: 2, label: 'Fair', color: 'bg-amber-500', text: 'text-amber-500' };
+    if (score === 3) return { score: 3, label: 'Good', color: 'bg-blue-500', text: 'text-blue-500' };
+    return { score: 4, label: 'Strong', color: 'bg-emerald-500', text: 'text-emerald-500' };
   }, [newPassword]);
 
-  // Live cloud re-hydration on mount: fetch latest partner record from Supabase
+  // Cloud re-hydration on mount
   useEffect(() => {
     const partnerId = partner?.id || activeSessionPartner?.id;
     if (partnerId) {
       (async () => {
         try {
-          const { data, error } = await supabase
-            .from('partners')
-            .select('*')
-            .eq('id', partnerId)
-            .maybeSingle();
+          const res = await apiClient.get<any>('/crm/partners');
+          const data = (res.data || []).find((p: any) => p.id === partnerId);
 
-          if (data && !error) {
+          if (data) {
             const freshPartner = mapPartnerFromDb(data);
             setPartner(freshPartner);
             authService.setPartnerSession(freshPartner);
             if (onPartnerUpdated) onPartnerUpdated(freshPartner);
 
-            // Dynamically detect if partner has password set in database
             const hasDbPassword = Boolean(
               data.password_hash || (data.payout_details as any)?.passwordHash
             );
@@ -183,31 +204,36 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
             setEditNotifyOnWhatsApp(freshPartner.payoutDetails?.notifyOnWhatsApp ?? true);
           }
         } catch (err) {
-          console.warn('Supabase partner fresh fetch notice:', err);
+          console.warn('MySQL partner rehydrate error:', err);
         }
       })();
     }
   }, []);
-
-  // Interactive Commission Simulator State
-  const [simDealValue, setSimDealValue] = useState<number>(150000);
 
   // Referral link
   const referralUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/?ref=${encodeURIComponent(partner.referralCode)}`
     : `https://agxperience.com/?ref=${partner.referralCode}`;
 
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(
     referralUrl
-  )}&color=07090e&bgcolor=ffffff&format=svg`;
+  )}&color=0c0f17&bgcolor=ffffff&format=svg`;
 
-  // Partner commission rate (standardized float, e.g. 0.15)
-  const partnerRate = useMemo(() => {
-    const rawRate = partner.commissionRate || 0.10;
-    return rawRate >= 1 ? rawRate / 100 : rawRate;
-  }, [partner.commissionRate]);
+  // Calculate active monthly billing volume across all partner direct referrals & CRM leads
+  const initialBillingVolume = useMemo(() => {
+    const directReferrals = store.partnerReferrals.filter(r => r.partnerId === partner.id);
+    const directVal = directReferrals.reduce((acc, r) => acc + (r.dealValue || 0), 0);
+    const directPaid = directReferrals.reduce((acc, r) => acc + (r.totalPaid || 0), 0);
+    return Math.max(directVal, directPaid);
+  }, [store.partnerReferrals, partner.id]);
 
-  const partnerRatePercent = Math.round(partnerRate * 100);
+  // Effective commission rate resolution (handles custom fixed percentage or dynamic volume tiers)
+  const initialEffectiveRate = useMemo(() => {
+    return getEffectivePartnerRate(partner, initialBillingVolume);
+  }, [partner, initialBillingVolume]);
+
+  const partnerRate = initialEffectiveRate.rate;
+  const partnerRatePercent = initialEffectiveRate.percentage;
 
   // Filter referrals specifically for this partner & reconcile with store.leads
   const myReferrals = useMemo(() => {
@@ -215,7 +241,6 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     const existingLeadIds = new Set(directReferrals.map(r => r.leadId).filter(Boolean));
     const existingEmails = new Set(directReferrals.map(r => r.clientEmail?.toLowerCase()).filter(Boolean));
 
-    // Discover any leads attributed to this partner in the CRM that do not have an explicit referral record yet
     const orphanPartnerLeads = store.leads.filter(l => {
       if (
         l.partnerId === partner.id ||
@@ -238,7 +263,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
       company: l.company || l.name,
       clientEmail: l.email || undefined,
       clientPhone: l.phone || undefined,
-      projectType: l.interestedService || 'AI Automation',
+      projectType: l.interestedService || 'AI Automation Blueprint',
       dealValue: l.estimatedDealValue || 0,
       totalPaid: 0,
       pendingPayment: l.estimatedDealValue || 0,
@@ -260,17 +285,27 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     return store.partnerPayouts.filter(p => p.partnerId === partner.id);
   }, [store.partnerPayouts, partner.id]);
 
-  // Calculations
+  // Key Calculations
   const totalReferredClients = myReferrals.length;
   const wonDealsCount = myReferrals.filter(
     r => r.dealStatus === 'WON' || r.dealStatus === 'IN PROGRESS' || r.dealStatus === 'COMPLETED'
   ).length;
-  const partnerTier = useMemo(() => calculatePartnerTier(wonDealsCount), [wonDealsCount]);
-  const winRate = totalReferredClients > 0 ? Math.round((wonDealsCount / totalReferredClients) * 100) : 0;
 
   const totalPipelineValue = myReferrals.reduce((acc, r) => acc + (r.dealValue || 0), 0);
   const totalClientPaymentsReceived = myReferrals.reduce((acc, r) => acc + (r.totalPaid || 0), 0);
-  const totalPendingClientPayments = myReferrals.reduce((acc, r) => acc + (r.pendingPayment || 0), 0);
+  const activeBillingVolume = Math.max(totalClientPaymentsReceived, totalPipelineValue);
+
+  // Fully reconciled Effective Partner Rate & Tier with complete deal billing volume
+  const effectivePartnerRateInfo = useMemo(() => {
+    return getEffectivePartnerRate(partner, activeBillingVolume);
+  }, [partner, activeBillingVolume]);
+
+  const partnerTier = useMemo(() => {
+    return calculatePartnerTier(activeBillingVolume, wonDealsCount);
+  }, [activeBillingVolume, wonDealsCount]);
+
+  const winRate = totalReferredClients > 0 ? Math.round((wonDealsCount / totalReferredClients) * 100) : 0;
+
   const totalCommissionEarned = myReferrals.reduce((acc, r) => acc + (r.commissionEarned || 0), 0);
   const totalCommissionPaidOut = myPayouts
     .filter(p => p.status === 'Completed')
@@ -299,6 +334,51 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     setTimeout(() => setCopiedPitchId(null), 2500);
   };
 
+  // Accept Legal Agreement under Indian Law
+  const handleAcceptTerms = async ({ acceptedAt, version }: { acceptedAt: string; version: string }) => {
+    const updated: Partner = {
+      ...partner,
+      termsAccepted: true,
+      termsAcceptedAt: acceptedAt,
+      termsVersion: version
+    };
+    setPartner(updated);
+    store.updatePartner(partner.id, {
+      termsAccepted: true,
+      termsAcceptedAt: acceptedAt,
+      termsVersion: version
+    });
+    authService.setPartnerSession(updated);
+    if (onPartnerUpdated) onPartnerUpdated(updated);
+    setIsTermsModalOpen(false);
+    toast.success('Agreement Signed & Certified', 'Welcome to the AGX Partner Network.');
+  };
+
+  // Handle direct file upload for an existing referral
+  const handleUploadFileForReferral = async (referral: PartnerReferral, file: File) => {
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('File Limit Exceeded', `"${file.name}" exceeds the 25MB maximum limit.`);
+      return;
+    }
+
+    setUploadingReferralId(referral.id);
+    try {
+      await store.uploadReferralDocument(
+        referral.id,
+        file,
+        referral.clientName,
+        referral.company,
+        partner.name
+      );
+    } catch (err: any) {
+      console.error('File upload error:', err);
+      toast.error('Upload Notice', err.message || 'Could not stream document to Google Drive.');
+    } finally {
+      setUploadingReferralId(null);
+    }
+  };
+
   // Submit Client Referral
   const handleSubmitReferral = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -311,7 +391,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     setIsSubmitting(true);
 
     try {
-      await store.addPartnerLeadReferral(partner, {
+      const created = await store.addPartnerLeadReferral(partner, {
         clientName: newClientName.trim(),
         company: newClientCompany.trim() || newClientName.trim(),
         clientEmail: newClientEmail.trim() || undefined,
@@ -321,15 +401,32 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
         notes: newNotes.trim() || undefined
       });
 
+      // Stream any attached files to Google Drive for this newly created referral
+      if (newReferralFiles.length > 0 && created?.referral?.id) {
+        for (const file of newReferralFiles) {
+          try {
+            await store.uploadReferralDocument(
+              created.referral.id,
+              file,
+              newClientName.trim(),
+              newClientCompany.trim() || newClientName.trim(),
+              partner.name
+            );
+          } catch (fileErr) {
+            console.warn('Initial file upload error:', fileErr);
+          }
+        }
+      }
+
       setIsSubmitModalOpen(false);
 
-      // Reset form
       setNewClientName('');
       setNewClientCompany('');
       setNewClientEmail('');
       setNewClientPhone('');
       setNewNotes('');
       setNewDealValue('75000');
+      setNewReferralFiles([]);
     } catch (err: any) {
       console.error('Submit referral error:', err);
       toast.error('Submission Notice', 'Failed to register referral. Please try again.');
@@ -368,7 +465,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
 
     toast.success(
       'Payout Request Submitted 💸',
-      `₹${reqAmt.toLocaleString('en-IN')} requested. Our finance team will disburse via ${partner.payoutMethod}.`
+      `₹${reqAmt.toLocaleString('en-IN')} requested. Our finance team will disburse via ${partner.payoutMethod || 'UPI'}.`
     );
     setIsPayoutModalOpen(false);
     setPayoutRequestAmount('');
@@ -380,17 +477,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     e.preventDefault();
     const errors: { [key: string]: string } = {};
 
-    // 1. Validate Name
     if (!editName.trim() || editName.trim().length < 2) {
       errors.name = 'Please provide a valid full name (min 2 characters).';
     }
 
-    // 2. Validate Phone (optional but if provided, validate)
     if (editPhone.trim() && !/^[+0-9\s-]{7,18}$/.test(editPhone.trim())) {
       errors.phone = 'Please provide a valid phone or WhatsApp number.';
     }
 
-    // 3. Validate Payout method specific requirements
     if (editPayoutMethod === 'UPI') {
       const upi = editUpiId.trim();
       if (!upi) {
@@ -464,7 +558,29 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     };
 
     try {
-      // 1. Direct await to Supabase database
+      // 1. Optimistic Local Save (Instantly persist to memory, store, and active session)
+      store.updatePartner(partner.id, {
+        name: updatedPartner.name,
+        company: updatedPartner.company,
+        phone: updatedPartner.phone,
+        notes: updatedPartner.notes,
+        payoutMethod: editPayoutMethod,
+        payoutDetails: updatedDetails
+      });
+
+      authService.setPartnerSession(updatedPartner);
+      setPartner(updatedPartner);
+
+      if (onPartnerUpdated) onPartnerUpdated(updatedPartner);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('agx_crm_partner_updated', { detail: updatedPartner }));
+      }
+
+      setProfileSaveSuccess('Partner profile and payout coordinates saved successfully! ✨');
+      toast.success('Partner Profile Saved! ✨', 'Your coordinates have been saved and updated.');
+      setTimeout(() => setProfileSaveSuccess(null), 6000);
+
+      // 2. Cloud MySQL Sync (Non-blocking background sync)
       const payload: any = {
         name: updatedPartner.name,
         company: updatedPartner.company,
@@ -475,39 +591,16 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
         updated_at: new Date().toISOString()
       };
 
-      const { error: dbError } = await supabase.from('partners').update(payload).eq('id', partner.id);
-      if (dbError) throw dbError;
-
-      // 2. Synchronize in-memory CRM store
-      store.updatePartner(partner.id, {
-        name: updatedPartner.name,
-        company: updatedPartner.company,
-        phone: updatedPartner.phone,
-        notes: updatedPartner.notes,
-        payoutMethod: editPayoutMethod,
-        payoutDetails: updatedDetails
+      apiClient.put(`/crm/partners/${partner.id}`, payload).then((res) => {
+        if (res && res.success && !res.deferred) {
+          console.log('[Partner Portal] MySQL cloud sync confirmed');
+        }
+      }).catch((syncErr) => {
+        console.warn('[Partner Portal] Database sync deferred (saved locally):', syncErr.message);
       });
-
-      // 3. Update localStorage session cache
-      authService.setPartnerSession(updatedPartner);
-
-      // 4. Update local component state
-      setPartner(updatedPartner);
-
-      // 5. Notify parent App component
-      if (onPartnerUpdated) {
-        onPartnerUpdated(updatedPartner);
-      }
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('agx_crm_partner_updated', { detail: updatedPartner }));
-      }
-
-      setProfileSaveSuccess('Partner profile and payout coordinates saved successfully to cloud! ✨');
-      toast.success('Partner Profile Saved! ✨', 'Your contact and payout coordinates have been updated in Supabase.');
-      setTimeout(() => setProfileSaveSuccess(null), 6000);
     } catch (err: any) {
       console.error('Error updating partner profile:', err);
-      const errMsg = err?.message || 'Unable to update coordinates in database. Please retry.';
+      const errMsg = err?.message || 'Unable to update coordinates. Please retry.';
       setProfileSaveError(errMsg);
       toast.error('Save Failed', errMsg);
     } finally {
@@ -515,7 +608,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     }
   };
 
-  // Partner Password Update Handler (contextually supports first-time password setup for Google OAuth accounts)
+  // Password Update
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
@@ -525,7 +618,6 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     const trimmedNew = newPassword.trim();
     const trimmedConfirm = confirmPassword.trim();
 
-    // If an existing password is set, current password is strictly required and cannot match new password
     if (hasExistingPassword) {
       if (!trimmedCurrent) {
         setPasswordError('Please enter your current password.');
@@ -598,7 +690,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     onLogout();
   };
 
-  // Filtered referrals list for display
+  // Filtered referrals list for referrals tab
   const filteredReferrals = myReferrals.filter(r => {
     const matchesSearch =
       r.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -613,1764 +705,2181 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     return true;
   });
 
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'referrals', label: 'Referred Clients', icon: Users, count: myReferrals.length },
+    { id: 'payouts', label: 'Payout Vault & Ledger', icon: Wallet, count: availablePendingPayout > 0 ? 1 : undefined },
+    { id: 'toolkit', label: 'Growth Toolkit', icon: Sparkles },
+    { id: 'settings', label: 'Profile & Settings', icon: CreditCard },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#07090E] text-white flex flex-col relative antialiased selection:bg-[#CCFF00] selection:text-black">
-      {/* Background Decorative Ambient Flares */}
-      <div className="fixed top-0 left-1/4 w-[650px] h-[350px] bg-[#CCFF00]/5 rounded-full blur-[170px] pointer-events-none" />
-      <div className="fixed bottom-10 right-10 w-[550px] h-[550px] bg-emerald-600/5 rounded-full blur-[190px] pointer-events-none" />
-
-      {/* Top Glass Navigation Bar */}
-      <header className="w-full bg-[#0C0F17]/90 backdrop-blur-xl border-b border-white/[0.08] sticky top-0 z-40 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <button
-              onClick={onBackToWebsite}
-              className="flex items-center gap-1.5 text-xs font-semibold text-white/60 hover:text-white transition-colors px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] cursor-pointer"
-            >
-              <ArrowLeft size={13} />
-              <span className="hidden sm:inline">Agency Site</span>
-            </button>
-
-            <div className="flex items-center gap-2.5">
-              <span className="text-xl sm:text-2xl font-black italic tracking-tighter text-white font-['Outfit']">
+    <div className="crm-theme min-h-screen bg-[#F4F3F9] text-gray-900 flex antialiased overflow-x-hidden relative">
+      
+      {/* 1. Left Dark Sidebar (Exact Admin CRM Architecture) */}
+      <aside className="w-64 bg-gradient-to-b from-[#0C0F17] via-[#090C12] to-[#06080D] border-r border-white/[0.08] text-white flex-shrink-0 flex flex-col justify-between p-4 hidden md:flex z-30 shadow-2xl">
+        <div>
+          {/* Top Logo */}
+          <div
+            onClick={() => setActiveTab('dashboard')}
+            className="flex items-center gap-3 px-3 py-4 cursor-pointer hover:opacity-90 transition-opacity mb-4 group"
+          >
+            <div className="w-9 h-9 rounded-xl bg-[#CCFF00] text-black font-black italic flex items-center justify-center text-lg shadow-[0_0_15px_rgba(204,255,0,0.3)] group-hover:scale-105 transition-transform">
+              A
+            </div>
+            <div>
+              <span className="text-xl font-black italic tracking-tighter text-white block leading-none">
                 AG<span className="text-[#CCFF00]">X</span>
               </span>
-              <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
-              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#CCFF00]/10 border border-[#CCFF00]/20 text-[#CCFF00] text-[10px] font-bold uppercase tracking-wider">
-                <Handshake size={11} />
-                <span>Partner Portal</span>
-              </div>
+              <span className="text-[10px] font-mono text-[#CCFF00] uppercase tracking-widest block mt-0.5 font-bold">
+                Partner OS
+              </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex flex-col text-right">
-              <span className="text-xs font-bold text-white leading-tight">{partner.name}</span>
-              <span className="text-[10px] text-white/40">{partner.company || partner.email}</span>
-            </div>
-
-            <div className="relative">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#CCFF00]/20 to-emerald-400/20 border border-[#CCFF00]/40 flex items-center justify-center font-bold text-xs text-[#CCFF00]">
-                {partner.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#0C0F17]" />
-            </div>
-
-            <button
-              onClick={handleLogoutPartner}
-              title="Sign Out Partner Session"
-              className="p-2 rounded-xl bg-white/[0.04] hover:bg-red-500/15 text-white/40 hover:text-red-400 border border-white/10 transition-colors cursor-pointer"
+          {/* Partner Tier Summary Badge */}
+          <div className="mx-2 mb-4 p-3 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center gap-2.5">
+            <div 
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
+              style={{ backgroundColor: `${partnerTier.tierColor}20`, color: partnerTier.tierColor }}
             >
-              <LogOut size={14} />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8 z-10">
-        
-        {/* EXECUTIVE BENTO HERO SECTION */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Main Welcome & Quick Referral Card (Col 8) */}
-          <div className="lg:col-span-8 p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-[#0F1422] via-[#0B0E17] to-[#07090E] border border-white/[0.1] relative overflow-hidden flex flex-col justify-between shadow-2xl">
-            {/* Top ambient highlight */}
-            <div className="absolute top-0 right-0 w-72 h-72 bg-[#CCFF00]/[0.04] rounded-full blur-3xl pointer-events-none" />
-
-            <div>
-              <div className="flex flex-wrap items-center gap-2.5 mb-3">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#CCFF00]/10 border border-[#CCFF00]/25 text-[#CCFF00] text-xs font-bold font-mono tracking-wide shadow-sm">
-                  <Sparkles size={12} className="text-[#CCFF00]" />
-                  <span>{partnerRatePercent}% Verified Partner Tier</span>
-                </div>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
-                  <CheckCircle size={11} /> Active Contract
-                </span>
-              </div>
-
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tight text-white font-['Outfit']">
-                Welcome, {partner.name}
-              </h1>
-              <p className="text-xs sm:text-sm text-white/60 mt-1.5 max-w-xl leading-relaxed font-light">
-                Introduce businesses to AGX autonomous systems. Track deal milestones live, celebrate milestone collections, and withdraw your commission immediately upon invoice clearance.
-              </p>
+              <Award size={16} />
             </div>
-
-            {/* Quick Link & Code Action Strip */}
-            <div className="mt-6 pt-6 border-t border-white/[0.08] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                {/* Referral Code Badge */}
-                <div className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-2xl bg-black/50 border border-white/10 backdrop-blur-md">
-                  <div className="flex flex-col">
-                    <span className="text-[9px] uppercase tracking-wider text-white/40 font-semibold">Your Referral Code</span>
-                    <span className="text-sm font-bold text-[#CCFF00] tracking-wider font-mono">{partner.referralCode}</span>
-                  </div>
-                  <button
-                    onClick={handleCopyCode}
-                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
-                    title="Copy Code"
-                  >
-                    {copiedCode ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                  </button>
-                </div>
-
-                {/* Copy Link Button */}
-                <button
-                  onClick={handleCopyLink}
-                  className="px-3.5 py-2.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                  title="Copy Tracking Link"
-                >
-                  {copiedLink ? <Check size={13} className="text-emerald-400" /> : <Share2 size={13} />}
-                  <span className="hidden sm:inline">{copiedLink ? 'Link Copied!' : 'Copy Link'}</span>
-                </button>
-
-                {/* Show QR Code Button */}
-                <button
-                  onClick={() => setIsQrModalOpen(true)}
-                  className="p-2.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white text-xs font-bold transition-all flex items-center justify-center cursor-pointer"
-                  title="Show Referral QR Code"
-                >
-                  <QrCode size={16} />
-                </button>
-              </div>
-
-              {/* Submit Client CTA */}
-              <BorderBeam size="sm" colorVariant="ocean" style={{ display: 'inline-block' }}>
-                <button
-                  onClick={() => setIsSubmitModalOpen(true)}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-2xl bg-[#CCFF00] hover:bg-[#b8e600] text-black text-xs font-black uppercase tracking-wider transition-transform active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-[#CCFF00]/15"
-                >
-                  <Plus size={16} />
-                  <span>Submit Client Intro</span>
-                </button>
-              </BorderBeam>
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider block">Active Tier</span>
+              <span className="text-xs font-black text-white block truncate">{partnerTier.badgeLabel} ({partnerRatePercent}%)</span>
             </div>
           </div>
 
-          {/* Luminous Payout Vault Card (Col 4) */}
-          <div className="lg:col-span-4 p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-[#13192B] via-[#0E1321] to-[#0A0D17] border border-[#CCFF00]/25 relative overflow-hidden flex flex-col justify-between shadow-2xl group">
-            {/* Luminous Glow Accent */}
-            <div className="absolute top-0 right-0 w-40 h-40 bg-[#CCFF00]/10 rounded-full blur-2xl pointer-events-none" />
+          {/* Navigation Links */}
+          <nav className="space-y-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
 
-            <div>
-              <div className="flex items-center justify-between text-[#CCFF00]">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-[#CCFF00] animate-pulse" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Available Payout Vault</span>
-                </div>
-                <Wallet size={16} className="text-[#CCFF00]" />
-              </div>
-
-              <div className="mt-4">
-                <span className="text-[10px] uppercase font-bold text-white/40 block tracking-wider">Ready for Withdrawal</span>
-                <div className="text-3xl sm:text-4xl font-black text-[#CCFF00] tracking-tight tabular-nums mt-0.5 font-['Outfit']">
-                  ₹{availablePendingPayout.toLocaleString('en-IN')}
-                </div>
-              </div>
-
-              <p className="text-[11px] text-white/50 mt-2 font-light leading-relaxed">
-                Settles immediately via <strong className="text-white font-medium">{partner.payoutMethod || 'UPI'}</strong> to your registered coordinates.
-              </p>
-            </div>
-
-            <div className="mt-6 pt-4 border-t border-white/[0.08] flex items-center justify-between gap-3">
-              <div className="flex flex-col text-[10px]">
-                <span className="text-white/40">Min. Threshold</span>
-                <span className="text-white font-mono font-semibold">₹1,000 INR</span>
-              </div>
-
-              <button
-                onClick={() => setIsPayoutModalOpen(true)}
-                disabled={availablePendingPayout < 1000}
-                className="px-4 py-2.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] disabled:opacity-30 disabled:hover:bg-[#CCFF00] text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-[#CCFF00]/10 disabled:cursor-not-allowed"
-              >
-                Request Payout
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* TIER MILESTONE PROGRESSION & GAMIFICATION CARD */}
-        <section className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#111625] via-[#0D111D] to-[#080B12] border border-white/10 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-80 h-32 bg-gradient-to-l from-[#CCFF00]/[0.05] to-transparent rounded-full blur-2xl pointer-events-none" />
-
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
-            <div className="flex items-center gap-3.5">
-              <div 
-                className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg shadow-inner shrink-0 border"
-                style={{ 
-                  backgroundColor: `${partnerTier.tierColor}18`, 
-                  color: partnerTier.tierColor,
-                  borderColor: `${partnerTier.tierColor}35`
-                }}
-              >
-                <Award size={24} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase font-mono tracking-widest text-white/50">Commission Tier</span>
-                  <span 
-                    className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border font-mono"
-                    style={{ 
-                      backgroundColor: `${partnerTier.tierColor}15`, 
-                      color: partnerTier.tierColor,
-                      borderColor: `${partnerTier.tierColor}30`
-                    }}
-                  >
-                    {partnerTier.badgeLabel}
-                  </span>
-                </div>
-                <h4 className="text-sm sm:text-base font-bold text-white mt-1">
-                  {partnerTier.nextTier ? (
-                    <span>
-                      Refer <strong className="text-[#CCFF00] font-black">{partnerTier.dealsNeededForNextTier} more client{partnerTier.dealsNeededForNextTier > 1 ? 's' : ''}</strong> to unlock the <strong>{partnerTier.nextTier} Tier ({partnerTier.nextTier === 'Gold' ? '20%' : '15%'})</strong>!
-                    </span>
-                  ) : (
-                    <span className="text-[#CCFF00]">
-                      Max Gold Tier Unlocked! You receive top-tier 20% on all closed client contracts.
-                    </span>
-                  )}
-                </h4>
-              </div>
-            </div>
-
-            {/* Badges Matrix */}
-            <div className="flex items-center gap-2">
-              <div className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all ${
-                partnerTier.tier === 'Bronze' 
-                  ? 'bg-[#D97706]/20 border-[#D97706]/40 text-[#D97706] shadow-sm' 
-                  : 'bg-white/[0.03] border-white/10 text-white/35'
-              }`}>
-                <span>🥉 Bronze</span>
-                <span className="font-mono text-[10px]">10%</span>
-              </div>
-              <div className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all ${
-                partnerTier.tier === 'Silver' 
-                  ? 'bg-[#94A3B8]/20 border-[#94A3B8]/40 text-white shadow-sm' 
-                  : 'bg-white/[0.03] border-white/10 text-white/35'
-              }`}>
-                <span>🥈 Silver</span>
-                <span className="font-mono text-[10px]">15%</span>
-              </div>
-              <div className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all ${
-                partnerTier.tier === 'Gold' 
-                  ? 'bg-[#EAB308]/20 border-[#EAB308]/40 text-[#EAB308] shadow-sm' 
-                  : 'bg-white/[0.03] border-white/10 text-white/35'
-              }`}>
-                <span>🥇 Gold</span>
-                <span className="font-mono text-[10px]">20%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Milestone Progress Bar */}
-          <div className="mt-4 pt-3.5 border-t border-white/[0.06] space-y-1.5 relative z-10">
-            <div className="flex justify-between items-center text-[11px] font-mono">
-              <span className="text-white/50">{wonDealsCount} Closed Deals On Record</span>
-              <span className="text-[#CCFF00] font-semibold">{partnerTier.progressPercent}% to {partnerTier.nextTier ? `${partnerTier.nextTier} Tier` : 'Max Tier'}</span>
-            </div>
-            <div className="h-2.5 w-full bg-white/[0.05] rounded-full overflow-hidden p-0.5 border border-white/[0.08]">
-              <div 
-                className="h-full rounded-full transition-all duration-700 bg-gradient-to-r from-[#CCFF00] via-emerald-400 to-[#CCFF00]"
-                style={{ width: `${Math.max(4, partnerTier.progressPercent)}%` }}
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* 4 HIGH-CONTRAST METRICS PILLARS */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-          {/* Card 1: Clients & Win Rate */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] border border-white/[0.08] hover:border-white/[0.15] transition-all flex flex-col justify-between">
-            <div className="flex items-center justify-between text-white/50 text-[10px] font-bold uppercase tracking-wider">
-              <span>Introductions</span>
-              <Users size={14} className="text-blue-400" />
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl sm:text-3xl font-black text-white tabular-nums font-['Outfit']">
-                {totalReferredClients}
-              </div>
-              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-white/50">
-                <span className="text-emerald-400 font-semibold">{winRate}% conversion</span>
-                <span>• {wonDealsCount} won</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Total Contract Pipeline */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] border border-white/[0.08] hover:border-white/[0.15] transition-all flex flex-col justify-between">
-            <div className="flex items-center justify-between text-white/50 text-[10px] font-bold uppercase tracking-wider">
-              <span>Deal Pipeline</span>
-              <TrendingUp size={14} className="text-purple-400" />
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl sm:text-3xl font-black text-white tabular-nums font-['Outfit']">
-                ₹{totalPipelineValue.toLocaleString('en-IN')}
-              </div>
-              <div className="text-[10px] text-white/50 mt-1">
-                Potential Cut: <span className="text-purple-300 font-semibold">₹{Math.round(totalPipelineValue * partnerRate).toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Client Payments Collected */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] border border-white/[0.08] hover:border-white/[0.15] transition-all flex flex-col justify-between">
-            <div className="flex items-center justify-between text-white/50 text-[10px] font-bold uppercase tracking-wider">
-              <span>Client Collections</span>
-              <CreditCard size={14} className="text-emerald-400" />
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl sm:text-3xl font-black text-emerald-400 tabular-nums font-['Outfit']">
-                ₹{totalClientPaymentsReceived.toLocaleString('en-IN')}
-              </div>
-              <div className="text-[10px] text-white/50 mt-1">
-                Pending: ₹{totalPendingClientPayments.toLocaleString('en-IN')}
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: Lifetime Commission Earned */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] border border-white/[0.08] hover:border-white/[0.15] transition-all flex flex-col justify-between">
-            <div className="flex items-center justify-between text-white/50 text-[10px] font-bold uppercase tracking-wider">
-              <span>Lifetime Earnings</span>
-              <IndianRupee size={14} className="text-amber-400" />
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl sm:text-3xl font-black text-white tabular-nums font-['Outfit']">
-                ₹{totalCommissionEarned.toLocaleString('en-IN')}
-              </div>
-              <div className="text-[10px] text-white/50 mt-1">
-                Paid: ₹{totalCommissionPaidOut.toLocaleString('en-IN')}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* INTERACTIVE NAVIGATION TABS */}
-        <section className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-            {[
-              { id: 'referrals', label: 'Referred Clients & Deals', badge: myReferrals.length, icon: Users },
-              { id: 'payouts', label: 'Payout Vault & Ledger', badge: myPayouts.length, icon: Wallet },
-              { id: 'toolkit', label: 'Partner Growth Toolkit', badge: 'Tools', icon: Sparkles },
-              { id: 'settings', label: 'Profile & Payout Settings', badge: null, icon: CreditCard }
-            ].map(tab => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
               return (
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id as PartnerTab)}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer relative btn-press ${
                     isActive
-                      ? 'bg-white text-black shadow-lg font-black'
-                      : 'text-white/60 hover:text-white hover:bg-white/[0.05]'
+                      ? 'bg-white/[0.12] text-white shadow-inner border border-white/10'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  <Icon size={14} className={isActive ? 'text-black' : 'text-white/60'} />
-                  <span>{tab.label}</span>
-                  {tab.badge !== null && (
+                  {isActive && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-[#CCFF00] rounded-r-full shadow-[0_0_10px_#CCFF00]" />
+                  )}
+                  <div className="flex items-center gap-3">
+                    <Icon size={16} className={isActive ? 'text-[#CCFF00]' : 'text-gray-400'} />
+                    <span className={isActive ? 'text-white font-extrabold' : 'font-medium'}>{item.label}</span>
+                  </div>
+                  {item.count !== undefined && item.count > 0 && (
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                        isActive ? 'bg-black/10 text-black' : 'bg-white/10 text-white/70'
+                      className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                        isActive ? 'bg-[#CCFF00] text-black font-black' : 'bg-white/10 text-white'
                       }`}
                     >
-                      {tab.badge}
+                      {item.count}
                     </span>
                   )}
                 </button>
               );
             })}
+          </nav>
+        </div>
+
+        {/* Sidebar Footer */}
+        <div className="pt-4 border-t border-white/10 space-y-3">
+          {/* Referral Code Quick Pill */}
+          <div className="p-3 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between text-xs">
+            <div>
+              <span className="text-[9px] uppercase font-mono text-white/40 block">Your Code</span>
+              <span className="font-mono font-bold text-[#CCFF00] text-xs">{partner.referralCode}</span>
+            </div>
+            <button
+              onClick={handleCopyCode}
+              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              title="Copy Referral Code"
+            >
+              {copiedCode ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+            </button>
           </div>
 
-          {/* Tab-specific Search & Quick Filters */}
-          {activeTab === 'referrals' && (
-            <div className="flex items-center gap-2.5">
-              <div className="relative">
+          {/* Cloud Sync Status */}
+          <div className="flex items-center justify-between px-3 py-2 bg-white/5 rounded-2xl border border-white/5 text-[11px]">
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${store.isMySQLConnected ? 'bg-[#CCFF00] animate-pulse shadow-[0_0_6px_#CCFF00]' : 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]'}`} />
+              <span className="text-gray-300 font-medium">{store.isMySQLConnected ? 'MySQL Cloud Sync' : 'Local Storage Engine'}</span>
+            </div>
+            <button
+              onClick={() => store.refreshFromCloud(false)}
+              className="text-gray-400 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors cursor-pointer btn-press"
+              title={store.isMySQLConnected ? 'Sync with MySQL cloud database' : 'Sync latest local storage records'}
+            >
+              <RefreshCw size={12} className={store.isSyncing ? 'animate-spin text-[#CCFF00]' : ''} />
+            </button>
+          </div>
+
+          {/* Back to Website */}
+          <button
+            onClick={onBackToWebsite}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer btn-press"
+          >
+            <div className="flex items-center gap-2">
+              <Globe size={15} />
+              <span>Back to Website</span>
+            </div>
+            <ArrowUpRight size={14} />
+          </button>
+        </div>
+      </aside>
+
+      {/* 2. Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        
+        {/* Floating Glass Island Top Header */}
+        <div className="px-4 sm:px-6 pt-3 pb-1 z-20 sticky top-0">
+          <header className="glass-island h-14 rounded-2xl px-4 sm:px-5 flex items-center justify-between">
+            {/* Left Search / Action Area */}
+            <div className="flex items-center gap-3 flex-1 max-w-md">
+              <div className="relative w-full">
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search client or company..."
-                  className="w-48 sm:w-56 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00]"
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (activeTab !== 'referrals' && e.target.value.trim()) {
+                      setActiveTab('referrals');
+                    }
+                  }}
+                  placeholder="Search referred clients, companies, or deals..."
+                  className="w-full bg-gray-100/70 hover:bg-gray-100 focus:bg-white text-gray-900 pl-9 pr-3.5 py-1.5 rounded-xl text-xs transition-colors border border-gray-200/50 outline-none focus:border-black font-medium"
                 />
               </div>
-
-              <div className="flex items-center p-0.5 rounded-xl bg-white/[0.04] border border-white/10 text-[10px] font-bold">
-                {(['ALL', 'NEW', 'WON', 'COMPLETED'] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setStatusFilter(f)}
-                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                      statusFilter === f
-                        ? 'bg-white/20 text-white font-bold'
-                        : 'text-white/40 hover:text-white'
-                    }`}
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
             </div>
-          )}
-        </section>
 
-        {/* TAB 1: REFERRED CLIENTS & MILESTONE TRACKING */}
-        {activeTab === 'referrals' && (
-          <div className="space-y-4">
-            {filteredReferrals.length === 0 ? (
-              <div className="text-center py-16 p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] flex flex-col items-center justify-center">
-                <div className="mb-4">
-                  <BotAvatar type="star" size={88} state="default" aria-label="Partner Assistant Mascot" />
-                </div>
-                <h3 className="text-lg font-bold text-white">No Referred Clients Found</h3>
-                <p className="text-xs text-white/50 mt-1 max-w-md mx-auto leading-relaxed font-light">
-                  Introduce your first client or share your personalized referral link. When they contract with AGX, you earn {partnerRatePercent}% on every milestone payment collected.
-                </p>
-                <div className="mt-5 flex gap-3">
+            {/* Right Header Actions */}
+            <div className="flex items-center gap-2.5">
+              {/* Quick Link Copy Button */}
+              <button
+                onClick={handleCopyLink}
+                className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100/80 hover:bg-gray-200/80 text-gray-800 font-bold text-xs cursor-pointer transition-colors btn-press"
+                title="Copy tracking URL"
+              >
+                {copiedLink ? <Check size={12} className="text-emerald-600" /> : <Share2 size={12} className="text-gray-500" />}
+                <span>{copiedLink ? 'Link Copied!' : 'Copy Link'}</span>
+              </button>
+
+              {/* QR Code Quick Button */}
+              <button
+                onClick={() => setIsQrModalOpen(true)}
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gray-100/80 hover:bg-gray-200/80 text-gray-700 font-semibold text-xs cursor-pointer transition-colors btn-press"
+                title="Show QR Code"
+              >
+                <QrCode size={13} />
+                <span className="hidden md:inline">QR</span>
+              </button>
+
+              {/* Primary Action Button: + Submit Client Intro */}
+              <div className="relative">
+                <BorderBeam size="pulse-inner" colorVariant="sunset" strength={0.8} style={{ display: 'inline-block' }}>
                   <button
                     onClick={() => setIsSubmitModalOpen(true)}
-                    className="px-5 py-2.5 rounded-xl bg-[#CCFF00] text-black text-xs font-black uppercase tracking-wider cursor-pointer hover:bg-[#b8e600] transition-colors"
+                    className="flex items-center gap-2 pl-3.5 pr-2 py-1.5 rounded-full bg-black hover:bg-gray-800 text-white font-bold text-xs shadow-md transition-all cursor-pointer btn-press group"
                   >
-                    Submit Client Intro
+                    <span>Submit Intro</span>
+                    <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-[#CCFF00] group-hover:text-black transition-colors">
+                      <Plus size={12} className="text-[#CCFF00] group-hover:text-black transition-colors" />
+                    </span>
                   </button>
-                  <button
-                    onClick={handleCopyLink}
-                    className="px-4 py-2.5 rounded-xl bg-white/10 text-white text-xs font-bold hover:bg-white/20 transition-colors cursor-pointer"
-                  >
-                    Copy Referral Link
-                  </button>
-                </div>
+                </BorderBeam>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {filteredReferrals.map((referral) => {
-                  const percentPaid =
-                    referral.dealValue > 0
-                      ? Math.min(100, Math.round((referral.totalPaid / referral.dealValue) * 100))
-                      : 0;
-                  const isFullySettled = referral.totalPaid >= referral.dealValue && referral.dealValue > 0;
-                  const earnedCut = referral.commissionEarned || Math.round(referral.totalPaid * partnerRate);
-                  const fullPotentialCut = Math.round(referral.dealValue * partnerRate);
 
-                  // Milestone stages: Stage 1 (Advance 40%), Stage 2 (Delivery 30%), Stage 3 (Handover 30%)
-                  const stage1Cleared = percentPaid >= 35;
-                  const stage2Cleared = percentPaid >= 65;
-                  const stage3Cleared = isFullySettled;
+              {/* Notifications Bell */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsNotifDrawerOpen(!isNotifDrawerOpen)}
+                  className="p-2 rounded-xl bg-gray-100/80 hover:bg-gray-200/80 text-gray-600 transition-colors relative cursor-pointer btn-press"
+                >
+                  <Bell size={17} />
+                  {availablePendingPayout > 0 && (
+                    <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white shadow-xs" />
+                  )}
+                </button>
 
-                  return (
-                    <div
-                      key={referral.id}
-                      className="p-5 sm:p-6 rounded-3xl bg-[#0C101A] border border-white/[0.08] hover:border-white/[0.18] transition-all flex flex-col gap-4 shadow-xl"
+                {/* Notifications Popover */}
+                <AnimatePresence>
+                  {isNotifDrawerOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                      transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                      style={{ transformOrigin: 'top right' }}
+                      className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-3xl p-4 shadow-2xl border border-gray-100 z-50 text-xs"
                     >
-                      {/* Top Row: Client Info + Badges */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                         <div>
-                          <div className="flex items-center gap-2.5 flex-wrap">
-                            <h3 className="text-lg font-bold text-white tracking-tight">{referral.clientName}</h3>
-                            {referral.company && (
-                              <span className="text-xs text-white/50 font-medium">@{referral.company}</span>
-                            )}
-                            <span className="px-2.5 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-white/70 font-semibold text-[10px]">
-                              {referral.projectType}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-white/40 mt-1">
-                            <span>Referred {new Date(referral.createdAt).toLocaleDateString()}</span>
-                            {referral.clientPhone && <span>• {referral.clientPhone}</span>}
-                            {referral.clientEmail && <span>• {referral.clientEmail}</span>}
-                          </div>
-                        </div>
-
-                        {/* Status Badges */}
-                        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-                          <span
-                            className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              referral.dealStatus === 'COMPLETED'
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : referral.dealStatus === 'WON' || referral.dealStatus === 'IN PROGRESS'
-                                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                            }`}
-                          >
-                            Deal: {referral.dealStatus}
-                          </span>
-
-                          <span
-                            className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              isFullySettled
-                                ? 'bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/30 font-black'
-                                : percentPaid > 0
-                                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                                : 'bg-white/5 text-white/40 border border-white/10'
-                            }`}
-                          >
-                            {isFullySettled ? '100% Fully Settled ✓' : `${percentPaid}% Paid`}
-                          </span>
+                          <h4 className="font-extrabold text-sm text-gray-900">Partner Alerts</h4>
+                          <span className="text-[10px] text-gray-400">Real-time commission and deal updates</span>
                         </div>
                       </div>
 
-                      {/* 3-STAGE MILESTONE VISUALIZER */}
-                      <div className="p-3.5 rounded-2xl bg-black/40 border border-white/[0.05] space-y-2.5">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-white/60 font-medium">Milestone Release Progress</span>
-                          <span className="font-mono text-white text-[11px]">
-                            ₹{referral.totalPaid.toLocaleString('en-IN')} of ₹{referral.dealValue.toLocaleString('en-IN')}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
-                          {/* Stage 1 */}
-                          <div
-                            className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-colors ${
-                              stage1Cleared
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                                : 'bg-white/[0.02] border-white/10 text-white/40'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1 font-bold">
-                              {stage1Cleared ? <CheckCircle2 size={12} className="text-emerald-400" /> : <Clock size={12} />}
-                              <span>Milestone 1</span>
+                      <div className="py-2 space-y-2">
+                        {availablePendingPayout > 0 ? (
+                          <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100">
+                            <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs">
+                              <Wallet size={14} className="text-emerald-600" />
+                              <span>₹{availablePendingPayout.toLocaleString('en-IN')} Available in Vault</span>
                             </div>
-                            <span className="text-[9px]">Kickoff Advance (40%)</span>
+                            <p className="text-emerald-700 text-[11px] mt-1">
+                              You have cleared milestone commissions ready for withdrawal via {partner.payoutMethod || 'UPI'}.
+                            </p>
+                            <button
+                              onClick={() => { setIsNotifDrawerOpen(false); setIsPayoutModalOpen(true); }}
+                              className="mt-2 text-[11px] font-black text-emerald-900 underline cursor-pointer"
+                            >
+                              Request Withdrawal Now →
+                            </button>
                           </div>
+                        ) : null}
 
-                          {/* Stage 2 */}
-                          <div
-                            className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-colors ${
-                              stage2Cleared
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                                : 'bg-white/[0.02] border-white/10 text-white/40'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1 font-bold">
-                              {stage2Cleared ? <CheckCircle2 size={12} className="text-emerald-400" /> : <Clock size={12} />}
-                              <span>Milestone 2</span>
-                            </div>
-                            <span className="text-[9px]">UAT Demo (30%)</span>
-                          </div>
-
-                          {/* Stage 3 */}
-                          <div
-                            className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-colors ${
-                              stage3Cleared
-                                ? 'bg-[#CCFF00]/10 border-[#CCFF00]/30 text-[#CCFF00]'
-                                : 'bg-white/[0.02] border-white/10 text-white/40'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1 font-bold">
-                              {stage3Cleared ? <CheckCircle2 size={12} className="text-[#CCFF00]" /> : <Clock size={12} />}
-                              <span>Milestone 3</span>
-                            </div>
-                            <span className="text-[9px]">Handover & Final (30%)</span>
-                          </div>
+                        <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                          <span className="font-bold text-gray-900 text-xs block">Active Tier: {partnerTier.badgeLabel}</span>
+                          <p className="text-gray-500 text-[11px] mt-0.5">
+                            {partnerTier.nextTier ? `Refer ${partnerTier.dealsNeededForNextTier} more client to unlock ${partnerTier.nextTier} Tier (${partnerTier.nextTier === 'Gold' ? '20%' : '15%'})!` : 'You are at maximum Gold Tier (20%)!'}
+                          </p>
                         </div>
                       </div>
-
-                      {/* Financial Audit Strip */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-white/[0.06] text-xs">
-                        <div>
-                          <span className="text-[10px] text-white/40 block font-medium">Contract Value</span>
-                          <span className="text-white font-bold font-mono">₹{referral.dealValue.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-white/40 block font-medium">Commission Rate</span>
-                          <span className="text-white font-bold">{partnerRatePercent}% Tier</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-white/40 block font-medium">Earned Cut (Ready)</span>
-                          <span className="text-[#CCFF00] font-black font-mono">₹{earnedCut.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-white/40 block font-medium">Max Potential Cut</span>
-                          <span className="text-white/80 font-bold font-mono">₹{fullPotentialCut.toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
-
-                      {/* Quick Contact Actions if client contact info exists */}
-                      {(referral.clientPhone || referral.clientEmail) && (
-                        <div className="flex items-center gap-2 pt-1">
-                          {referral.clientPhone && (
-                            <a
-                              href={`https://wa.me/${referral.clientPhone.replace(/[^0-9]/g, '')}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[11px] font-bold flex items-center gap-1.5 transition-colors"
-                            >
-                              <MessageSquare size={12} /> WhatsApp Client
-                            </a>
-                          )}
-                          {referral.clientEmail && (
-                            <a
-                              href={`mailto:${referral.clientEmail}`}
-                              className="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 text-[11px] font-semibold flex items-center gap-1.5 transition-colors"
-                            >
-                              <Mail size={12} /> Email Client
-                            </a>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 2: PAYOUT VAULT & LEDGER */}
-        {activeTab === 'payouts' && (
-          <div className="space-y-6">
-            {/* Payout Status Banner */}
-            <div className="p-6 rounded-3xl bg-gradient-to-r from-white/[0.03] to-transparent border border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-bold text-white font-['Outfit']">Commission Disbursements</h3>
-                <p className="text-xs text-white/50 mt-0.5">
-                  Payments are processed directly to your registered {partner.payoutMethod || 'UPI'} coordinates within 24 business hours.
-                </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              <button
-                onClick={() => setIsPayoutModalOpen(true)}
-                disabled={availablePendingPayout < 1000}
-                className="px-5 py-2.5 rounded-2xl bg-[#CCFF00] hover:bg-[#b8e600] disabled:opacity-30 disabled:cursor-not-allowed text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-[#CCFF00]/15"
-              >
-                Request Withdrawal
-              </button>
-            </div>
-
-            {/* Table */}
-            <div className="rounded-3xl bg-[#0C101A] border border-white/[0.08] overflow-hidden shadow-xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-white/[0.08] text-white/40 uppercase tracking-wider text-[10px] font-bold bg-white/[0.01]">
-                      <th className="py-3.5 px-5">Date</th>
-                      <th className="py-3.5 px-5">Disbursed Amount</th>
-                      <th className="py-3.5 px-5">Method</th>
-                      <th className="py-3.5 px-5">Reference / UTR</th>
-                      <th className="py-3.5 px-5">Status</th>
-                      <th className="py-3.5 px-5">Notes</th>
-                      <th className="py-3.5 px-5 text-right">Tax Voucher</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.04]">
-                    {myPayouts.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="py-14 text-center text-white/40 text-xs">
-                          No commission payouts logged yet. When your referred clients make milestone payments, your available balance unlocks for withdrawal.
-                        </td>
-                      </tr>
-                    ) : (
-                      myPayouts.map(p => (
-                        <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="py-4 px-5 text-white/80 font-mono">{p.payoutDate}</td>
-                          <td className="py-4 px-5 text-[#CCFF00] font-black font-mono text-sm">
-                            ₹{p.amount.toLocaleString('en-IN')}
-                          </td>
-                          <td className="py-4 px-5 text-white/70 font-medium">{p.paymentMethod}</td>
-                          <td className="py-4 px-5 text-white/50 font-mono text-[11px]">{p.transactionRef || 'Processing'}</td>
-                          <td className="py-4 px-5">
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                p.status === 'Completed'
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                              }`}
-                            >
-                              {p.status}
-                            </span>
-                          </td>
-                          <td className="py-4 px-5 text-white/50 text-[11px] max-w-xs truncate">{p.notes || '—'}</td>
-                          <td className="py-4 px-5 text-right">
-                            {p.status === 'Completed' ? (
-                              <button
-                                onClick={() => exportService.generatePartnerPayoutVoucherPdf(p, partner)}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.06] hover:bg-[#CCFF00] hover:text-black text-white/80 border border-white/10 text-[11px] font-bold transition-all cursor-pointer shadow-xs"
-                                title="Download Official Tax Voucher (PDF)"
-                              >
-                                <Download size={12} />
-                                <span>Voucher</span>
-                              </button>
-                            ) : (
-                              <span className="text-white/30 text-[10px] font-mono">Pending</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: PARTNER GROWTH TOOLKIT */}
-        {activeTab === 'toolkit' && (
-          <div className="space-y-6">
-            {/* Top Row: Commission Calculator & QR Code */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Deal & Commission Simulator (Col 7) */}
-              <div className="lg:col-span-7 p-6 sm:p-7 rounded-3xl bg-[#0C101A] border border-white/[0.08] space-y-5 shadow-xl">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-[#CCFF00]/10 border border-[#CCFF00]/20 flex items-center justify-center text-[#CCFF00]">
-                      <Calculator size={16} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-white font-['Outfit']">Commission Simulator</h3>
-                      <span className="text-[11px] text-white/40">Calculate your estimated earnings based on client contract size</span>
-                    </div>
+              {/* Partner Profile Pill */}
+              <div className="relative">
+                <div
+                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                  className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200/80 p-1.5 pr-3 rounded-full cursor-pointer transition-colors btn-press"
+                >
+                  <div className="w-8 h-8 rounded-full bg-black text-[#CCFF00] font-black italic flex items-center justify-center text-xs shadow-xs">
+                    {partner.name.charAt(0).toUpperCase()}
                   </div>
-                  <span className="px-2.5 py-0.5 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] font-black text-xs font-mono">
-                    {partnerRatePercent}% Tier
-                  </span>
-                </div>
-
-                {/* Slider */}
-                <div className="space-y-2 pt-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-white/60 font-medium">Estimated Client Budget</span>
-                    <span className="text-lg font-black text-white font-mono">
-                      ₹{simDealValue.toLocaleString('en-IN')}
+                  <div className="hidden sm:block text-left">
+                    <span className="text-xs font-extrabold text-gray-900 block leading-none">
+                      {partner.name.split(' ')[0]}
+                    </span>
+                    <span className="text-[9px] font-semibold text-gray-400 block leading-none mt-0.5">
+                      {partnerTier.badgeLabel}
                     </span>
                   </div>
-                  <input
-                    type="range"
-                    min={25000}
-                    max={1000000}
-                    step={25000}
-                    value={simDealValue}
-                    onChange={(e) => setSimDealValue(Number(e.target.value))}
-                    className="w-full accent-[#CCFF00] cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[10px] text-white/30 font-mono">
-                    <span>₹25,000</span>
-                    <span>₹5,00,000</span>
-                    <span>₹10,00,000+</span>
-                  </div>
                 </div>
 
-                {/* Projected Result Box */}
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-[#CCFF00]/10 via-[#CCFF00]/5 to-transparent border border-[#CCFF00]/20 flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-white/60 tracking-wider">Your Take-Home Cut</span>
-                    <div className="text-2xl sm:text-3xl font-black text-[#CCFF00] font-mono tracking-tight">
-                      ₹{Math.round(simDealValue * partnerRate).toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setNewDealValue(String(simDealValue));
-                      setIsSubmitModalOpen(true);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-[#CCFF00] text-black text-xs font-black uppercase tracking-wider hover:bg-[#b8e600] transition-colors cursor-pointer"
-                  >
-                    Submit Deal
-                  </button>
-                </div>
+                {/* Profile Popover */}
+                <AnimatePresence>
+                  {isProfileMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                      transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                      style={{ transformOrigin: 'top right' }}
+                      className="absolute right-0 mt-2 w-72 bg-white rounded-3xl p-4 shadow-2xl border border-gray-100 z-50 text-xs"
+                    >
+                      <div className="flex items-center gap-3 pb-3 border-b border-gray-100 mb-3">
+                        <div className="w-10 h-10 rounded-2xl bg-black text-[#CCFF00] font-black italic flex items-center justify-center text-base shadow-sm">
+                          {partner.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <strong className="text-gray-900 text-xs font-black block truncate">{partner.name}</strong>
+                          <span className="text-[11px] text-gray-400 block truncate">{partner.email}</span>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[10px] font-bold text-gray-800 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
+                              {partnerTier.badgeLabel} ({partnerRatePercent}%)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <button
+                          onClick={() => { setActiveTab('settings'); setIsProfileMenuOpen(false); }}
+                          className="w-full px-3 py-2 rounded-xl text-left font-semibold text-gray-700 hover:bg-gray-100 flex items-center gap-2 cursor-pointer transition-colors btn-press"
+                        >
+                          <CreditCard size={14} className="text-gray-400" />
+                          <span>Payout Coordinates & Profile</span>
+                        </button>
+                        <button
+                          onClick={() => { setIsQrModalOpen(true); setIsProfileMenuOpen(false); }}
+                          className="w-full px-3 py-2 rounded-xl text-left font-semibold text-gray-700 hover:bg-gray-100 flex items-center gap-2 cursor-pointer transition-colors btn-press"
+                        >
+                          <QrCode size={14} className="text-gray-400" />
+                          <span>Show QR Business Card</span>
+                        </button>
+                        <button
+                          onClick={() => { setActiveTab('toolkit'); setIsProfileMenuOpen(false); }}
+                          className="w-full px-3 py-2 rounded-xl text-left font-semibold text-gray-700 hover:bg-gray-100 flex items-center gap-2 cursor-pointer transition-colors btn-press"
+                        >
+                          <Sparkles size={14} className="text-gray-400" />
+                          <span>Growth & Outreach Scripts</span>
+                        </button>
+                      </div>
+
+                      <div className="pt-2 mt-2 border-t border-gray-100">
+                        <button
+                          onClick={handleLogoutPartner}
+                          className="w-full px-3 py-2 rounded-xl text-left font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer transition-colors btn-press"
+                        >
+                          <LogOut size={14} />
+                          <span>Sign Out Partner Session</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
+            </div>
+          </header>
+        </div>
 
-              {/* QR Code & Direct Link Card (Col 5) */}
-              <div className="lg:col-span-5 p-6 rounded-3xl bg-[#0C101A] border border-white/[0.08] flex flex-col justify-between shadow-xl">
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-                      <QrCode size={16} />
+        {/* Mobile Floating Bottom Dock */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-200/80 px-2 py-1.5 flex items-center justify-around shadow-2xl">
+          {[
+            { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
+            { id: 'referrals', label: 'Clients', icon: Users, count: myReferrals.length },
+            { id: 'payouts', label: 'Vault', icon: Wallet },
+            { id: 'toolkit', label: 'Toolkit', icon: Sparkles },
+            { id: 'settings', label: 'Settings', icon: CreditCard },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id as PartnerTab); setIsMobileMoreOpen(false); }}
+                className={`flex flex-col items-center py-1 px-3 rounded-xl text-[10px] font-bold transition-all relative btn-press ${
+                  isActive ? 'text-black' : 'text-gray-400 hover:text-gray-700'
+                }`}
+              >
+                <div className="relative">
+                  <Icon size={18} className={isActive ? 'text-black' : 'text-gray-400'} />
+                  {tab.count !== undefined && tab.count > 0 && (
+                    <span className="absolute -top-1 -right-2 bg-black text-[#CCFF00] text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                      {tab.count}
+                    </span>
+                  )}
+                </div>
+                <span className="mt-0.5">{tab.label}</span>
+                {isActive && <span className="w-1 h-1 rounded-full bg-black mt-0.5" />}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Workspace Dynamic View Container */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-2 sm:pt-4 pb-24 md:pb-8 overflow-y-auto crm-scrollbar">
+          <div className="max-w-7xl mx-auto space-y-6">
+
+            {/* ======================================================== */}
+            {/* VIEW 1: EXECUTIVE DASHBOARD                             */}
+            {/* ======================================================== */}
+            {activeTab === 'dashboard' && (
+              <div className="space-y-6">
+                {/* Top Banner Row */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-2xl md:text-3xl font-extrabold text-[#111827] tracking-tight">
+                        {greeting}, {partner.name.split(' ')[0]} 👋
+                      </h2>
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono ${
+                        effectivePartnerRateInfo.isCustom
+                          ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                          : 'bg-black text-[#CCFF00]'
+                      }`}>
+                        {effectivePartnerRateInfo.isCustom ? `⚡ Fixed ${effectivePartnerRateInfo.percentage}% (VIP)` : partnerTier.badgeLabel}
+                      </span>
                     </div>
-                    <h3 className="text-base font-bold text-white font-['Outfit']">Your Instant Referral Link</h3>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                      Track your client introductions, deal milestone releases, and withdraw your commission directly to UPI.
+                    </p>
                   </div>
 
-                  <p className="text-xs text-white/50 leading-relaxed font-light mb-4">
-                    Any prospect who clicks this link or scans the code receives a 60-day tracking cookie mapping any discovery call directly to your account.
-                  </p>
-
-                  <div className="p-3 rounded-2xl bg-black/50 border border-white/10 flex items-center justify-between gap-2 text-xs">
-                    <span className="text-[#CCFF00] truncate font-mono text-[11px]">{referralUrl}</span>
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={handleCopyLink}
-                      className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-[10px] shrink-0 cursor-pointer"
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-colors shadow-xs cursor-pointer btn-press"
                     >
-                      {copiedLink ? 'Copied!' : 'Copy'}
+                      {copiedLink ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                      <span>{copiedLink ? 'Link Copied!' : 'Copy Referral Link'}</span>
+                    </button>
+                    <button
+                      onClick={() => setIsSubmitModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#CCFF00] text-black text-xs font-bold hover:bg-[#b8e600] transition-colors shadow-sm cursor-pointer btn-press"
+                    >
+                      <Plus size={14} /> Submit Client Intro
                     </button>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-white/[0.06] flex items-center justify-between">
-                  <span className="text-xs text-white/50">Need a printable QR code?</span>
-                  <button
-                    onClick={() => setIsQrModalOpen(true)}
-                    className="text-xs text-[#CCFF00] font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                {/* 4 Double-Bezel Tactile KPI Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Card 1: Introductions */}
+                  <div
+                    onClick={() => setActiveTab('referrals')}
+                    className="double-bezel-outer card-tactile cursor-pointer group"
                   >
-                    <Eye size={13} /> View QR Code
-                  </button>
+                    <div className="double-bezel-inner p-5 h-full flex flex-col justify-between">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shadow-xs bg-blue-50 text-blue-600 border border-blue-100">
+                            <Users size={20} />
+                          </div>
+                          <div>
+                            <h3 className="font-extrabold text-gray-900 text-sm group-hover:text-black transition-colors">Introductions</h3>
+                            <p className="text-xs text-gray-500 font-medium tabular-nums">{totalReferredClients} Total Leads</p>
+                          </div>
+                        </div>
+                        <div className="w-7 h-7 rounded-full bg-gray-50 group-hover:bg-black flex items-center justify-center transition-colors">
+                          <ArrowUpRight size={14} className="text-gray-400 group-hover:text-[#CCFF00] transition-all" />
+                        </div>
+                      </div>
+
+                      <div className="mt-5 pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Win Rate</span>
+                          <span className="font-extrabold text-gray-900 text-sm tabular-nums">{winRate}%</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Won Deals</span>
+                          <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] mt-0.5 inline-block">
+                            {wonDealsCount} Won
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Deal Pipeline */}
+                  <div
+                    onClick={() => setActiveTab('referrals')}
+                    className="double-bezel-outer card-tactile cursor-pointer group"
+                  >
+                    <div className="double-bezel-inner p-5 h-full flex flex-col justify-between">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shadow-xs bg-purple-50 text-purple-600 border border-purple-100">
+                            <Briefcase size={20} />
+                          </div>
+                          <div>
+                            <h3 className="font-extrabold text-gray-900 text-sm group-hover:text-black transition-colors">Deal Pipeline</h3>
+                            <p className="text-xs text-gray-500 font-medium tabular-nums">Active Contracts</p>
+                          </div>
+                        </div>
+                        <div className="w-7 h-7 rounded-full bg-gray-50 group-hover:bg-black flex items-center justify-center transition-colors">
+                          <ArrowUpRight size={14} className="text-gray-400 group-hover:text-[#CCFF00] transition-all" />
+                        </div>
+                      </div>
+
+                      <div className="mt-5 pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Contract Value</span>
+                          <span className="font-extrabold text-gray-900 text-sm tabular-nums font-mono">
+                            ₹{totalPipelineValue.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Potential Cut</span>
+                          <span className="font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg text-[10px] mt-0.5 inline-block font-mono">
+                            ₹{Math.round(totalPipelineValue * partnerRate).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Available Payout Vault (Luminous Hero Card) */}
+                  <div
+                    className="double-bezel-outer card-tactile cursor-pointer group"
+                    onClick={() => setActiveTab('payouts')}
+                  >
+                    <div className="double-bezel-inner p-5 h-full flex flex-col justify-between bg-gradient-to-br from-[#0E131F] to-[#080B12] text-white relative overflow-hidden">
+                      <div className="absolute right-[-10px] top-[-10px] w-24 h-24 bg-[#CCFF00]/15 rounded-full blur-xl pointer-events-none" />
+                      
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shadow-xs bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/25">
+                            <Wallet size={20} />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#CCFF00]/20 text-[#CCFF00] border border-[#CCFF00]/30 inline-block mb-1">
+                              Payout Vault
+                            </span>
+                            <h3 className="font-extrabold text-white text-sm">Ready to Withdraw</h3>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-white/10 flex items-baseline justify-between">
+                        <div>
+                          <div className="text-2xl font-black text-[#CCFF00] font-['Outfit'] tabular-nums tracking-tight">
+                            ₹{availablePendingPayout.toLocaleString('en-IN')}
+                          </div>
+                          <span className="text-[10px] text-gray-400 mt-0.5 block">Via {partner.payoutMethod || 'UPI'}</span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsPayoutModalOpen(true);
+                          }}
+                          disabled={availablePendingPayout < 1000}
+                          className="px-3 py-1.5 rounded-xl bg-[#CCFF00] text-black text-[11px] font-black uppercase tracking-wider hover:bg-[#b8e600] disabled:opacity-30 disabled:hover:bg-[#CCFF00] transition-colors cursor-pointer"
+                        >
+                          Withdraw
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 4: Lifetime Earnings */}
+                  <div
+                    onClick={() => setActiveTab('payouts')}
+                    className="double-bezel-outer card-tactile cursor-pointer group"
+                  >
+                    <div className="double-bezel-inner p-5 h-full flex flex-col justify-between">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shadow-xs bg-emerald-50 text-emerald-600 border border-emerald-100">
+                            <IndianRupee size={20} />
+                          </div>
+                          <div>
+                            <h3 className="font-extrabold text-gray-900 text-sm group-hover:text-black transition-colors">Lifetime Earnings</h3>
+                            <p className="text-xs text-gray-500 font-medium tabular-nums">All Milestones</p>
+                          </div>
+                        </div>
+                        <div className="w-7 h-7 rounded-full bg-gray-50 group-hover:bg-black flex items-center justify-center transition-colors">
+                          <ArrowUpRight size={14} className="text-gray-400 group-hover:text-[#CCFF00] transition-all" />
+                        </div>
+                      </div>
+
+                      <div className="mt-5 pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Total Earned</span>
+                          <span className="font-extrabold text-gray-900 text-sm tabular-nums font-mono">
+                            ₹{totalCommissionEarned.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Disbursed</span>
+                          <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] mt-0.5 inline-block font-mono">
+                            ₹{totalCommissionPaidOut.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Volume-Based Partner Tier Progression Card OR VIP Custom Fixed Rate Agreement */}
+                {effectivePartnerRateInfo.isCustom ? (
+                  <div className="bg-gradient-to-br from-[#120B22] via-[#1A1033] to-[#0D0719] text-white rounded-3xl p-6 md:p-8 border border-purple-500/30 shadow-2xl relative overflow-hidden space-y-6">
+                    {/* Atmospheric Glow */}
+                    <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 w-80 h-80 bg-[#CCFF00]/5 rounded-full blur-3xl pointer-events-none" />
+
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-700 to-indigo-600 flex items-center justify-center font-black text-2xl shadow-lg shadow-purple-900/40 border border-purple-400/30 shrink-0">
+                          <Zap size={28} className="text-[#CCFF00] fill-[#CCFF00]" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] uppercase font-mono tracking-widest text-purple-300 font-bold">
+                              Exclusive Partnership Status
+                            </span>
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-200 border border-purple-400/40 font-mono flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#CCFF00] animate-pulse" />
+                              VIP Custom Rate
+                            </span>
+                          </div>
+                          <h3 className="text-xl md:text-2xl font-black text-white mt-1">
+                            Guaranteed {effectivePartnerRateInfo.percentage}% Fixed Commission
+                          </h3>
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xs text-right self-start md:self-auto">
+                        <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Active Billing Volume</span>
+                        <span className="text-lg font-black font-mono text-[#CCFF00]">
+                          ₹{activeBillingVolume.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Explanatory Message */}
+                    <div className="p-4 rounded-2xl bg-white/5 border border-purple-400/20 text-xs text-purple-200/90 leading-relaxed relative z-10">
+                      <div className="flex items-start gap-2.5">
+                        <Sparkles size={16} className="text-[#CCFF00] shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="text-white">VIP Priority Plan:</strong> Your account is locked at a guaranteed flat <strong>{effectivePartnerRateInfo.percentage}% commission</strong> across all cleared contract milestones. Monthly volume tiers and minimum quotas are bypassed.
+                          {partner.customRateReason && (
+                            <div className="mt-2 text-purple-200 font-medium text-[11px] bg-purple-950/60 p-2.5 rounded-xl border border-purple-500/30">
+                              📋 <strong>Agreement Note:</strong> {partner.customRateReason}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4 Guaranteed Sample Milestone Payout Cards */}
+                    <div className="relative z-10 space-y-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block font-mono">
+                        Guaranteed Take-Home Earnings Matrix
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {[
+                          { deal: 100000, label: 'Starter Deal' },
+                          { deal: 250000, label: 'Mid-Market Deal' },
+                          { deal: 500000, label: 'Enterprise Deal' },
+                          { deal: 1000000, label: 'Large Enterprise' }
+                        ].map(tierSample => {
+                          const payout = Math.round(tierSample.deal * effectivePartnerRateInfo.rate);
+                          return (
+                            <div key={tierSample.deal} className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-purple-400/40 transition-all flex flex-col justify-between">
+                              <div>
+                                <span className="text-[10px] font-bold text-purple-300 uppercase block">{tierSample.label}</span>
+                                <span className="text-xs text-gray-400 font-mono mt-0.5 block">₹{tierSample.deal.toLocaleString('en-IN')} Deal</span>
+                              </div>
+                              <div className="mt-4 pt-3 border-t border-white/10">
+                                <div className="text-2xl font-black text-white tracking-tight font-mono">
+                                  ₹{payout.toLocaleString('en-IN')}
+                                </div>
+                                <span className="text-[10px] text-[#CCFF00] font-bold block mt-0.5">
+                                  {effectivePartnerRateInfo.percentage}% Guaranteed
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Reference Toggle: View Standard Dynamic Tiers */}
+                    <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs relative z-10">
+                      <span className="text-gray-400 text-[11px]">Want to check standard public agency tiers?</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowStandardTiersWhenCustom(!showStandardTiersWhenCustom)}
+                        className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        {showStandardTiersWhenCustom ? 'Hide Standard Tiers' : 'View Standard Tiers (Reference)'}
+                      </button>
+                    </div>
+
+                    {/* Standard Tiers when expanded */}
+                    {showStandardTiersWhenCustom && (
+                      <div className="pt-4 border-t border-white/10 space-y-3 relative z-10">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                          Standard Public Tiers Reference
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-gray-900">
+                          <div className="p-3.5 rounded-xl bg-white text-gray-900 text-xs">
+                            <span className="font-bold block text-gray-500 uppercase text-[10px]">Starter Tier</span>
+                            <span className="text-lg font-black font-['Outfit'] block mt-1">10%</span>
+                            <span className="text-[10px] text-gray-600 block">Up to ₹2.5L volume</span>
+                          </div>
+                          <div className="p-3.5 rounded-xl bg-white text-gray-900 text-xs">
+                            <span className="font-bold block text-blue-600 uppercase text-[10px]">Base Tier</span>
+                            <span className="text-lg font-black font-['Outfit'] block mt-1">15%</span>
+                            <span className="text-[10px] text-gray-600 block">₹2.5L — ₹4.0L volume</span>
+                          </div>
+                          <div className="p-3.5 rounded-xl bg-white text-gray-900 text-xs">
+                            <span className="font-bold block text-emerald-600 uppercase text-[10px]">Pro Tier</span>
+                            <span className="text-lg font-black font-['Outfit'] block mt-1">20%</span>
+                            <span className="text-[10px] text-gray-600 block">Above ₹4.0L volume</span>
+                          </div>
+                          <div className="p-3.5 rounded-xl bg-white text-gray-900 text-xs border border-emerald-400">
+                            <span className="font-bold block text-emerald-700 uppercase text-[10px]">Elite Tier</span>
+                            <span className="text-lg font-black font-['Outfit'] block mt-1">25%</span>
+                            <span className="text-[10px] text-gray-600 block">&gt; ₹12.0L (+5% Bonus)</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3.5">
+                        <div 
+                          className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg shrink-0 border"
+                          style={{ 
+                            backgroundColor: `${partnerTier.tierColor}15`, 
+                            color: partnerTier.tierColor,
+                            borderColor: `${partnerTier.tierColor}30`
+                          }}
+                        >
+                          <Award size={24} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] uppercase font-mono tracking-widest text-gray-400 font-bold">Commission Tier</span>
+                            <span 
+                              className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border font-mono"
+                              style={{ 
+                                backgroundColor: `${partnerTier.tierColor}15`, 
+                                color: partnerTier.tierColor,
+                                borderColor: `${partnerTier.tierColor}30`
+                              }}
+                            >
+                              {partnerTier.badgeLabel}
+                            </span>
+                          </div>
+                          <h4 className="text-sm sm:text-base font-bold text-gray-900 mt-0.5">
+                            {partnerTier.nextTier ? (
+                              <span>
+                                Generate <strong className="text-black font-black">₹{partnerTier.volumeNeededForNextTier.toLocaleString('en-IN')} more</strong> in monthly business to unlock the <strong>{partnerTier.nextTier} Tier ({partnerTier.nextTier === 'Elite' ? '25%' : partnerTier.nextTier === 'Pro' ? '20%' : '15%'})</strong>!
+                              </span>
+                            ) : (
+                              <span className="text-emerald-600 font-bold">
+                                Max Elite Bonus Tier Unlocked! You receive top-tier 25% (+5% Performance Bonus) on all business generated.
+                              </span>
+                            )}
+                          </h4>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Current Month&apos;s Business</span>
+                        <span className="text-base font-black font-mono text-gray-900">₹{activeBillingVolume.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+
+                    {/* Flexible Business Volume Clarification Banner */}
+                    <div className="mt-4 p-3 rounded-2xl bg-gray-50 border border-gray-100 flex items-center gap-2.5 text-xs text-gray-600">
+                      <Sparkles size={15} className="text-[#CCFF00] bg-black rounded-md p-0.5 shrink-0" />
+                      <span>
+                        <strong className="text-gray-900">100% Flexible & Performance-Based:</strong> Monthly billing is not a fixed retainer or rigid quota. Your payout tier flexes dynamically based on the actual business volume your referred clients bill each month.
+                      </span>
+                    </div>
+
+                    {/* 4 Cards Matrix matching User's Provided Image */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-4">
+                      {/* Card 1: Starter Tier */}
+                      <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+                        partnerTier.tier === 'Starter'
+                          ? 'bg-slate-50 border-slate-400 ring-2 ring-slate-400/20 shadow-xs'
+                          : 'bg-gray-50/50 border-gray-200'
+                      }`}>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black uppercase tracking-wider text-gray-600 block">Starter Tier</span>
+                            {partnerTier.tier === 'Starter' && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-800">Current</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-gray-500 mt-1">Up to ₹2,50,000<br/>(Monthly Business)</p>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-gray-200/60">
+                          <div className="text-3xl font-black text-gray-900 tracking-tight font-['Outfit']">10%</div>
+                          <span className="text-xs font-bold text-gray-700 block">Share.</span>
+                          <span className="text-[10px] text-gray-400 mt-1 block">Entry tier with zero mandatory quotas.</span>
+                        </div>
+                      </div>
+
+                      {/* Card 2: Base Tier */}
+                      <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+                        partnerTier.tier === 'Base'
+                          ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs'
+                          : 'bg-gray-50/50 border-gray-200'
+                      }`}>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black uppercase tracking-wider text-gray-900 block">Base Tier</span>
+                            {partnerTier.tier === 'Base' && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-blue-600 text-white">Current</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-gray-500 mt-1">₹2,50,001 — ₹4,00,000<br/>(Monthly Business)</p>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-gray-200/60">
+                          <div className="text-3xl font-black text-gray-900 tracking-tight font-['Outfit']">15%</div>
+                          <span className="text-xs font-bold text-gray-900 block">Share.</span>
+                          <span className="text-[10px] text-gray-400 mt-1 block">Standard agency & partner rate.</span>
+                        </div>
+                      </div>
+
+                      {/* Card 3: Pro Tier */}
+                      <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+                        partnerTier.tier === 'Pro'
+                          ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                          : 'bg-gray-50/50 border-gray-200'
+                      }`}>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black uppercase tracking-wider text-gray-900 block">Pro Tier</span>
+                            {partnerTier.tier === 'Pro' && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-600 text-white">Current</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-gray-500 mt-1">Above ₹4,00,000<br/>(Monthly Business)</p>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-gray-200/60">
+                          <div className="text-3xl font-black text-gray-900 tracking-tight font-['Outfit']">20%</div>
+                          <span className="text-xs font-bold text-gray-900 block">Share.</span>
+                          <span className="text-[10px] text-emerald-800 font-medium italic mt-1 block leading-tight">
+                            Applied to all business closed this month, not just overflow.
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card 4: Elite Bonus Tier (Vibrant Green Border like Image) */}
+                      <div className={`p-4 rounded-2xl border-2 transition-all flex flex-col justify-between relative overflow-hidden ${
+                        partnerTier.tier === 'Elite'
+                          ? 'bg-emerald-50/80 border-emerald-500 ring-4 ring-emerald-400/20 shadow-md'
+                          : 'bg-emerald-50/30 border-emerald-500/80'
+                      }`}>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black uppercase tracking-wider text-emerald-950 block">Elite Bonus Tier</span>
+                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500 text-black">Top Tier</span>
+                          </div>
+                          <p className="text-[11px] text-emerald-900 font-medium mt-1">Exceeds ₹12,00,000<br/>(Monthly Business)</p>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-emerald-200">
+                          <div className="text-3xl font-black text-gray-900 tracking-tight font-['Outfit']">25%</div>
+                          <span className="text-xs font-black text-gray-900 block">Share.</span>
+                          <span className="text-[10px] text-emerald-800 font-bold mt-1 block leading-tight">
+                            (+5% Performance Bonus on total monthly business).
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress Track */}
+                    <div className="mt-5 pt-3.5 border-t border-gray-100 space-y-1.5">
+                      <div className="flex justify-between items-center text-[11px] font-mono">
+                        <span className="text-gray-500 font-medium">₹{activeBillingVolume.toLocaleString('en-IN')} Billing Active</span>
+                        <span className="text-gray-900 font-bold">{partnerTier.progressPercent}% to {partnerTier.nextTier ? `${partnerTier.nextTier} Tier` : 'Max Tier'}</span>
+                      </div>
+                      <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden p-0.5 border border-gray-200">
+                        <div 
+                          className="h-full rounded-full transition-all duration-700 bg-gradient-to-r from-black via-emerald-500 to-[#CCFF00]"
+                          style={{ width: `${Math.max(4, partnerTier.progressPercent)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2-Column Split: Recent Referrals Table & Growth Widget */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  {/* Left Column (8 cols): Recent Referrals Table */}
+                  <div className="lg:col-span-8 bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                        <div>
+                          <h3 className="font-extrabold text-gray-900 text-base">Recent Client Introductions</h3>
+                          <span className="text-xs text-gray-400 font-medium">Live pipeline tracking & 3-stage milestone progression</span>
+                        </div>
+                        <button
+                          onClick={() => setActiveTab('referrals')}
+                          className="text-xs font-bold text-gray-900 hover:text-black hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          View All ({myReferrals.length}) <ChevronRight size={14} />
+                        </button>
+                      </div>
+
+                      {myReferrals.length === 0 ? (
+                        <div className="py-12 text-center flex flex-col items-center justify-center">
+                          <BotAvatar type="star" size={72} state="default" aria-label="Partner Assistant" />
+                          <h4 className="text-sm font-bold text-gray-900 mt-3">No client introductions yet</h4>
+                          <p className="text-xs text-gray-500 mt-1 max-w-sm">
+                            Introduce businesses looking for AI automations and claim {partnerRatePercent}% on every cleared contract milestone.
+                          </p>
+                          <button
+                            onClick={() => setIsSubmitModalOpen(true)}
+                            className="mt-4 px-4 py-2 rounded-xl bg-black text-white text-xs font-bold hover:bg-gray-800 transition-colors cursor-pointer"
+                          >
+                            + Submit First Client Intro
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-100 mt-2">
+                          {myReferrals.slice(0, 4).map((r) => {
+                            const percentPaid = r.dealValue > 0 ? Math.min(100, Math.round((r.totalPaid / r.dealValue) * 100)) : 0;
+                            return (
+                              <div key={r.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-extrabold text-sm text-gray-900">{r.clientName}</span>
+                                    {r.company && <span className="text-xs text-gray-400 font-medium">@{r.company}</span>}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                    <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[10px] font-semibold">{r.projectType}</span>
+                                    <span>· Deal: ₹{(r.dealValue || 0).toLocaleString('en-IN')}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  <div className="text-right">
+                                    <span className="text-xs font-mono font-bold text-gray-900 block">
+                                      ₹{Math.round((r.dealValue || 0) * partnerRate).toLocaleString('en-IN')} Cut
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mt-0.5 ${
+                                      r.dealStatus === 'WON' || r.dealStatus === 'COMPLETED'
+                                        ? 'bg-emerald-50 text-emerald-700'
+                                        : 'bg-amber-50 text-amber-700'
+                                    }`}>
+                                      {r.dealStatus} ({percentPaid}% Paid)
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column (4 cols): Commission Calculator & Link Card */}
+                  <div className="lg:col-span-4 space-y-4">
+                    {/* Interactive Commission Simulator Widget */}
+                    <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Calculator size={16} className="text-indigo-600" />
+                        <h4 className="font-extrabold text-sm text-gray-900">Commission Calculator</h4>
+                      </div>
+                      <p className="text-xs text-gray-500 mb-4">
+                        Slide to see your take-home cut adjust dynamically across the 10%, 15%, 20%, and 25% tiers based on actual business closed.
+                      </p>
+
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-500 font-medium">Monthly Business Generated</span>
+                          <span className="font-mono font-bold text-gray-900 text-sm">₹{simDealValue.toLocaleString('en-IN')}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={50000}
+                          max={1600000}
+                          step={25000}
+                          value={simDealValue}
+                          onChange={(e) => setSimDealValue(Number(e.target.value))}
+                          className="w-full accent-black cursor-pointer"
+                        />
+
+                        {/* Dynamically simulated tier and commission */}
+                        {(() => {
+                          const effectiveSim = getEffectivePartnerRate(partner, simDealValue);
+                          const simCut = Math.round(simDealValue * effectiveSim.rate);
+                          return (
+                            <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between">
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Your Take-Home</span>
+                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                    effectiveSim.isCustom ? 'bg-purple-700 text-white' : 'bg-black text-[#CCFF00]'
+                                  }`}>
+                                    {effectiveSim.isCustom ? 'VIP Fixed' : `${effectiveSim.tier} Tier`}
+                                  </span>
+                                </div>
+                                <span className="text-xl font-black text-gray-900 font-mono mt-0.5 block">
+                                  ₹{simCut.toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                              <div className="text-right">
+                                <span className={`text-xs font-black px-2.5 py-1 rounded-xl block border ${
+                                  effectiveSim.isCustom
+                                    ? 'text-purple-800 bg-purple-50 border-purple-200'
+                                    : 'text-emerald-700 bg-emerald-50 border border-emerald-100'
+                                }`}>
+                                  {effectiveSim.percentage}% Share
+                                </span>
+                                {effectiveSim.isCustom ? (
+                                  <span className="text-[9px] font-bold text-purple-700 block mt-1">Guaranteed Fixed Rate</span>
+                                ) : effectiveSim.tier === 'Elite' ? (
+                                  <span className="text-[9px] font-bold text-emerald-600 block mt-1">+5% Bonus Included</span>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Quick Referral QR / Share Card */}
+                    <div className="bg-gradient-to-br from-[#0C0F17] to-[#07090E] text-white rounded-3xl p-6 border border-white/10 shadow-xl relative overflow-hidden">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-mono font-bold text-[#CCFF00] uppercase tracking-wider">Direct Referral Link</span>
+                        <QrCode size={16} className="text-white/60 cursor-pointer hover:text-white" onClick={() => setIsQrModalOpen(true)} />
+                      </div>
+                      <h4 className="font-black text-base text-white">Share Your Link</h4>
+                      <p className="text-xs text-white/50 mt-1 leading-relaxed">
+                        Clients using your link are automatically tagged to your partner ledger.
+                      </p>
+
+                      <div className="mt-4 flex items-center gap-2">
+                        <button
+                          onClick={handleCopyLink}
+                          className="flex-1 py-2 px-3 rounded-xl bg-[#CCFF00] text-black font-extrabold text-xs hover:bg-[#b8e600] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md btn-press"
+                        >
+                          {copiedLink ? <Check size={13} /> : <Share2 size={13} />}
+                          <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
+                        </button>
+                        <button
+                          onClick={() => setIsQrModalOpen(true)}
+                          className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer btn-press"
+                          title="Show QR Code"
+                        >
+                          <QrCode size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* High-Converting Outreach Pitch Templates */}
-            <div className="p-6 sm:p-7 rounded-3xl bg-[#0C101A] border border-white/[0.08] space-y-5 shadow-xl">
-              <div>
-                <h3 className="text-base font-bold text-white font-['Outfit']">Client Outreach & Intro Scripts</h3>
-                <p className="text-xs text-white/50 mt-0.5">
-                  Tested messages for marketing agencies, consultants, and tech founders introducing AGX services.
-                </p>
-              </div>
+            {/* ======================================================== */}
+            {/* VIEW 2: REFERRED CLIENTS & DEAL PIPELINE                */}
+            {/* ======================================================== */}
+            {activeTab === 'referrals' && (
+              <div className="space-y-5">
+                {/* Header row with search & filters */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-extrabold text-xl text-gray-900 tracking-tight">Referred Clients & Deals</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Track the real-time milestone release and payments for every client you introduced.
+                    </p>
+                  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  {
-                    id: 'agency',
-                    title: 'For Agencies (Upsell Strategy)',
-                    target: 'Existing Retainer Clients',
-                    text: `Hey [Client Name], we handle your brand/growth, but noticed a lot of manual bottlenecks in your internal operations. We’ve partnered with an elite engineering group (AGX) who builds custom autonomous AI workflows and support bots in under 14 days. Want me to connect you with their team for a free architecture review?`
-                  },
-                  {
-                    id: 'ops',
-                    title: 'For Operations & Founders',
-                    target: 'Founders / COOs',
-                    text: `Hi [Name], saw your team has been scaling fast. Are you guys currently automating your customer support and lead qualification workflows? My partners at AGX replace repetitive manual desk work with autonomous agents backed by a 30-day performance guarantee. Check them out here: ${referralUrl}`
-                  },
-                  {
-                    id: 'quick',
-                    title: 'WhatsApp Quick Ping',
-                    target: 'Informal WhatsApp Intro',
-                    text: `Hey [Name]! Quick question—have you explored deploying custom AI agents for your back-office workflows yet? AGX built out full end-to-end automations for us in 2 weeks. Here’s their partner link if you want to book a 15-min discovery audit: ${referralUrl}`
-                  }
-                ].map(pitch => (
-                  <div
-                    key={pitch.id}
-                    className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] transition-all flex flex-col justify-between gap-3"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-bold text-white">{pitch.title}</span>
-                      </div>
-                      <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider block mb-2">
-                        {pitch.target}
-                      </span>
-                      <p className="text-[11px] text-white/70 leading-relaxed italic bg-black/30 p-3 rounded-xl border border-white/[0.04]">
-                        "{pitch.text}"
-                      </p>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Status Filter Tabs */}
+                    <div className="flex items-center p-1 rounded-xl bg-gray-100 text-xs font-bold">
+                      {(['ALL', 'NEW', 'WON', 'COMPLETED'] as const).map(f => (
+                        <button
+                          key={f}
+                          onClick={() => setStatusFilter(f)}
+                          className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                            statusFilter === f
+                              ? 'bg-white text-gray-900 shadow-xs'
+                              : 'text-gray-500 hover:text-gray-900'
+                          }`}
+                        >
+                          {f}
+                        </button>
+                      ))}
                     </div>
 
                     <button
-                      onClick={() => handleCopyPitch(pitch.id, pitch.text)}
-                      className="w-full py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      onClick={() => setIsSubmitModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black text-white text-xs font-bold hover:bg-gray-800 transition-colors cursor-pointer btn-press"
                     >
-                      {copiedPitchId === pitch.id ? (
-                        <>
-                          <Check size={12} className="text-emerald-400" />
-                          <span className="text-emerald-400">Copied to Clipboard!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={12} />
-                          <span>Copy Script</span>
-                        </>
-                      )}
+                      <Plus size={14} className="text-[#CCFF00]" />
+                      <span>Submit Intro</span>
                     </button>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: PARTNER PROFILE & PAYOUT SETTINGS */}
-        {activeTab === 'settings' && (
-          <div className="max-w-4xl mx-auto w-full space-y-6">
-            {/* Header Banner with Partner Identity Card */}
-            <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-[#0E1321] via-[#0C101A] to-[#080B12] border border-white/[0.08] shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#CCFF00]/20 to-emerald-400/20 border-2 border-[#CCFF00]/40 flex items-center justify-center font-black text-xl text-[#CCFF00] font-['Outfit'] shadow-lg">
-                    {editName ? editName.charAt(0).toUpperCase() : partner.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-[#0C101A] flex items-center justify-center">
-                    <Check size={9} className="text-black stroke-[3]" />
-                  </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h2 className="text-xl sm:text-2xl font-black text-white font-['Outfit'] tracking-tight">
-                      {editName || partner.name}
-                    </h2>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#CCFF00]/10 border border-[#CCFF00]/25 text-[#CCFF00] text-xs font-bold font-mono shadow-sm">
-                      <Percent size={11} className="text-[#CCFF00]" />
-                      <span>{partnerRatePercent}% Commission Tier</span>
-                    </div>
+                {/* Referrals Cards Grid */}
+                {filteredReferrals.length === 0 ? (
+                  <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm flex flex-col items-center justify-center">
+                    <BotAvatar type="star" size={88} state="default" aria-label="Partner Mascot" />
+                    <h4 className="text-base font-extrabold text-gray-900 mt-4">No matching referrals found</h4>
+                    <p className="text-xs text-gray-500 mt-1 max-w-md">
+                      Introduce clients using your referral link or the submit form. When contracts close, milestones disburse into your payout vault.
+                    </p>
+                    <button
+                      onClick={() => setIsSubmitModalOpen(true)}
+                      className="mt-5 px-5 py-2.5 rounded-xl bg-[#CCFF00] text-black text-xs font-extrabold hover:bg-[#b8e600] transition-colors cursor-pointer"
+                    >
+                      + Submit Client Intro
+                    </button>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-white/50 mt-1 flex-wrap">
-                    <span>Code: <strong className="text-[#CCFF00] font-mono">{partner.referralCode}</strong></span>
-                    <span>•</span>
-                    <span>{editCompany || partner.company || 'Independent Partner'}</span>
-                    <span>•</span>
-                    <span className="text-emerald-400 font-semibold">{partner.status}</span>
-                  </div>
-                </div>
-              </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {filteredReferrals.map((referral) => {
+                      const percentPaid =
+                        referral.dealValue > 0
+                          ? Math.min(100, Math.round((referral.totalPaid / referral.dealValue) * 100))
+                          : 0;
+                      const isFullySettled = referral.totalPaid >= referral.dealValue && referral.dealValue > 0;
+                      const earnedCut = referral.commissionEarned || Math.round(referral.totalPaid * partnerRate);
+                      const fullPotentialCut = Math.round(referral.dealValue * partnerRate);
 
-              <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-3 sm:pt-0 border-white/[0.06]">
-                <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Account ID</span>
-                <span className="text-xs font-mono text-white/70">{partner.id.slice(0, 14)}...</span>
-              </div>
-            </div>
+                      const stage1Cleared = percentPaid >= 35;
+                      const stage2Cleared = percentPaid >= 65;
+                      const stage3Cleared = isFullySettled;
 
-            <form onSubmit={handleSaveProfileAndPayoutSettings} className="space-y-6">
-              {/* SECTION 1: Personal & Business Identity */}
-              <div className="p-6 sm:p-7 rounded-3xl bg-[#0C101A] border border-white/[0.08] shadow-xl space-y-5">
-                <div className="flex items-center gap-2 pb-3 border-b border-white/[0.06]">
-                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-                    <User size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white font-['Outfit']">Partner Identity & Contact</h3>
-                    <p className="text-[11px] text-white/50">Your profile details for deal attribution and AGX notifications</p>
-                  </div>
-                </div>
+                      const isDocsExpanded = expandedDocReferralId === referral.id;
+                      const isUploadingThis = uploadingReferralId === referral.id;
+                      const isDraggingThis = dragActiveReferralId === referral.id;
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Full Name */}
-                  <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                      Full Name *
-                    </label>
-                    <div className="relative">
-                      <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
-                      <input
-                        type="text"
-                        required
-                        value={editName}
-                        onChange={(e) => {
-                          setEditName(e.target.value);
-                          if (formValidationErrors.name) {
-                            setFormValidationErrors(prev => ({ ...prev, name: '' }));
-                          }
-                        }}
-                        placeholder="e.g. Abhinav Sharma"
-                        className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-white/[0.04] border text-white text-xs placeholder:text-white/30 focus:outline-none transition-colors ${
-                          formValidationErrors.name ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-[#CCFF00]'
-                        }`}
-                      />
-                    </div>
-                    {formValidationErrors.name && (
-                      <span className="text-[10px] text-red-400 mt-1 block">{formValidationErrors.name}</span>
-                    )}
-                  </div>
+                      const attachedDocs: ClientDocument[] = [
+                        ...(referral.documents || []),
+                        ...(store.documents || []).filter(
+                          d => (d.leadId && (d.leadId === referral.id || d.leadId === referral.leadId)) ||
+                               (d.clientId && d.clientId === referral.clientId) ||
+                               (d.leadName && referral.clientName && d.leadName.toLowerCase() === referral.clientName.toLowerCase())
+                        ).map(cd => ({
+                          id: cd.id,
+                          title: cd.title,
+                          docType: cd.docType,
+                          leadId: cd.leadId,
+                          clientId: cd.clientId,
+                          leadName: cd.leadName,
+                          fileUrl: cd.fileUrl,
+                          fileSize: cd.fileSize,
+                          uploadedBy: cd.uploadedBy,
+                          createdAt: cd.createdAt
+                        }))
+                      ].filter((doc, idx, arr) => arr.findIndex(x => x.id === doc.id || (x.title === doc.title && x.fileUrl === doc.fileUrl)) === idx);
 
-                  {/* Agency / Company */}
-                  <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                      Agency / Business Name
-                    </label>
-                    <div className="relative">
-                      <Building size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
-                      <input
-                        type="text"
-                        value={editCompany}
-                        onChange={(e) => setEditCompany(e.target.value)}
-                        placeholder="e.g. Apex Media Labs"
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00] transition-colors"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Phone / WhatsApp */}
-                  <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                      Phone / WhatsApp Number
-                    </label>
-                    <div className="relative">
-                      <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
-                      <input
-                        type="tel"
-                        value={editPhone}
-                        onChange={(e) => {
-                          setEditPhone(e.target.value);
-                          if (formValidationErrors.phone) {
-                            setFormValidationErrors(prev => ({ ...prev, phone: '' }));
-                          }
-                        }}
-                        placeholder="+91 98765 43210"
-                        className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-white/[0.04] border text-white text-xs placeholder:text-white/30 focus:outline-none transition-colors font-mono ${
-                          formValidationErrors.phone ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-[#CCFF00]'
-                        }`}
-                      />
-                    </div>
-                    <span className="text-[10px] text-white/40 mt-1 block">
-                      Used by AGX ops to send instant WhatsApp notifications for closed deals.
-                    </span>
-                    {formValidationErrors.phone && (
-                      <span className="text-[10px] text-red-400 mt-1 block">{formValidationErrors.phone}</span>
-                    )}
-                  </div>
-
-                  {/* Registered Email (Locked) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-white/70">
-                        Primary Account Email
-                      </label>
-                      <span className="text-[9px] px-2 py-0.2 rounded-full bg-white/10 text-white/60 font-semibold flex items-center gap-1">
-                        <Lock size={9} /> Verified Auth
-                      </span>
-                    </div>
-                    <div className="relative">
-                      <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
-                      <input
-                        type="email"
-                        disabled
-                        value={partner.email}
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-white/[0.02] border border-white/5 text-white/50 text-xs cursor-not-allowed font-mono"
-                      />
-                    </div>
-                    <span className="text-[10px] text-white/40 mt-1 block">
-                      Contact support to transfer ownership or change auth email.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Additional Info: Specialization & PAN */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                      Agency Specialization / Notes
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={editBio}
-                      onChange={(e) => setEditBio(e.target.value)}
-                      placeholder="e.g. Design Studio & Fractional CTO for venture-backed fintechs..."
-                      className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00] transition-colors"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                      PAN / Tax / GST Identification (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={editPanTaxId}
-                      onChange={(e) => setEditPanTaxId(e.target.value.toUpperCase())}
-                      placeholder="e.g. ABCDE1234F or GSTIN"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00] transition-colors font-mono"
-                    />
-                    <span className="text-[10px] text-white/40 mt-1 block">
-                      Enables automated generation of tax compliance payout vouchers.
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* SECTION 2: Payout Coordinates (Multi-Rail) */}
-              <div className="p-6 sm:p-7 rounded-3xl bg-[#0C101A] border border-white/[0.08] shadow-xl space-y-5">
-                <div className="flex items-center gap-2 pb-3 border-b border-white/[0.06]">
-                  <div className="w-8 h-8 rounded-xl bg-[#CCFF00]/10 border border-[#CCFF00]/20 flex items-center justify-center text-[#CCFF00]">
-                    <CreditCard size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white font-['Outfit']">Payout Disbursement Coordinates</h3>
-                    <p className="text-[11px] text-white/50">Select your preferred payout rail and provide withdrawal coordinates</p>
-                  </div>
-                </div>
-
-                {/* Rail Selector */}
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-white/60 block mb-2">
-                    Disbursement Rail *
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    {[
-                      { id: 'UPI', label: 'UPI / VPA', sub: 'Instant (INR)', icon: Zap },
-                      { id: 'Bank Transfer', label: 'Bank Transfer', sub: 'NEFT / IMPS', icon: Building },
-                      { id: 'PayPal', label: 'PayPal', sub: 'Global USD/EUR', icon: Globe },
-                      { id: 'Wire', label: 'SWIFT / Wire', sub: 'International', icon: Shield }
-                    ].map(rail => {
-                      const isSelected = editPayoutMethod === rail.id;
-                      const RailIcon = rail.icon;
                       return (
-                        <button
-                          key={rail.id}
-                          type="button"
-                          onClick={() => {
-                            setEditPayoutMethod(rail.id as any);
-                            setFormValidationErrors({});
-                          }}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                            isSelected
-                              ? 'bg-[#CCFF00] text-black border-[#CCFF00] shadow-md shadow-[#CCFF00]/15'
-                              : 'bg-white/[0.02] text-white/70 border-white/10 hover:bg-white/[0.05] hover:text-white'
-                          }`}
+                        <div
+                          key={referral.id}
+                          className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-shadow space-y-4"
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <RailIcon size={16} className={isSelected ? 'text-black' : 'text-[#CCFF00]'} />
-                            {isSelected && <Check size={14} className="text-black stroke-[3]" />}
+                          {/* Client Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+                            <div>
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <h4 className="text-base font-extrabold text-gray-900">{referral.clientName}</h4>
+                                {referral.company && (
+                                  <span className="text-xs text-gray-500 font-medium">@{referral.company}</span>
+                                )}
+                                <span className="px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 font-semibold text-[10px]">
+                                  {referral.projectType}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                                <span>Introduced {new Date(referral.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                {referral.clientPhone && <span>• {referral.clientPhone}</span>}
+                                {referral.clientEmail && <span>• {referral.clientEmail}</span>}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                referral.dealStatus === 'COMPLETED'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : referral.dealStatus === 'WON' || referral.dealStatus === 'IN PROGRESS'
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}>
+                                Deal: {referral.dealStatus}
+                              </span>
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-800">
+                                {isFullySettled ? '100% Settled ✓' : `${percentPaid}% Paid`}
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-xs font-black block tracking-tight">{rail.label}</span>
-                            <span className={`text-[10px] block ${isSelected ? 'text-black/70' : 'text-white/40'}`}>
-                              {rail.sub}
-                            </span>
+
+                          {/* 3-Stage Milestone Visualizer */}
+                          <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-100 space-y-2.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-500 font-semibold">Milestone Release Progress</span>
+                              <span className="font-mono text-gray-900 font-bold text-[11px]">
+                                ₹{referral.totalPaid.toLocaleString('en-IN')} of ₹{referral.dealValue.toLocaleString('en-IN')}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+                              {/* Stage 1 */}
+                              <div className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition-colors ${
+                                stage1Cleared
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-bold'
+                                  : 'bg-white border-gray-200 text-gray-400'
+                              }`}>
+                                <div className="flex items-center gap-1">
+                                  {stage1Cleared ? <CheckCircle2 size={12} className="text-emerald-600" /> : <Clock size={12} />}
+                                  <span>Milestone 1</span>
+                                </div>
+                                <span className="text-[9px] font-normal">Kickoff Advance (40%)</span>
+                              </div>
+
+                              {/* Stage 2 */}
+                              <div className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition-colors ${
+                                stage2Cleared
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-bold'
+                                  : 'bg-white border-gray-200 text-gray-400'
+                              }`}>
+                                <div className="flex items-center gap-1">
+                                  {stage2Cleared ? <CheckCircle2 size={12} className="text-emerald-600" /> : <Clock size={12} />}
+                                  <span>Milestone 2</span>
+                                </div>
+                                <span className="text-[9px] font-normal">UAT Demo (30%)</span>
+                              </div>
+
+                              {/* Stage 3 */}
+                              <div className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition-colors ${
+                                stage3Cleared
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-bold'
+                                  : 'bg-white border-gray-200 text-gray-400'
+                              }`}>
+                                <div className="flex items-center gap-1">
+                                  {stage3Cleared ? <CheckCircle2 size={12} className="text-emerald-600" /> : <Clock size={12} />}
+                                  <span>Milestone 3</span>
+                                </div>
+                                <span className="text-[9px] font-normal">Final Handover (30%)</span>
+                              </div>
+                            </div>
                           </div>
-                        </button>
+
+                          {/* Financial Breakdown Strip */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-1">
+                            <div className="flex items-center gap-4">
+                              <div>
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Contract Budget</span>
+                                <span className="font-mono font-extrabold text-gray-900 text-sm">
+                                  ₹{referral.dealValue.toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                              <div className="h-6 w-[1px] bg-gray-200" />
+                              <div>
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Your Cut ({partnerRatePercent}%)</span>
+                                <span className="font-mono font-extrabold text-emerald-600 text-sm">
+                                  ₹{fullPotentialCut.toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Commission Released</span>
+                              <span className="font-mono font-black text-gray-900 text-sm">
+                                ₹{earnedCut.toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Client Documents & Google Drive Vault Section */}
+                          <div className="pt-3 border-t border-gray-100">
+                            <div className="flex flex-wrap items-center justify-between gap-2.5">
+                              {/* Left: Badge with folder icon, count, and accordion toggle */}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedDocReferralId(isDocsExpanded ? null : referral.id)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-800 text-xs font-bold transition-all cursor-pointer"
+                                >
+                                  <Folder size={13} className="text-[#0C0F17]" />
+                                  <span>Client Files & Drive</span>
+                                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                    attachedDocs.length > 0 ? 'bg-black text-[#CCFF00]' : 'bg-gray-200 text-gray-600'
+                                  }`}>
+                                    {attachedDocs.length}
+                                  </span>
+                                  <ChevronDown size={12} className={`transition-transform text-gray-500 ${isDocsExpanded ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {referral.driveFolderUrl && (
+                                  <a
+                                    href={referral.driveFolderUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] font-bold transition-colors cursor-pointer"
+                                    title="Open dedicated Google Drive folder for this client"
+                                  >
+                                    <span>📁 Open in Drive</span>
+                                    <ExternalLink size={10} />
+                                  </a>
+                                )}
+                              </div>
+
+                              {/* Right: Quick Attach Button */}
+                              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black hover:bg-gray-800 text-white text-[11px] font-bold cursor-pointer transition-colors shadow-xs">
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  disabled={isUploadingThis}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      handleUploadFileForReferral(referral, file);
+                                      if (!isDocsExpanded) setExpandedDocReferralId(referral.id);
+                                    }
+                                    e.target.value = '';
+                                  }}
+                                />
+                                {isUploadingThis ? (
+                                  <>
+                                    <RefreshCw size={11} className="animate-spin text-[#CCFF00]" />
+                                    <span>Uploading...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <UploadCloud size={11} className="text-[#CCFF00]" />
+                                    <span>+ Attach File</span>
+                                  </>
+                                )}
+                              </label>
+                            </div>
+
+                            {/* Expandable Vault Drawer */}
+                            <AnimatePresence>
+                              {isDocsExpanded && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="overflow-hidden mt-3 pt-3 border-t border-dashed border-gray-200 space-y-3"
+                                >
+                                  {/* Folder Info Strip */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-gray-50 border border-gray-100 text-xs">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                        <Folder size={12} />
+                                      </div>
+                                      <div className="truncate">
+                                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Google Drive Destination</span>
+                                        <span className="text-gray-800 font-mono text-[11px] font-semibold truncate block">
+                                          AGX Client Vault / {referral.clientName} {referral.company ? `- ${referral.company}` : ''}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {referral.driveFolderUrl && (
+                                      <a
+                                        href={referral.driveFolderUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-lg bg-white hover:bg-gray-100 border border-gray-200 text-gray-900 text-[11px] font-bold shrink-0 transition-colors cursor-pointer"
+                                      >
+                                        <span>View Drive Folder</span>
+                                        <ExternalLink size={10} />
+                                      </a>
+                                    )}
+                                  </div>
+
+                                  {/* Drag and Drop Zone */}
+                                  <div
+                                    onDragOver={(e) => { e.preventDefault(); setDragActiveReferralId(referral.id); }}
+                                    onDragLeave={(e) => { e.preventDefault(); setDragActiveReferralId(null); }}
+                                    onDrop={(e) => {
+                                      e.preventDefault();
+                                      setDragActiveReferralId(null);
+                                      const files = Array.from(e.dataTransfer.files || []);
+                                      if (files.length > 0) {
+                                        files.forEach(f => handleUploadFileForReferral(referral, f));
+                                      }
+                                    }}
+                                    className={`relative p-4 rounded-2xl border-2 border-dashed transition-all text-center flex flex-col items-center justify-center gap-1.5 ${
+                                      isDraggingThis
+                                        ? 'border-[#CCFF00] bg-black/5 scale-[0.99]'
+                                        : 'border-gray-200 hover:border-gray-400 bg-white'
+                                    }`}
+                                  >
+                                    <input
+                                      type="file"
+                                      id={`dropzone-${referral.id}`}
+                                      className="hidden"
+                                      disabled={isUploadingThis}
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleUploadFileForReferral(referral, file);
+                                        e.target.value = '';
+                                      }}
+                                    />
+                                    <label htmlFor={`dropzone-${referral.id}`} className="cursor-pointer flex flex-col items-center">
+                                      <div className="w-8 h-8 rounded-full bg-gray-100 hover:bg-[#CCFF00]/20 text-gray-700 hover:text-black flex items-center justify-center transition-colors mb-1">
+                                        <UploadCloud size={16} />
+                                      </div>
+                                      <span className="text-xs font-bold text-gray-900">
+                                        {isUploadingThis ? 'Streaming file to Google Drive...' : 'Drop files here, or click to browse'}
+                                      </span>
+                                      <span className="text-[10px] text-gray-400 mt-0.5">
+                                        PDF, DOCX, PNG, JPG, XLSX, ZIP up to 25MB • Stored in your Google Drive Vault
+                                      </span>
+                                    </label>
+                                  </div>
+
+                                  {/* Uploaded Documents List */}
+                                  {attachedDocs.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block px-1">
+                                        Attached Documents ({attachedDocs.length})
+                                      </span>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {attachedDocs.map((doc) => {
+                                          const isPdf = doc.title.toLowerCase().endsWith('.pdf');
+                                          const isImg = /\.(png|jpe?g|webp|gif|svg)$/i.test(doc.title);
+                                          const isDoc = /\.(docx?|txt|md)$/i.test(doc.title);
+                                          const isSheet = /\.(xlsx?|csv)$/i.test(doc.title);
+
+                                          return (
+                                            <div
+                                              key={doc.id}
+                                              className="p-2.5 rounded-xl bg-gray-50 hover:bg-white border border-gray-100 hover:border-gray-300 transition-all flex items-center justify-between gap-2 text-xs shadow-2xs"
+                                            >
+                                              <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-white font-bold text-[10px] ${
+                                                  isPdf ? 'bg-rose-500' : isImg ? 'bg-violet-500' : isSheet ? 'bg-emerald-600' : isDoc ? 'bg-blue-600' : 'bg-gray-800'
+                                                }`}>
+                                                  {isPdf ? 'PDF' : isImg ? 'IMG' : isSheet ? 'XLS' : isDoc ? 'DOC' : 'FILE'}
+                                                </div>
+                                                <div className="min-w-0">
+                                                  <p className="font-bold text-gray-900 truncate text-[11px]" title={doc.title}>
+                                                    {doc.title}
+                                                  </p>
+                                                  <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                                                    <span>{doc.fileSize || 'Attached'}</span>
+                                                    <span>•</span>
+                                                    <span>{new Date(doc.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              <div className="flex items-center gap-1 shrink-0">
+                                                <a
+                                                  href={doc.fileUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="p-1.5 rounded-lg bg-white hover:bg-black hover:text-[#CCFF00] border border-gray-200 text-gray-700 transition-colors"
+                                                  title="Open in Google Drive"
+                                                >
+                                                  <ExternalLink size={12} />
+                                                </a>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-2 text-gray-400 text-xs">
+                                      No documents attached yet for this referral.
+                                    </div>
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* VIEW 3: PAYOUT VAULT & LEDGER                           */}
+            {/* ======================================================== */}
+            {activeTab === 'payouts' && (
+              <div className="space-y-6">
+                {/* Hero Vault Banner */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  {/* Available Balance Box (8 cols) */}
+                  <div className="lg:col-span-8 bg-gradient-to-br from-[#0C0F17] via-[#090C12] to-[#06080D] text-white rounded-3xl p-6 sm:p-8 border border-white/10 shadow-2xl relative overflow-hidden flex flex-col justify-between">
+                    <div className="absolute right-[-20px] top-[-20px] w-64 h-64 bg-[#CCFF00]/10 rounded-full blur-3xl pointer-events-none" />
+
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#CCFF00] animate-pulse shadow-[0_0_8px_#CCFF00]" />
+                          <span className="text-xs font-mono font-bold text-[#CCFF00] uppercase tracking-wider">
+                            Available Payout Vault
+                          </span>
+                        </div>
+                        <span className="text-xs text-white/50">Settlement Currency: INR (₹)</span>
+                      </div>
+
+                      <span className="text-xs uppercase font-bold text-white/40 tracking-wider block">Ready for Immediate Withdrawal</span>
+                      <div className="text-3xl sm:text-5xl font-black text-[#CCFF00] tracking-tight tabular-nums mt-1 font-['Outfit']">
+                        ₹{availablePendingPayout.toLocaleString('en-IN')}
+                      </div>
+
+                      <p className="text-xs text-white/60 mt-3 max-w-lg leading-relaxed">
+                        Funds settle directly via <strong className="text-white">{partner.payoutMethod || 'UPI'}</strong> to your registered coordinates. Minimum withdrawal threshold is ₹1,000 INR.
+                      </p>
+                    </div>
+
+                    <div className="mt-8 pt-6 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col text-xs">
+                          <span className="text-white/40">Registered Method:</span>
+                          <span className="text-white font-bold">{partner.payoutMethod || 'UPI'}</span>
+                        </div>
+                        <div className="h-6 w-[1px] bg-white/10" />
+                        <div className="flex flex-col text-xs">
+                          <span className="text-white/40">Auto-Payout Threshold:</span>
+                          <span className="text-white font-mono font-bold">₹{(partner.payoutDetails?.autoPayoutThreshold || 1000).toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setIsPayoutModalOpen(true)}
+                        disabled={availablePendingPayout < 1000}
+                        className="px-6 py-2.5 rounded-2xl bg-[#CCFF00] hover:bg-[#b8e600] disabled:opacity-30 disabled:hover:bg-[#CCFF00] text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-[#CCFF00]/15 disabled:cursor-not-allowed btn-press"
+                      >
+                        Request Withdrawal
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Coordinates Summary Card (4 cols) */}
+                  <div className="lg:col-span-4 bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+                        <h4 className="font-extrabold text-sm text-gray-900">Payout Coordinates</h4>
+                        <button
+                          onClick={() => setActiveTab('settings')}
+                          className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                      </div>
+
+                      <div className="space-y-3 text-xs">
+                        <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Primary Method</span>
+                          <span className="font-extrabold text-gray-900 text-sm">{partner.payoutMethod || 'UPI'}</span>
+                        </div>
+
+                        {partner.payoutDetails?.upiId && (
+                          <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">UPI ID</span>
+                            <span className="font-mono font-bold text-gray-900">{partner.payoutDetails.upiId}</span>
+                          </div>
+                        )}
+
+                        {partner.payoutDetails?.accountNumber && (
+                          <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Bank Account</span>
+                            <span className="font-mono font-bold text-gray-900">
+                              {partner.payoutDetails.bankName || 'Bank'} · Ending in {partner.payoutDetails.accountNumber.slice(-4)}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">PAN / Tax ID</span>
+                          <span className="font-mono font-semibold text-gray-700">
+                            {partner.payoutDetails?.panTaxId || 'Not registered'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">
+                      Instant settlements process upon client invoice clearance.
+                    </p>
+                  </div>
                 </div>
 
-                {/* Conditional Payout Form Fields */}
-                <div className="p-4 sm:p-5 rounded-2xl bg-black/40 border border-white/[0.06] space-y-4">
-                  {/* Rail 1: UPI */}
-                  {editPayoutMethod === 'UPI' && (
+                {/* Historical Payout Ledger */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+                  <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
                     <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-white/70">
-                          UPI ID (Virtual Payment Address) *
-                        </label>
-                        <span className="text-[10px] text-[#CCFF00] font-mono">Google Pay / PhonePe / Paytm</span>
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        value={editUpiId}
-                        onChange={(e) => {
-                          setEditUpiId(e.target.value);
-                          if (formValidationErrors.upiId) setFormValidationErrors(prev => ({ ...prev, upiId: '' }));
-                        }}
-                        placeholder="e.g. abhinav@okhdfcbank or 9876543210@paytm"
-                        className={`w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border text-white text-xs placeholder:text-white/30 focus:outline-none transition-colors font-mono ${
-                          formValidationErrors.upiId ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-[#CCFF00]'
-                        }`}
-                      />
-                      {formValidationErrors.upiId && (
-                        <span className="text-[10px] text-red-400 mt-1 block">{formValidationErrors.upiId}</span>
-                      )}
+                      <h4 className="font-extrabold text-base text-gray-900">Payout History & Ledger</h4>
+                      <p className="text-xs text-gray-400">All historical withdrawals, settlements, and bank disbursements.</p>
+                    </div>
+                  </div>
+
+                  {myPayouts.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-gray-400">
+                      No payout requests on record yet. Once your client deals hit cleared milestones, withdraw anytime.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-gray-100 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                            <th className="pb-3">Reference / ID</th>
+                            <th className="pb-3">Date</th>
+                            <th className="pb-3">Amount</th>
+                            <th className="pb-3">Method</th>
+                            <th className="pb-3">Status</th>
+                            <th className="pb-3 text-right">Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {myPayouts.map((p) => (
+                            <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="py-3 font-mono font-bold text-gray-900">{p.id.slice(0, 10)}</td>
+                              <td className="py-3 text-gray-500">{new Date(p.payoutDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                              <td className="py-3 font-mono font-black text-gray-900">₹{p.amount.toLocaleString('en-IN')}</td>
+                              <td className="py-3 text-gray-700 font-medium">{p.paymentMethod}</td>
+                              <td className="py-3">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  p.status === 'Completed'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : p.status === 'Failed'
+                                    ? 'bg-rose-50 text-rose-700'
+                                    : 'bg-amber-50 text-amber-700'
+                                }`}>
+                                  {p.status}
+                                </span>
+                              </td>
+                              <td className="py-3 text-right text-gray-500">{p.notes || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
 
-                  {/* Rail 2: Bank Transfer (Domestic) */}
-                  {editPayoutMethod === 'Bank Transfer' && (
-                    <div className="space-y-3.5">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <div>
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                            Bank Name *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={editBankName}
-                            onChange={(e) => {
-                              setEditBankName(e.target.value);
-                              if (formValidationErrors.bankName) setFormValidationErrors(prev => ({ ...prev, bankName: '' }));
-                            }}
-                            placeholder="e.g. HDFC Bank Ltd"
-                            className={`w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border text-white text-xs placeholder:text-white/30 focus:outline-none transition-colors ${
-                              formValidationErrors.bankName ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-[#CCFF00]'
-                            }`}
-                          />
-                          {formValidationErrors.bankName && (
-                            <span className="text-[10px] text-red-400 mt-1 block">{formValidationErrors.bankName}</span>
-                          )}
-                        </div>
+            {/* ======================================================== */}
+            {/* VIEW 4: PARTNER GROWTH TOOLKIT                          */}
+            {/* ======================================================== */}
+            {activeTab === 'toolkit' && (
+              <div className="space-y-6">
+                {/* Header */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+                  <h3 className="font-extrabold text-xl text-gray-900 tracking-tight">Partner Growth & Enablement Toolkit</h3>
+                  <p className="text-xs text-gray-500 mt-1 max-w-2xl">
+                    Everything you need to introduce clients with confidence: battlecards, pre-written pitch messages, and tracking assets.
+                  </p>
+                </div>
 
-                        <div>
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                            Account Holder Name *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={editAccountName}
-                            onChange={(e) => {
-                              setEditAccountName(e.target.value);
-                              if (formValidationErrors.accountName) setFormValidationErrors(prev => ({ ...prev, accountName: '' }));
-                            }}
-                            placeholder="e.g. Abhinav Sharma"
-                            className={`w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border text-white text-xs placeholder:text-white/30 focus:outline-none transition-colors ${
-                              formValidationErrors.accountName ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-[#CCFF00]'
-                            }`}
-                          />
-                          {formValidationErrors.accountName && (
-                            <span className="text-[10px] text-red-400 mt-1 block">{formValidationErrors.accountName}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <div>
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                            Account Number *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={editAccountNumber}
-                            onChange={(e) => {
-                              setEditAccountNumber(e.target.value);
-                              if (formValidationErrors.accountNumber) setFormValidationErrors(prev => ({ ...prev, accountNumber: '' }));
-                            }}
-                            placeholder="e.g. 50100456789123"
-                            className={`w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border text-white text-xs placeholder:text-white/30 focus:outline-none transition-colors font-mono ${
-                              formValidationErrors.accountNumber ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-[#CCFF00]'
-                            }`}
-                          />
-                          {formValidationErrors.accountNumber && (
-                            <span className="text-[10px] text-red-400 mt-1 block">{formValidationErrors.accountNumber}</span>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                            IFSC Code *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            maxLength={11}
-                            value={editIfsc}
-                            onChange={(e) => {
-                              setEditIfsc(e.target.value.toUpperCase());
-                              if (formValidationErrors.ifsc) setFormValidationErrors(prev => ({ ...prev, ifsc: '' }));
-                            }}
-                            placeholder="e.g. HDFC0001234"
-                            className={`w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border text-white text-xs placeholder:text-white/30 focus:outline-none transition-colors font-mono uppercase ${
-                              formValidationErrors.ifsc ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-[#CCFF00]'
-                            }`}
-                          />
-                          {formValidationErrors.ifsc && (
-                            <span className="text-[10px] text-red-400 mt-1 block">{formValidationErrors.ifsc}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Rail 3: PayPal */}
-                  {editPayoutMethod === 'PayPal' && (
+                {/* 3 High-Converting Pitch Scripts */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                     <div>
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                        PayPal Registered Email *
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={editPaypalEmail}
-                        onChange={(e) => {
-                          setEditPaypalEmail(e.target.value);
-                          if (formValidationErrors.paypalEmail) setFormValidationErrors(prev => ({ ...prev, paypalEmail: '' }));
-                        }}
-                        placeholder="e.g. partner-payouts@agency.com"
-                        className={`w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border text-white text-xs placeholder:text-white/30 focus:outline-none transition-colors ${
-                          formValidationErrors.paypalEmail ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-[#CCFF00]'
-                        }`}
-                      />
-                      <span className="text-[10px] text-white/40 mt-1 block">
-                        Commissions will be transferred in equivalent USD/EUR via PayPal Mass Payments.
-                      </span>
-                      {formValidationErrors.paypalEmail && (
-                        <span className="text-[10px] text-red-400 mt-1 block">{formValidationErrors.paypalEmail}</span>
-                      )}
+                      <h4 className="font-extrabold text-base text-gray-900">Ready-to-Send Outreach Scripts</h4>
+                      <p className="text-xs text-gray-400">Tested message templates customized with your tracking link.</p>
                     </div>
-                  )}
+                  </div>
 
-                  {/* Rail 4: Wire / SWIFT */}
-                  {editPayoutMethod === 'Wire' && (
-                    <div className="space-y-3.5">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      {
+                        id: 'agency',
+                        title: 'For Marketing Agencies & Consultants',
+                        target: 'Upselling Existing Retainer Clients',
+                        text: `Hey [Client Name], we handle your brand/growth, but noticed a lot of manual bottlenecks in your internal operations. We've partnered with an elite engineering group (AGX) who builds custom autonomous AI workflows and support bots in under 14 days. Want me to connect you with their team for a free architecture review?`
+                      },
+                      {
+                        id: 'ops',
+                        title: 'For Operations Heads & Founders',
+                        target: 'Growing Businesses & COOs',
+                        text: `Hi [Name], saw your team has been scaling fast. Are you guys currently automating your customer support and lead qualification workflows? My partners at AGX replace repetitive manual desk work with autonomous agents backed by a 30-day performance guarantee. Check them out here: ${referralUrl}`
+                      },
+                      {
+                        id: 'quick',
+                        title: 'WhatsApp / DM Quick Ping',
+                        target: 'Informal WhatsApp / Slack Intro',
+                        text: `Hey [Name]! Quick question—have you explored deploying custom AI agents for your back-office workflows yet? AGX built out full end-to-end automations for us in 2 weeks. Here's their partner link if you want to book a 15-min discovery audit: ${referralUrl}`
+                      }
+                    ].map(pitch => (
+                      <div
+                        key={pitch.id}
+                        className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col justify-between gap-3 hover:border-gray-200 transition-colors"
+                      >
                         <div>
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                            Bank Name & Country *
-                          </label>
+                          <span className="text-xs font-extrabold text-gray-900 block mb-1">{pitch.title}</span>
+                          <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider block mb-2">
+                            {pitch.target}
+                          </span>
+                          <p className="text-[11px] text-gray-700 leading-relaxed italic bg-white p-3 rounded-xl border border-gray-200/60 shadow-2xs">
+                            "{pitch.text}"
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => handleCopyPitch(pitch.id, pitch.text)}
+                          className="w-full py-2 rounded-xl bg-black text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:bg-gray-800 btn-press"
+                        >
+                          {copiedPitchId === pitch.id ? (
+                            <>
+                              <Check size={12} className="text-[#CCFF00]" />
+                              <span className="text-[#CCFF00]">Copied Script!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={12} />
+                              <span>Copy Script</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* AGX Core Solutions Cheat-Sheet */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
+                  <h4 className="font-extrabold text-base text-gray-900">What AGX Builds: Services & Budgets Cheat-Sheet</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase text-gray-400">Blueprint</span>
+                      <h5 className="font-extrabold text-gray-900 text-sm">AI Operations Audit</h5>
+                      <p className="text-gray-500 text-[11px]">Comprehensive workflow architecture diagnostic for operational bottlenecks.</p>
+                      <div className="pt-2 font-mono font-bold text-gray-900 text-xs">₹50,000+</div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase text-gray-400">Autonomous</span>
+                      <h5 className="font-extrabold text-gray-900 text-sm">Custom AI Support Agent</h5>
+                      <p className="text-gray-500 text-[11px]">Human-like customer support, sales lead qualification, and WhatsApp bots.</p>
+                      <div className="pt-2 font-mono font-bold text-gray-900 text-xs">₹1,50,000+</div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase text-gray-400">Pipelines</span>
+                      <h5 className="font-extrabold text-gray-900 text-sm">Workflow Automation</h5>
+                      <p className="text-gray-500 text-[11px]">Connecting CRM, invoicing, payment gateways, and backend database syncs.</p>
+                      <div className="pt-2 font-mono font-bold text-gray-900 text-xs">₹75,000+</div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase text-gray-400">Enterprise</span>
+                      <h5 className="font-extrabold text-gray-900 text-sm">Custom Business OS</h5>
+                      <p className="text-gray-500 text-[11px]">Full end-to-end bespoke operating system with custom portals and role-based access.</p>
+                      <div className="pt-2 font-mono font-bold text-gray-900 text-xs">₹2,50,000+</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* VIEW 5: PROFILE & PAYOUT SETTINGS                       */}
+            {/* ======================================================== */}
+            {activeTab === 'settings' && (
+              <div className="max-w-4xl mx-auto space-y-6">
+                {/* Header Identity Card */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-black text-[#CCFF00] font-black italic flex items-center justify-center text-2xl shadow-md">
+                      {editName ? editName.charAt(0).toUpperCase() : partner.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-extrabold text-gray-900">{editName || partner.name}</h3>
+                      <p className="text-xs text-gray-400">{partner.email}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="px-2.5 py-0.5 rounded-full bg-black text-[#CCFF00] font-mono text-[10px] font-bold">
+                          {partnerTier.badgeLabel} ({partnerRatePercent}%)
+                        </span>
+                        <span className="text-xs font-mono text-gray-500">Ref: {partner.referralCode}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form Section */}
+                <form onSubmit={handleSaveProfileAndPayoutSettings} className="space-y-6">
+                  {/* Card 1: Contact Coordinates */}
+                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
+                    <h4 className="font-extrabold text-base text-gray-900">Partner Coordinates</h4>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Full Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Company / Organization</label>
+                        <input
+                          type="text"
+                          value={editCompany}
+                          onChange={(e) => setEditCompany(e.target.value)}
+                          placeholder="e.g. Acme Agency"
+                          className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Phone / WhatsApp</label>
+                        <input
+                          type="tel"
+                          value={editPhone}
+                          onChange={(e) => setEditPhone(e.target.value)}
+                          placeholder="+91 98765 43210"
+                          className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">PAN / Tax ID (Optional)</label>
+                        <input
+                          type="text"
+                          value={editPanTaxId}
+                          onChange={(e) => setEditPanTaxId(e.target.value.toUpperCase())}
+                          placeholder="ABCDE1234F"
+                          className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Payout Coordinates */}
+                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
+                    <h4 className="font-extrabold text-base text-gray-900">Payout Coordinates (Bank & UPI)</h4>
+
+                    {/* Method Selector */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {(['UPI', 'Bank Transfer', 'PayPal', 'Wire'] as const).map(method => (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setEditPayoutMethod(method)}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                            editPayoutMethod === method
+                              ? 'bg-black text-[#CCFF00] border-black shadow-sm'
+                              : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                          }`}
+                        >
+                          {method}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* UPI Fields */}
+                    {editPayoutMethod === 'UPI' && (
+                      <div>
+                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">UPI ID (VPA) *</label>
+                        <input
+                          type="text"
+                          required
+                          value={editUpiId}
+                          onChange={(e) => setEditUpiId(e.target.value)}
+                          placeholder="yourname@okhdfcbank"
+                          className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-mono font-bold"
+                        />
+                      </div>
+                    )}
+
+                    {/* Bank Transfer Fields */}
+                    {editPayoutMethod === 'Bank Transfer' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Bank Name *</label>
                           <input
                             type="text"
                             required
                             value={editBankName}
                             onChange={(e) => setEditBankName(e.target.value)}
-                            placeholder="e.g. Barclays Bank UK"
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00]"
+                            placeholder="HDFC Bank"
+                            className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white font-medium"
                           />
                         </div>
                         <div>
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                            SWIFT / BIC Code *
-                          </label>
+                          <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Account Holder Name *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editAccountName}
+                            onChange={(e) => setEditAccountName(e.target.value)}
+                            className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white font-medium"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Account Number *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editAccountNumber}
+                            onChange={(e) => setEditAccountNumber(e.target.value)}
+                            className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white font-mono font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">IFSC Code *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editIfsc}
+                            onChange={(e) => setEditIfsc(e.target.value.toUpperCase())}
+                            placeholder="HDFC0001234"
+                            className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white font-mono font-bold"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* PayPal Fields */}
+                    {editPayoutMethod === 'PayPal' && (
+                      <div>
+                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">PayPal Email Address *</label>
+                        <input
+                          type="email"
+                          required
+                          value={editPaypalEmail}
+                          onChange={(e) => setEditPaypalEmail(e.target.value)}
+                          placeholder="billing@yourdomain.com"
+                          className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white font-medium"
+                        />
+                      </div>
+                    )}
+
+                    {/* Wire Fields */}
+                    {editPayoutMethod === 'Wire' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">SWIFT / BIC Code *</label>
                           <input
                             type="text"
                             required
                             value={editSwiftCode}
-                            onChange={(e) => {
-                              setEditSwiftCode(e.target.value.toUpperCase());
-                              if (formValidationErrors.swiftCode) setFormValidationErrors(prev => ({ ...prev, swiftCode: '' }));
-                            }}
-                            placeholder="e.g. BARCGB22"
-                            className={`w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border text-white text-xs placeholder:text-white/30 focus:outline-none transition-colors font-mono uppercase ${
-                              formValidationErrors.swiftCode ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-[#CCFF00]'
-                            }`}
+                            onChange={(e) => setEditSwiftCode(e.target.value.toUpperCase())}
+                            className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs font-mono font-bold"
                           />
-                          {formValidationErrors.swiftCode && (
-                            <span className="text-[10px] text-red-400 mt-1 block">{formValidationErrors.swiftCode}</span>
-                          )}
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">IBAN / Wire Details *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editWireDetails}
+                            onChange={(e) => setEditWireDetails(e.target.value)}
+                            className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs font-mono"
+                          />
                         </div>
                       </div>
+                    )}
 
+                    {/* Preferences */}
+                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
                       <div>
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                          IBAN or International Account Number *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={editAccountNumber}
-                          onChange={(e) => setEditAccountNumber(e.target.value)}
-                          placeholder="e.g. GB29BARC20201531234567"
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00] font-mono"
-                        />
+                        <span className="text-xs font-bold text-gray-900 block">WhatsApp Payout Notifications</span>
+                        <span className="text-[11px] text-gray-400">Receive instant alerts when commission disbursements execute.</span>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* SECTION 3: Payout Automation & Preferences */}
-              <div className="p-6 sm:p-7 rounded-3xl bg-[#0C101A] border border-white/[0.08] shadow-xl space-y-4">
-                <div className="flex items-center gap-2 pb-3 border-b border-white/[0.06]">
-                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-                    <Sliders size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white font-['Outfit']">Preferences & Automation</h3>
-                    <p className="text-[11px] text-white/50">Tailor payout frequencies and milestone communication</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                      Minimum Auto-Disbursement Threshold
-                    </label>
-                    <select
-                      value={editAutoPayoutThreshold}
-                      onChange={(e) => setEditAutoPayoutThreshold(Number(e.target.value))}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#080B12] border border-white/10 text-white text-xs focus:outline-none focus:border-[#CCFF00]"
-                    >
-                      <option value={1000}>₹1,000 (Standard Min.)</option>
-                      <option value={5000}>₹5,000 (Recommended)</option>
-                      <option value={10000}>₹10,000 (Batch Settlements)</option>
-                      <option value={25000}>₹25,000 (High Volume)</option>
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col justify-center">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/70 block mb-2">
-                      WhatsApp Deal Alerts
-                    </label>
-                    <label className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.02] border border-white/10 cursor-pointer hover:bg-white/[0.05] transition-colors">
                       <input
                         type="checkbox"
                         checked={editNotifyOnWhatsApp}
                         onChange={(e) => setEditNotifyOnWhatsApp(e.target.checked)}
-                        className="w-4 h-4 accent-[#CCFF00] rounded cursor-pointer"
+                        className="w-4 h-4 accent-black cursor-pointer"
                       />
-                      <span className="text-xs text-white/80 font-medium">
-                        Notify me instantly via WhatsApp on milestone payments
-                      </span>
-                    </label>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Save Feedback Banners */}
-              {profileSaveError && (
-                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-rose-300 text-xs">
-                  <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-400" />
-                  <div className="flex-1 font-medium">{profileSaveError}</div>
-                  <button
-                    type="button"
-                    onClick={() => setProfileSaveError(null)}
-                    className="text-white/40 hover:text-white text-xs underline cursor-pointer"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              )}
-
-              {profileSaveSuccess && (
-                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3 text-emerald-300 text-xs shadow-lg shadow-emerald-500/10">
-                  <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
-                  <div className="flex-1 font-medium">{profileSaveSuccess}</div>
-                </div>
-              )}
-
-              {/* SAVE ACTION BAR */}
-              <div className="flex items-center justify-between gap-4 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Reset to active partner data
-                    if (partner) {
-                      setEditName(partner.name || '');
-                      setEditCompany(partner.company || '');
-                      setEditPhone(partner.phone || '');
-                      setEditBio(partner.notes || '');
-                      setEditPanTaxId(partner.payoutDetails?.panTaxId || '');
-                      setEditPayoutMethod(partner.payoutMethod || 'UPI');
-                      setEditUpiId(partner.payoutDetails?.upiId || '');
-                      setEditBankName(partner.payoutDetails?.bankName || '');
-                      setEditAccountNumber(partner.payoutDetails?.accountNumber || '');
-                      setEditAccountName(partner.payoutDetails?.accountName || partner.name || '');
-                      setEditIfsc(partner.payoutDetails?.ifsc || '');
-                      setEditPaypalEmail(partner.payoutDetails?.paypalEmail || partner.email || '');
-                      setEditSwiftCode(partner.payoutDetails?.swiftCode || '');
-                      setEditWireDetails(partner.payoutDetails?.wireDetails || '');
-                      setFormValidationErrors({});
-                      toast.info('Form Reset', 'Reverted back to your saved profile.');
-                    }
-                  }}
-                  className="px-5 py-3 rounded-2xl bg-white/[0.05] hover:bg-white/10 text-white/60 hover:text-white text-xs font-bold transition-all cursor-pointer"
-                >
-                  Discard Changes
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={isSavingSettings}
-                  className="px-7 py-3 rounded-2xl bg-[#CCFF00] hover:bg-[#b8e600] disabled:opacity-50 text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-[#CCFF00]/15 flex items-center gap-2"
-                >
-                  {isSavingSettings ? (
-                    <>
-                      <ThinkingOrb state="connecting" size={20} theme="dark" aria-label="Saving profile..." />
-                      <span>Saving Profile...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={15} />
-                      <span>Save Profile & Payout Coordinates</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-
-            {/* SECTION 4: SECURITY & CREDENTIAL UPDATE */}
-            <div className="p-6 md:p-8 rounded-3xl bg-[#0B0F17] border border-white/10 shadow-2xl relative overflow-hidden">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/5">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                    hasExistingPassword 
-                      ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
-                      : 'bg-[#CCFF00]/10 border border-[#CCFF00]/20 text-[#CCFF00]'
-                  }`}>
-                    <KeyRound size={18} />
+                  {/* Save Button */}
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isSavingSettings}
+                      className="px-6 py-2.5 rounded-xl bg-black text-white text-xs font-extrabold hover:bg-gray-800 transition-colors shadow-sm cursor-pointer flex items-center gap-2 btn-press"
+                    >
+                      {isSavingSettings ? (
+                        <>
+                          <RefreshCw size={14} className="animate-spin text-[#CCFF00]" />
+                          <span>Saving Coordinates...</span>
+                        </>
+                      ) : (
+                        <span>Save Coordinates</span>
+                      )}
+                    </button>
                   </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white tracking-tight">
-                      {hasExistingPassword ? 'Security & Authentication' : 'Create Account Password'}
-                    </h3>
-                    <p className="text-xs text-white/50">
-                      {hasExistingPassword 
-                        ? 'Update your partner account password and credential access.' 
-                        : 'Set a secure password to enable direct email & password login.'}
-                    </p>
-                  </div>
-                </div>
+                </form>
 
-                {hasExistingPassword ? (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono font-medium self-start sm:self-auto">
-                    <Shield size={12} />
-                    <span>Dual-Sync Encrypted</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#CCFF00]/10 border border-[#CCFF00]/20 text-[#CCFF00] text-[11px] font-mono font-medium self-start sm:self-auto">
-                    <Sparkles size={12} />
-                    <span>Google OAuth • First-Time Setup</span>
-                  </div>
-                )}
-              </div>
+                {/* Password Update Card */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
+                  <h4 className="font-extrabold text-base text-gray-900">Partner Portal Access Password</h4>
+                  <p className="text-xs text-gray-500">
+                    {hasExistingPassword
+                      ? 'Update your portal password to keep your earnings vault secure.'
+                      : 'Set a password to log into the Partner Portal directly with your email.'}
+                  </p>
 
-              {/* Informational Callout for First-Time Setup */}
-              {!hasExistingPassword && (
-                <div className="mt-6 p-4 rounded-2xl bg-[#CCFF00]/5 border border-[#CCFF00]/20 flex items-start gap-3 text-white/80 text-xs">
-                  <Sparkles size={16} className="shrink-0 mt-0.5 text-[#CCFF00]" />
-                  <div>
-                    <span className="font-bold text-white">First-time password setup: </span>
-                    Your account was authenticated directly via Google OAuth without a password. Setting a password allows you to log in anytime using your email and password, in addition to Google One-Tap.
-                  </div>
-                </div>
-              )}
-
-              {/* Password Feedback Banners */}
-              {passwordError && (
-                <div className="mt-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-rose-300 text-xs">
-                  <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-400" />
-                  <div className="flex-1 font-medium">{passwordError}</div>
-                  <button
-                    type="button"
-                    onClick={() => setPasswordError(null)}
-                    className="text-white/40 hover:text-white text-xs underline cursor-pointer"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              )}
-
-              {passwordSuccess && (
-                <div className="mt-6 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3 text-emerald-300 text-xs">
-                  <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
-                  <div className="flex-1 font-medium">{passwordSuccess}</div>
-                </div>
-              )}
-
-              <form onSubmit={handleUpdatePassword} className="mt-6 space-y-6">
-                <div className={`grid grid-cols-1 ${hasExistingPassword ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-5`}>
-                  {/* CURRENT PASSWORD (Only rendered if an existing password is already set) */}
-                  {hasExistingPassword && (
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1.5">
-                        <Lock size={12} className="text-white/40" />
-                        <span>Current Password</span>
-                        <span className="text-[#CCFF00]">*</span>
-                      </label>
-                      <div className="relative">
+                  <form onSubmit={handleUpdatePassword} className="space-y-4">
+                    {hasExistingPassword && (
+                      <div>
+                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Current Password *</label>
                         <input
-                          type={showCurrentPassword ? 'text' : 'password'}
+                          type="password"
+                          required
                           value={currentPassword}
-                          onChange={e => {
-                            setCurrentPassword(e.target.value);
-                            if (passwordError) setPasswordError(null);
-                          }}
-                          placeholder="••••••••••••"
-                          className="w-full pl-4 pr-11 py-3 rounded-2xl bg-white/[0.03] border border-white/10 text-white placeholder-white/20 text-xs focus:outline-none focus:border-amber-400/50 transition-all font-mono"
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white"
                         />
-                        <button
-                          type="button"
-                          onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer"
-                          aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showCurrentPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* NEW PASSWORD */}
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1.5">
-                      <KeyRound size={12} className={hasExistingPassword ? "text-amber-400" : "text-[#CCFF00]"} />
-                      <span>{hasExistingPassword ? 'New Password' : 'Create Password'}</span>
-                      <span className="text-[#CCFF00]">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showNewPassword ? 'text' : 'password'}
-                        value={newPassword}
-                        onChange={e => {
-                          setNewPassword(e.target.value);
-                          if (passwordError) setPasswordError(null);
-                        }}
-                        placeholder="Min. 8 characters"
-                        className="w-full pl-4 pr-11 py-3 rounded-2xl bg-white/[0.03] border border-white/10 text-white placeholder-white/20 text-xs focus:outline-none focus:border-[#CCFF00]/50 transition-all font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer"
-                        aria-label={showNewPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                    </div>
-
-                    {/* LIVE PASSWORD STRENGTH METER */}
-                    {newPassword && (
-                      <div className="space-y-1.5 pt-1">
-                        <div className="grid grid-cols-4 gap-1.5">
-                          {[1, 2, 3, 4].map(step => (
-                            <div
-                              key={step}
-                              className={`h-1 rounded-full transition-all duration-300 ${
-                                step <= passwordStrength.score ? passwordStrength.color : 'bg-white/10'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="text-white/40">Strength Rating:</span>
-                          <span className={`font-bold ${passwordStrength.text}`}>
-                            {passwordStrength.label}
-                          </span>
-                        </div>
                       </div>
                     )}
-                  </div>
 
-                  {/* CONFIRM NEW PASSWORD */}
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-bold text-white/70 uppercase tracking-wider flex items-center gap-1.5">
-                      <CheckCheck size={12} className="text-emerald-400" />
-                      <span>Confirm {hasExistingPassword ? 'New Password' : 'Password'}</span>
-                      <span className="text-[#CCFF00]">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        value={confirmPassword}
-                        onChange={e => {
-                          setConfirmPassword(e.target.value);
-                          if (passwordError) setPasswordError(null);
-                        }}
-                        placeholder="Re-enter password"
-                        className="w-full pl-4 pr-11 py-3 rounded-2xl bg-white/[0.03] border border-white/10 text-white placeholder-white/20 text-xs focus:outline-none focus:border-emerald-400/50 transition-all font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer"
-                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                    </div>
-
-                    {/* MATCH FEEDBACK */}
-                    {confirmPassword && (
-                      <div className="text-[10px] flex items-center gap-1 pt-1">
-                        {newPassword === confirmPassword ? (
-                          <span className="text-emerald-400 flex items-center gap-1">
-                            <CheckCircle2 size={11} /> Passwords match perfectly
-                          </span>
-                        ) : (
-                          <span className="text-amber-400/80 flex items-center gap-1">
-                            <AlertCircle size={11} /> Passwords do not match yet
-                          </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">New Password *</label>
+                        <input
+                          type="password"
+                          required
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Min 8 characters"
+                          className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white"
+                        />
+                        {passwordStrength.label && (
+                          <div className="mt-1 flex items-center gap-2 text-[10px]">
+                            <span className="text-gray-400">Strength:</span>
+                            <span className={`font-bold ${passwordStrength.text}`}>{passwordStrength.label}</span>
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Confirm Password *</label>
+                        <input
+                          type="password"
+                          required
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        disabled={isUpdatingPassword}
+                        className="px-5 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-900 text-xs font-bold transition-colors cursor-pointer btn-press"
+                      >
+                        {isUpdatingPassword ? 'Updating...' : hasExistingPassword ? 'Update Password' : 'Create Password'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
 
-                {/* SECURITY FOOTER & SUBMIT */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-white/5">
-                  <div className="flex items-center gap-2 text-white/40 text-[11px]">
-                    <Shield size={13} className="text-[#CCFF00]/80 shrink-0" />
-                    <span>Minimum 8 characters with numbers or symbols recommended.</span>
+                {/* Legal Agreement & Statutory Compliance Card */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-black text-[#CCFF00] flex items-center justify-center font-bold">
+                        <Scale size={20} />
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-base text-gray-900">Partner Program Agreement</h4>
+                        <p className="text-xs text-gray-500">
+                          Governed under the Indian Contract Act (1872), IT Act (2000), and DPDP Act (2023).
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase font-mono tracking-wider border ${
+                        partner.termsAccepted
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {partner.termsAccepted ? 'Signed & Active (v1.0)' : 'Action Required'}
+                      </span>
+                    </div>
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={isUpdatingPassword || (hasExistingPassword && !currentPassword) || !newPassword || !confirmPassword}
-                    className={`px-6 py-3 rounded-2xl disabled:opacity-40 text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 ${
-                      hasExistingPassword
-                        ? 'bg-amber-500 hover:bg-amber-400 shadow-amber-500/15'
-                        : 'bg-[#CCFF00] hover:bg-[#b8e600] shadow-[#CCFF00]/15'
-                    }`}
-                  >
-                    {isUpdatingPassword ? (
-                      <>
-                        <ThinkingOrb state="connecting" size={20} theme="dark" aria-label="Processing password..." />
-                        <span>{hasExistingPassword ? 'Updating Password...' : 'Creating Password...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <KeyRound size={15} />
-                        <span>{hasExistingPassword ? 'Update Password' : 'Create Password'}</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+                    <div>
+                      <span className="text-gray-600 block">
+                        {partner.termsAccepted ? (
+                          <>Digitally accepted on <strong>{partner.termsAcceptedAt ? new Date(partner.termsAcceptedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'Active Session'}</strong></>
+                        ) : (
+                          <span className="text-amber-700 font-semibold">Please review and sign the agreement to keep your account in good standing.</span>
+                        )}
+                      </span>
+                      <span className="text-[11px] text-gray-400 block mt-0.5">
+                        Covers Principal-to-Principal status, flexible 10%–25% tiers, 40/30/30 milestones, TDS Section 194H, and non-circumvention.
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsTermsModalOpen(true)}
+                      className="px-4 py-2 rounded-xl bg-black hover:bg-gray-800 text-white font-bold text-xs transition-colors cursor-pointer shrink-0 flex items-center justify-center gap-1.5 shadow-xs btn-press"
+                    >
+                      <FileText size={13} />
+                      <span>{partner.termsAccepted ? 'View Signed Agreement' : 'Review & Sign Agreement'}</span>
+                    </button>
+                  </div>
                 </div>
-              </form>
-            </div>
+              </div>
+            )}
+
           </div>
-        )}
-      </main>
+        </main>
+      </div>
 
-      {/* MODAL 1: SUBMIT CLIENT INTRO */}
+      {/* ======================================================== */}
+      {/* MODAL 1: SUBMIT CLIENT INTRO                             */}
+      {/* ======================================================== */}
       <AnimatePresence>
         {isSubmitModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-[#0C101A] border border-white/15 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-lg p-6 sm:p-7 rounded-3xl bg-white border border-gray-200 shadow-2xl space-y-4"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                 <div>
-                  <h3 className="text-xl font-black uppercase text-white font-['Outfit']">
-                    Submit Client Referral
-                  </h3>
-                  <p className="text-xs text-white/60">
-                    We will initiate discovery and keep your portal updated with live deal milestones.
-                  </p>
+                  <h3 className="text-lg font-black text-gray-900 font-['Outfit']">Submit Client Introduction</h3>
+                  <p className="text-xs text-gray-400">Earn {partnerRatePercent}% on every cleared contract milestone.</p>
                 </div>
                 <button
                   onClick={() => setIsSubmitModalOpen(false)}
-                  className="p-2 rounded-full hover:bg-white/10 text-white/50 hover:text-white cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-black cursor-pointer transition-colors"
                 >
                   ✕
                 </button>
               </div>
 
-              <form onSubmit={handleSubmitReferral} className="space-y-4">
+              <form onSubmit={handleSubmitReferral} className="space-y-3.5 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-white/70 block mb-1">Contact Name *</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Contact Name *</label>
                     <input
                       type="text"
                       required
                       value={newClientName}
                       onChange={(e) => setNewClientName(e.target.value)}
-                      placeholder="e.g. David Miller"
-                      className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00]"
+                      placeholder="e.g. John Doe"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-white/70 block mb-1">Company Name</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Company Name</label>
                     <input
                       type="text"
                       value={newClientCompany}
                       onChange={(e) => setNewClientCompany(e.target.value)}
-                      placeholder="e.g. Acme Corp"
-                      className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00]"
+                      placeholder="e.g. Nexus Media"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-white/70 block mb-1">Email</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Email</label>
                     <input
                       type="email"
                       value={newClientEmail}
                       onChange={(e) => setNewClientEmail(e.target.value)}
-                      placeholder="david@acmecorp.com"
-                      className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00]"
+                      placeholder="john@nexus.com"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-white/70 block mb-1">Phone / WhatsApp</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Phone / WhatsApp</label>
                     <input
                       type="tel"
                       value={newClientPhone}
                       onChange={(e) => setNewClientPhone(e.target.value)}
-                      placeholder="+1 (555) 019-2831"
-                      className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00]"
+                      placeholder="+91 98765 43210"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-white/70 block mb-1">Target Service</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Target Service</label>
                     <select
                       value={newProjectType}
                       onChange={(e) => setNewProjectType(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-[#07090E] border border-white/10 text-white text-xs focus:outline-none focus:border-[#CCFF00]"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium cursor-pointer"
                     >
                       <option value="AI Automation Blueprint">AI Automation Blueprint (₹50k+)</option>
                       <option value="Custom Autonomous AI Agent">Custom Autonomous AI Agent (₹1.5L+)</option>
@@ -2379,52 +2888,105 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-white/70 block mb-1">Estimated Budget (₹)</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Estimated Budget (₹)</label>
                     <input
                       type="number"
                       value={newDealValue}
                       onChange={(e) => setNewDealValue(e.target.value)}
                       placeholder="75000"
-                      className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00] font-mono tabular-nums"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-mono font-bold"
                     />
                   </div>
                 </div>
 
                 {/* Real-time Estimated Cut Preview */}
-                <div className="p-3 rounded-2xl bg-[#CCFF00]/5 border border-[#CCFF00]/20 flex items-center justify-between text-xs">
-                  <span className="text-white/70">Projected Commission ({partnerRatePercent}%):</span>
-                  <span className="text-sm font-black text-[#CCFF00] font-mono">
+                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between text-xs">
+                  <span className="text-emerald-800 font-semibold">Projected Commission ({partnerRatePercent}%):</span>
+                  <span className="text-base font-black text-emerald-700 font-mono">
                     ₹{Math.round((Number(newDealValue) || 0) * partnerRate).toLocaleString('en-IN')}
                   </span>
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-white/70 block mb-1">Introduction Notes / Bottlenecks</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Introduction Notes / Context</label>
                   <textarea
                     rows={3}
                     value={newNotes}
                     onChange={(e) => setNewNotes(e.target.value)}
-                    placeholder="Tell us what bottlenecks this client faces or how the introduction occurred..."
-                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00]"
+                    placeholder="Tell our sales team what challenges this business is facing..."
+                    className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
                   />
                 </div>
 
-                <div className="flex gap-3 pt-2">
+                {/* File Attachment Dropzone for New Referral */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block">
+                      Attach Project Documents / Photos (Optional)
+                    </label>
+                    <span className="text-[10px] text-gray-400">Stores in Google Drive Vault</span>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
+                    <label className="flex items-center justify-center gap-2 p-2 rounded-xl bg-white border border-dashed border-gray-300 hover:border-black cursor-pointer text-xs font-semibold text-gray-700 transition-colors">
+                      <input
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (files.length > 0) {
+                            setNewReferralFiles(prev => [...prev, ...files]);
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                      <Paperclip size={13} className="text-gray-500" />
+                      <span>Choose briefs, specs, photos, or RFPs (up to 25MB)</span>
+                    </label>
+
+                    {newReferralFiles.length > 0 && (
+                      <div className="space-y-1 pt-1">
+                        {newReferralFiles.map((file, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-xs"
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <FileText size={12} className="text-gray-400 shrink-0" />
+                              <span className="font-semibold text-gray-800 truncate text-[11px]">{file.name}</span>
+                              <span className="text-[10px] text-gray-400 shrink-0">({Math.round(file.size / 1024)} KB)</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setNewReferralFiles(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-gray-400 hover:text-rose-600 p-0.5 cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5 pt-2">
                   <button
                     type="button"
                     onClick={() => setIsSubmitModalOpen(false)}
-                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition-colors cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex-1 py-2.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] disabled:opacity-50 text-black text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-lg shadow-[#CCFF00]/15 flex items-center justify-center gap-1.5"
+                    className="flex-1 py-2.5 rounded-xl bg-black hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-md flex items-center justify-center gap-1.5"
                   >
                     {isSubmitting ? (
                       <>
-                        <ThinkingOrb state="connecting" size={20} theme="dark" aria-label="Registering referral..." />
+                        <RefreshCw size={13} className="animate-spin text-[#CCFF00]" />
                         <span>Registering...</span>
                       </>
                     ) : (
@@ -2438,49 +3000,50 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* MODAL 2: REQUEST PAYOUT */}
+      {/* ======================================================== */}
+      {/* MODAL 2: REQUEST PAYOUT                                  */}
+      {/* ======================================================== */}
       <AnimatePresence>
         {isPayoutModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md p-6 rounded-3xl bg-[#0C101A] border border-white/15 shadow-2xl space-y-4"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-md p-6 rounded-3xl bg-white border border-gray-200 shadow-2xl space-y-4"
             >
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-black uppercase text-white font-['Outfit']">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <h3 className="text-lg font-black text-gray-900 font-['Outfit']">
                   Request Commission Payout
                 </h3>
                 <button
                   onClick={() => setIsPayoutModalOpen(false)}
-                  className="p-1 rounded-full hover:bg-white/10 text-white/50 hover:text-white cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-black cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#CCFF00]/10 border border-[#CCFF00]/25 flex justify-between items-center">
-                <span className="text-xs text-white/70 font-semibold">Available Balance:</span>
+              <div className="p-4 rounded-2xl bg-[#0C0F17] text-white flex justify-between items-center shadow-inner">
+                <span className="text-xs text-white/70 font-semibold">Available in Vault:</span>
                 <span className="text-2xl font-black text-[#CCFF00] font-mono tabular-nums">
                   ₹{availablePendingPayout.toLocaleString('en-IN')}
                 </span>
               </div>
 
-              <form onSubmit={handleRequestPayout} className="space-y-3">
+              <form onSubmit={handleRequestPayout} className="space-y-3.5 text-xs">
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="text-[10px] font-bold uppercase text-white/70">
+                    <label className="text-[10px] font-bold uppercase text-gray-500">
                       Withdrawal Amount (₹) *
                     </label>
-                    {/* Quick percentage chips */}
                     <div className="flex items-center gap-1">
                       {[0.5, 1].map(pct => (
                         <button
                           key={pct}
                           type="button"
                           onClick={() => setPayoutRequestAmount(String(Math.floor(availablePendingPayout * pct)))}
-                          className="px-2 py-0.5 rounded text-[10px] bg-white/10 hover:bg-white/20 text-white/80 font-mono cursor-pointer"
+                          className="px-2 py-0.5 rounded text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-700 font-mono font-bold cursor-pointer"
                         >
                           {pct === 1 ? '100% (Max)' : `${pct * 100}%`}
                         </button>
@@ -2495,15 +3058,15 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                     value={payoutRequestAmount}
                     onChange={(e) => setPayoutRequestAmount(e.target.value)}
                     placeholder={`Max ₹${availablePendingPayout.toLocaleString('en-IN')}`}
-                    className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00] font-mono font-bold"
+                    className="w-full px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-mono font-bold"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-white/70 block mb-1">
+                  <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">
                     Destination Coordinates
                   </label>
-                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white/80 font-medium">
+                  <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-800 font-medium">
                     {partner.payoutMethod || 'UPI'}{' '}
                     {partner.payoutDetails?.upiId ? `(${partner.payoutDetails.upiId})` : ''}
                     {partner.payoutDetails?.accountNumber ? `(A/C: ${partner.payoutDetails.accountNumber})` : ''}
@@ -2511,7 +3074,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-white/70 block mb-1">
+                  <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">
                     Optional Reference Notes
                   </label>
                   <textarea
@@ -2519,21 +3082,21 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                     value={payoutNotes}
                     onChange={(e) => setPayoutNotes(e.target.value)}
                     placeholder="e.g. Milestone settlement withdrawal"
-                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-[#CCFF00]"
+                    className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
                   />
                 </div>
 
-                <div className="flex gap-3 pt-2">
+                <div className="flex gap-2.5 pt-2">
                   <button
                     type="button"
                     onClick={() => setIsPayoutModalOpen(false)}
-                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition-colors cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-lg shadow-[#CCFF00]/15"
+                    className="flex-1 py-2.5 rounded-xl bg-black hover:bg-gray-800 text-white text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-md"
                   >
                     Confirm Withdrawal
                   </button>
@@ -2544,50 +3107,54 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* MODAL 3: QR CODE PREVIEW */}
+      {/* ======================================================== */}
+      {/* MODAL 3: QR CODE PREVIEW                                 */}
+      {/* ======================================================== */}
       <AnimatePresence>
         {isQrModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm p-6 sm:p-7 rounded-3xl bg-[#0C101A] border border-white/15 shadow-2xl flex flex-col items-center text-center space-y-4"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-sm p-6 sm:p-7 rounded-3xl bg-white border border-gray-200 shadow-2xl flex flex-col items-center text-center space-y-4"
             >
               <div className="w-full flex justify-end">
                 <button
                   onClick={() => setIsQrModalOpen(false)}
-                  className="p-1 rounded-full hover:bg-white/10 text-white/50 hover:text-white cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-black cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="w-12 h-12 rounded-2xl bg-[#CCFF00]/10 border border-[#CCFF00]/20 flex items-center justify-center text-[#CCFF00]">
-                <QrCode size={24} />
+              <div className="w-12 h-12 rounded-2xl bg-black text-[#CCFF00] font-black italic flex items-center justify-center text-xl shadow-md">
+                A
               </div>
 
               <div>
-                <h3 className="text-lg font-black uppercase text-white font-['Outfit']">Your Partner QR Code</h3>
-                <p className="text-xs text-white/50 mt-1">
-                  Have prospective clients scan this directly from your mobile screen during live meetings.
+                <h3 className="text-lg font-black uppercase text-gray-900 font-['Outfit']">Partner QR Code</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Scan to open your personalized referral landing page.
                 </p>
               </div>
 
               {/* QR Image Box */}
-              <div className="p-4 bg-white rounded-2xl shadow-xl">
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 shadow-xs">
                 <img
                   src={qrImageUrl}
                   alt="Partner Referral QR Code"
-                  className="w-48 h-48 rounded-lg"
+                  className="w-52 h-52 rounded-lg"
                 />
               </div>
 
-              <span className="text-xs font-mono font-bold text-[#CCFF00]">Code: {partner.referralCode}</span>
+              <span className="text-xs font-mono font-bold text-gray-900 bg-gray-100 px-3 py-1 rounded-full">
+                Code: {partner.referralCode}
+              </span>
 
               <button
                 onClick={handleCopyLink}
-                className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors cursor-pointer"
+                className="w-full py-2.5 rounded-xl bg-black text-white text-xs font-bold transition-colors cursor-pointer hover:bg-gray-800"
               >
                 {copiedLink ? 'Link Copied!' : 'Copy Referral URL'}
               </button>
@@ -2595,6 +3162,19 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      {/* ======================================================== */}
+      {/* MANDATORY / REVIEW: PARTNER TERMS & LEGAL AGREEMENT MODAL*/}
+      {/* ======================================================== */}
+      <PartnerTermsModal
+        partner={partner}
+        isOpen={!partner.termsAccepted || isTermsModalOpen}
+        isMandatory={!partner.termsAccepted}
+        alreadyAccepted={Boolean(partner.termsAccepted)}
+        onAccept={handleAcceptTerms}
+        onClose={() => setIsTermsModalOpen(false)}
+      />
+
     </div>
   );
 };

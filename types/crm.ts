@@ -7,7 +7,8 @@ export type UserRole =
   | 'Sales Executive' 
   | 'Project Manager' 
   | 'Developer' 
-  | 'Accountant';
+  | 'Accountant'
+  | 'Partnership';
 
 export type CrmModuleKey = 
   | 'dashboard'
@@ -154,6 +155,22 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, Record<CrmModuleKey, boo
     analytics: true,
     audit: false,
     settings: false
+  },
+  'Partnership': {
+    dashboard: true,
+    leads: true,
+    clients: true,
+    projects: true,
+    tasks: true,
+    issues: true,
+    finance: true,
+    partners: false,
+    documents: true,
+    vault: true,
+    calendar: true,
+    analytics: true,
+    audit: false,
+    settings: false
   }
 };
 
@@ -238,6 +255,8 @@ export interface Client {
   partnerId?: string;
   partnerName?: string;
   partnerCode?: string;
+  createdById?: string;
+  createdByName?: string;
   totalValue: number;
   totalPaid: number;
   outstandingAmount: number;
@@ -631,6 +650,17 @@ export interface Partner {
   lastLoginAt?: string;
   hasPassword?: boolean;
   passwordHash?: string;
+  code?: string;
+  avatarUrl?: string;
+  googleId?: string;
+  termsAccepted?: boolean;
+  termsAcceptedAt?: string;
+  termsVersion?: string;
+  isCustomRate?: boolean; // When true, this partner has a fixed percentage override set by Super Admin
+  customCommissionRate?: number; // e.g. 0.30 for 30%, 0.18 for 18%
+  customRateReason?: string; // e.g. "VIP Agency Agreement", "Strategic Enterprise Partner"
+  customRateSetAt?: string; // Timestamp when custom rate was configured
+  customRateSetBy?: string; // Admin who configured it (e.g. "Abhinav (Super Admin)")
   createdAt: string;
   updatedAt?: string;
 }
@@ -655,62 +685,201 @@ export interface PartnerReferral {
   commissionRate: number;
   commissionEarned: number;
   commissionPaid: number;
+  driveFolderId?: string;
+  driveFolderUrl?: string;
+  documents?: ClientDocument[];
   notes?: string;
   createdAt: string;
   updatedAt?: string;
 }
 
-export type PartnerTierName = 'Bronze' | 'Silver' | 'Gold';
+export interface ClientDocument {
+  id: string;
+  title: string;
+  docType?: string;
+  leadId?: string;
+  clientId?: string;
+  leadName?: string;
+  fileUrl: string;
+  downloadUrl?: string;
+  fileSize?: string;
+  uploadedBy?: string;
+  driveFileId?: string;
+  driveFolderId?: string;
+  driveFolderUrl?: string;
+  createdAt: string;
+}
+
+export type PartnerTierName = 'Starter' | 'Base' | 'Pro' | 'Elite' | 'Bronze' | 'Silver' | 'Gold';
 
 export interface PartnerTierInfo {
   tier: PartnerTierName;
-  commissionRate: number; // 0.10 for Bronze, 0.15 for Silver, 0.20 for Gold
-  closedDealsCount: number;
+  commissionRate: number; // 0.10 for Starter, 0.15 for Base, 0.20 for Pro, 0.25 for Elite
+  billingVolume: number;
+  closedDealsCount?: number;
+  thresholdMin: number;
+  thresholdMax?: number;
   nextTier?: PartnerTierName;
-  dealsNeededForNextTier: number;
+  volumeNeededForNextTier: number;
+  dealsNeededForNextTier?: number;
   progressPercent: number; // 0 to 100
   tierColor: string;
   badgeLabel: string;
+  ruleDescription: string;
+  bonusNote?: string;
 }
 
-export const calculatePartnerTier = (closedDealsCount: number): PartnerTierInfo => {
-  const safeCount = Math.max(0, closedDealsCount || 0);
-  if (safeCount >= 10) {
+export const calculatePartnerTier = (
+  billingVolumeOrDeals: number,
+  optionalClosedDeals?: number
+): PartnerTierInfo => {
+  let volume = Math.max(0, billingVolumeOrDeals || 0);
+  let deals = optionalClosedDeals !== undefined ? optionalClosedDeals : 0;
+
+  // Handle legacy deal-count callers gracefully if number passed is small (e.g. <= 25)
+  if (billingVolumeOrDeals > 0 && billingVolumeOrDeals <= 25 && optionalClosedDeals === undefined) {
+    deals = billingVolumeOrDeals;
+    // Map deal count estimation: 1 deal -> ~₹1.5L, 3 deals -> ~₹3.5L, 5 deals -> ~₹6L, 10 deals -> ~₹13L
+    if (deals >= 10) volume = 1250000;
+    else if (deals >= 4) volume = 500000;
+    else if (deals >= 2) volume = 300000;
+    else volume = 150000;
+  }
+
+  // Tier 4: Elite Bonus Tier (Exceeds ₹12,00,000) -> 25% Share (+5% Performance Bonus)
+  if (volume > 1200000) {
     return {
-      tier: 'Gold',
-      commissionRate: 0.20,
-      closedDealsCount: safeCount,
+      tier: 'Elite',
+      commissionRate: 0.25,
+      billingVolume: volume,
+      closedDealsCount: deals,
+      thresholdMin: 1200000,
       dealsNeededForNextTier: 0,
+      volumeNeededForNextTier: 0,
       progressPercent: 100,
-      tierColor: '#EAB308', // Amber/Gold
-      badgeLabel: 'Gold Partner (20%)'
+      tierColor: '#CCFF00', // AGX Luminous Lime
+      badgeLabel: 'Elite Bonus Tier (25%)',
+      ruleDescription: 'Exceeds ₹12,00,000 monthly business generated',
+      bonusNote: '(+5% Performance Bonus on total monthly business closed).'
     };
   }
-  if (safeCount >= 4) {
-    const dealsNeeded = 10 - safeCount;
-    const progress = Math.min(100, Math.round(((safeCount - 4) / 6) * 100));
+
+  // Tier 3: Pro Tier (Above ₹4,00,000 to ₹12,00,000) -> 20% Share (Applied to entire month's business)
+  if (volume > 400000) {
+    const volumeNeeded = 1200000 - volume;
+    const progress = Math.min(100, Math.max(5, Math.round(((volume - 400000) / 800000) * 100)));
     return {
-      tier: 'Silver',
-      commissionRate: 0.15,
-      closedDealsCount: safeCount,
-      nextTier: 'Gold',
-      dealsNeededForNextTier: dealsNeeded,
+      tier: 'Pro',
+      commissionRate: 0.20,
+      billingVolume: volume,
+      closedDealsCount: deals,
+      thresholdMin: 400000,
+      thresholdMax: 1200000,
+      nextTier: 'Elite',
+      volumeNeededForNextTier: volumeNeeded,
+      dealsNeededForNextTier: Math.max(1, Math.ceil(volumeNeeded / 150000)),
       progressPercent: progress,
-      tierColor: '#94A3B8', // Silver Slate
-      badgeLabel: 'Silver Partner (15%)'
+      tierColor: '#10B981', // Emerald Green
+      badgeLabel: 'Pro Tier (20%)',
+      ruleDescription: 'Above ₹4,00,000 monthly business generated',
+      bonusNote: "Applied to all business closed in that month, not just the overflow."
     };
   }
-  const dealsNeeded = 4 - safeCount;
-  const progress = Math.min(100, Math.round((safeCount / 4) * 100));
+
+  // Tier 2: Base Tier (₹2,50,001 to ₹4,00,000) -> 15% Share
+  if (volume > 250000) {
+    const volumeNeeded = 400000 - volume;
+    const progress = Math.min(100, Math.max(5, Math.round(((volume - 250000) / 150000) * 100)));
+    return {
+      tier: 'Base',
+      commissionRate: 0.15,
+      billingVolume: volume,
+      closedDealsCount: deals,
+      thresholdMin: 250000,
+      thresholdMax: 400000,
+      nextTier: 'Pro',
+      volumeNeededForNextTier: volumeNeeded,
+      dealsNeededForNextTier: Math.max(1, Math.ceil(volumeNeeded / 100000)),
+      progressPercent: progress,
+      tierColor: '#3B82F6', // Tech Blue
+      badgeLabel: 'Base Tier (15%)',
+      ruleDescription: '₹2,50,001 to ₹4,00,000 monthly business generated',
+      bonusNote: 'Standard agency rate. Flexible based on actual business closed.'
+    };
+  }
+
+  // Tier 1: Starter Tier (Up to ₹2,50,000) -> 10% Share
+  const volumeNeeded = 250000 - volume;
+  const progress = Math.min(100, Math.round((volume / 250000) * 100));
   return {
-    tier: 'Bronze',
+    tier: 'Starter',
     commissionRate: 0.10,
-    closedDealsCount: safeCount,
-    nextTier: 'Silver',
-    dealsNeededForNextTier: dealsNeeded,
-    progressPercent: progress,
-    tierColor: '#D97706', // Bronze Amber
-    badgeLabel: 'Bronze Partner (10%)'
+    billingVolume: volume,
+    closedDealsCount: deals,
+    thresholdMin: 0,
+    thresholdMax: 250000,
+    nextTier: 'Base',
+    volumeNeededForNextTier: volumeNeeded,
+    dealsNeededForNextTier: Math.max(1, Math.ceil(volumeNeeded / 75000)),
+    progressPercent: Math.max(4, progress),
+    tierColor: '#94A3B8', // Slate
+    badgeLabel: 'Starter Tier (10%)',
+    ruleDescription: 'Up to ₹2,50,000 monthly business generated',
+    bonusNote: 'Flexible entry tier with zero mandatory quotas or commitments.'
+  };
+};
+
+export interface EffectivePartnerRateInfo {
+  rate: number;
+  percentage: number;
+  isCustom: boolean;
+  tier: PartnerTierName | 'Custom';
+  tierColor: string;
+  badgeLabel: string;
+  ruleDescription: string;
+  reason?: string;
+  nextTier?: PartnerTierName;
+  volumeNeededForNextTier?: number;
+  dealsNeededForNextTier?: number;
+}
+
+export const getEffectivePartnerRate = (
+  partner: Pick<Partner, 'commissionRate' | 'isCustomRate' | 'customCommissionRate' | 'customRateReason'>,
+  billingVolume: number = 0
+): EffectivePartnerRateInfo => {
+  if (partner.isCustomRate && typeof partner.customCommissionRate === 'number' && partner.customCommissionRate > 0) {
+    const rate = partner.customCommissionRate;
+    const percentage = Math.round(rate * 1000) / 10;
+    return {
+      rate,
+      percentage,
+      isCustom: true,
+      tier: 'Custom',
+      tierColor: '#A855F7', // Royal Purple for VIP Custom Overrides
+      badgeLabel: `Fixed ${percentage}% (Custom)`,
+      ruleDescription: partner.customRateReason || 'Super Admin assigned custom fixed percentage override',
+      reason: partner.customRateReason,
+      nextTier: undefined,
+      volumeNeededForNextTier: 0,
+      dealsNeededForNextTier: 0
+    };
+  }
+
+  const tierInfo = calculatePartnerTier(billingVolume);
+  const rate = partner.commissionRate || tierInfo.commissionRate;
+  const percentage = Math.round(rate * 100);
+  return {
+    rate,
+    percentage,
+    isCustom: false,
+    tier: tierInfo.tier,
+    tierColor: tierInfo.tierColor,
+    badgeLabel: `${tierInfo.badgeLabel}`,
+    ruleDescription: tierInfo.ruleDescription,
+    reason: undefined,
+    nextTier: tierInfo.nextTier,
+    volumeNeededForNextTier: tierInfo.volumeNeededForNextTier,
+    dealsNeededForNextTier: tierInfo.dealsNeededForNextTier
   };
 };
 

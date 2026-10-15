@@ -20,11 +20,14 @@ dist-ssr
 .env.*.local
 credentials.json
 token.json
+service-account.json
 
 # Intermediate working files (Layer 3)
 .tmp/*
 !.tmp/.gitkeep
 scratch/
+server/data/*.json
+!server/data/.gitkeep
 
 # Python artifacts
 __pycache__/

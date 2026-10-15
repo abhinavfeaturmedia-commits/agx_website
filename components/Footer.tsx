@@ -290,7 +290,7 @@ const Footer: React.FC<FooterProps> = ({
                     <p>At AGXperience Inc., we treat your proprietary business data and automation blueprints with institutional-grade confidentiality.</p>
                     <p><strong>1. Data Ownership:</strong> All custom code, agent workflows, vectors, and credentials built for your company are 100% owned by your organization upon deployment.</p>
                     <p><strong>2. Zero Model Training:</strong> We enforce zero-retention and zero-training policies across our LLM integrations (OpenAI, Anthropic Claude, Perplexity). Your business data is never used to train public models.</p>
-                    <p><strong>3. Encryption:</strong> All webhook endpoints and API keys are stored with AES-256 encryption within isolated Supabase vaults.</p>
+                    <p><strong>3. Encryption:</strong> All webhook endpoints and API keys are stored with AES-256 encryption within isolated database credentials vaults.</p>
                   </>
                 ) : (
                   <>

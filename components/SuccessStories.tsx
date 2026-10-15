@@ -39,7 +39,7 @@ const testimonials: CaseStudyDetail[] = [
     size: "SCALED",
     challenge: "Support inbox flooded with 600+ repetitive tier-1 tickets daily. Average response time was 6.5 hours, hurting NPS scores.",
     solution: "Custom multi-agent triage system with real-time vector search on knowledge base and automated escalation triggers.",
-    techStack: ["Claude 3.5 Sonnet", "n8n Workflow Engine", "Zendesk API", "Supabase Vector"],
+    techStack: ["Claude 3.5 Sonnet", "n8n Workflow Engine", "Zendesk API", "Enterprise Vector DB"],
     results: [
       "Response time dropped from 6.5 hours to 28 seconds",
       "80% resolved autonomously without human touch",

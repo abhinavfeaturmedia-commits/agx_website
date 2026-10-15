@@ -120,10 +120,16 @@ export const PartnerAuth: React.FC<PartnerAuthProps> = ({
   const handleGoogleAuth = async () => {
     setIsLoading(true);
     setErrorMessage('');
-    const { error } = await authService.signInWithGoogle('/partner/portal');
+    const { partner, error } = await authService.signInWithGooglePartner();
     if (error) {
       setErrorMessage(error.message || 'Google authentication error. Please try again.');
       toast.error('Google Sign-In Error', error.message);
+      setIsLoading(false);
+    } else if (partner) {
+      toast.success('Welcome Back! 🎉', `Signed in with Google as ${partner.name}`);
+      onLoginSuccess(partner);
+      setIsLoading(false);
+    } else {
       setIsLoading(false);
     }
   };

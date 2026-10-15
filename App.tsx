@@ -238,7 +238,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Handle Supabase Auth state changes (e.g. Google OAuth redirect callback)
+  // Handle Auth state changes (e.g. partner login/session update)
   useEffect(() => {
     const unsubscribe = authService.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
@@ -246,7 +246,7 @@ const App: React.FC = () => {
           const path = window.location.pathname;
           const hash = window.location.hash;
           if (path.startsWith('/partner') || hash.startsWith('#partner')) {
-            const syncedPartner = await authService.syncPartnerFromSupabaseUser(session.user);
+            const syncedPartner = authService.getCurrentPartner();
             if (syncedPartner) {
               setActivePartner(syncedPartner);
               setCurrentView('partner-portal');

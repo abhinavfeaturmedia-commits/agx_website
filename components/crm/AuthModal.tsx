@@ -66,7 +66,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               AG<span className="text-[#CCFF00]">X</span> Enterprise Access
             </h3>
             <p className="text-[11px] text-gray-400">
-              Supabase Auth & Session Verification
+              MySQL Database Auth & Session Verification
             </p>
           </div>
         </div>

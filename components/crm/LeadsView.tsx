@@ -734,7 +734,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
             Lead Pipeline & Deal Engine
           </h2>
           <p className="text-xs text-gray-500">
-            Systematic deal acquisition workflow with 1-click client conversion, touchpoint logging & Supabase sync.
+            Systematic deal acquisition workflow with 1-click client conversion, touchpoint logging & MySQL sync.
           </p>
         </div>
 

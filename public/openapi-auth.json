@@ -1077,7 +1077,7 @@
                   },
                   "platform_name": {
                     "type": "string",
-                    "description": "Service name to store (e.g. Supabase, AWS)"
+                    "description": "Service name to store (e.g. MySQL, AWS)"
                   },
                   "username": {
                     "type": "string"

@@ -656,7 +656,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ store, onNavigate, i
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
-                  <span className="font-mono text-[10px]">Sync: Supabase</span>
+                  <span className="font-mono text-[10px]">Sync: MySQL</span>
                   <span className="font-bold text-gray-900 flex items-center gap-1 group-hover:text-indigo-600">
                     Inspect <ArrowRight size={12} />
                   </span>

@@ -121,7 +121,7 @@ const services: ServiceItem[] = [
       "Integrated payment gateways (Stripe, Razorpay)"
     ],
     timeline: "14–21 Days",
-    stack: ["React", "TypeScript", "TailwindCSS", "Supabase"]
+    stack: ["React", "TypeScript", "TailwindCSS", "PostgreSQL / MySQL"]
   },
   {
     id: "07",

@@ -1,5 +1,4 @@
-// Supabase & Hostinger Node.js Data Service Layer for AGX CRM & Business Operating System
-import { supabase } from './supabase';
+// 100% Native MySQL & Node.js Express Data Service Layer for AGX CRM & Business Operating System
 import { apiClient } from './apiClient';
 import {
   Lead, LeadStatus, LeadActivity, LeadActivityType, Client, Project, ProjectMilestone, ProjectStatus,
@@ -362,6 +361,14 @@ export interface DbPartner {
   pending_earnings: number;
   notes: string | null;
   last_login_at?: string | null;
+  terms_accepted?: number | boolean | null;
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
+  is_custom_rate?: number | boolean | null;
+  custom_commission_rate?: number | null;
+  custom_rate_reason?: string | null;
+  custom_rate_set_at?: string | null;
+  custom_rate_set_by?: string | null;
   password_hash?: string | null;
   created_at: string;
   updated_at: string;
@@ -470,6 +477,8 @@ export function mapClientFromDb(row: DbClient): Client {
     partnerId: (row as any).partner_id || undefined,
     partnerName: (row as any).partner_name || undefined,
     partnerCode: (row as any).partner_code || undefined,
+    createdById: (row as any).created_by_id || undefined,
+    createdByName: (row as any).created_by_name || undefined,
     totalValue: Number(row.total_value) || 0,
     totalPaid: Number(row.total_paid) || 0,
     outstandingAmount: Number(row.outstanding_amount) || 0,
@@ -858,6 +867,16 @@ export function mapPartnerFromDb(row: DbPartner): Partner {
     pendingEarnings: Number(row.pending_earnings) || 0,
     notes: row.notes || undefined,
     lastLoginAt: row.last_login_at || row.updated_at || row.created_at,
+    termsAccepted: Boolean(row.terms_accepted || (row.payout_details as any)?.termsAccepted),
+    termsAcceptedAt: row.terms_accepted_at || (row.payout_details as any)?.termsAcceptedAt || undefined,
+    termsVersion: row.terms_version || (row.payout_details as any)?.termsVersion || undefined,
+    isCustomRate: Boolean(row.is_custom_rate || (row.payout_details as any)?.isCustomRate),
+    customCommissionRate: row.custom_commission_rate !== null && row.custom_commission_rate !== undefined 
+      ? Number(row.custom_commission_rate) 
+      : ((row.payout_details as any)?.customCommissionRate ? Number((row.payout_details as any)?.customCommissionRate) : undefined),
+    customRateReason: row.custom_rate_reason || (row.payout_details as any)?.customRateReason || undefined,
+    customRateSetAt: row.custom_rate_set_at || (row.payout_details as any)?.customRateSetAt || undefined,
+    customRateSetBy: row.custom_rate_set_by || (row.payout_details as any)?.customRateSetBy || undefined,
     hasPassword: Boolean(row.password_hash || (row.payout_details as any)?.passwordHash),
     passwordHash: row.password_hash || (row.payout_details as any)?.passwordHash || undefined,
     createdAt: row.created_at,
@@ -919,175 +938,48 @@ export const crmService = {
       if (health.online) {
         return { ok: true, message: `Node.js + MySQL (${(health as any).database?.database || 'connected'})` };
       }
-    } catch (_) {}
-
-    try {
-      const { error } = await supabase.from('profiles').select('id').limit(1);
-      if (error) throw error;
-      return { ok: true, message: 'Supabase Live' };
+      return { ok: false, message: health.error || 'Server offline' };
     } catch (e: any) {
       return { ok: false, message: e?.message || 'Connection failed' };
     }
   },
 
-  // Storage Attachment Uploader
+  // Storage Attachment Uploader (Native Node.js uploads)
   async uploadAttachment(bucket: 'crm-documents' | 'crm-agreements' | 'crm-invoices' | 'crm-attachments', file: File, customPath?: string): Promise<{ publicUrl: string | null; error: Error | null }> {
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = customPath || `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: true
-      });
-
-      if (uploadError) {
-        console.warn(`Supabase storage upload error in ${bucket}:`, uploadError);
-        return { publicUrl: null, error: uploadError };
-      }
-
-      const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
-      return { publicUrl: publicUrlData.publicUrl, error: null };
-    } catch (err: any) {
-      console.warn(`Storage upload exception in ${bucket}:`, err);
-      return { publicUrl: null, error: err };
-    }
+    return await apiClient.upload(bucket, file, customPath);
   },
 
-  // Full Initial Fetch
+  // Full Initial Fetch (From MySQL via Express /api/crm/all)
   async fetchAllData() {
-    // 1. Try Node.js Express + MySQL API first if available on Hostinger
-    try {
-      const apiRes = await apiClient.get<any>('/crm/all');
-      if (apiRes && apiRes.success && apiRes.data) {
-        const d = apiRes.data;
-        const leadActivities = (d.leadActivities || []).map(mapLeadActivityFromDb);
-        const milestones = (d.milestones || []).map(mapMilestoneFromDb);
-        const clients = (d.clients || []).filter((r: any) => !r.deleted_at).map(mapClientFromDb);
-        const projects = (d.projects || []).filter((r: any) => !r.deleted_at).map((p: any) => mapProjectFromDb(p, milestones));
-        const invoices = (d.invoices || []).filter((r: any) => !r.deleted_at).map((i: any) => mapInvoiceFromDb(i, projects));
-        const leads = (d.leads || []).filter((r: any) => !r.deleted_at).map((l: any) => mapLeadFromDb(l, leadActivities));
-        const tasks = (d.tasks || []).filter((r: any) => !r.deleted_at).map((t: any) => mapTaskFromDb(t, clients, projects, leads));
-        const payments = (d.payments || []).filter((r: any) => !r.deleted_at).map((p: any) => mapPaymentFromDb(p, clients, projects, invoices));
-        const expenses = (d.expenses || []).filter((r: any) => !r.deleted_at).map((e: any) => mapExpenseFromDb(e, clients, projects));
-        const agreements = (d.agreements || []).filter((r: any) => !r.deleted_at).map((a: any) => mapAgreementFromDb(a, clients, projects, leads));
-        const documents = (d.documents || []).filter((r: any) => !r.deleted_at).map((doc: any) => mapDocumentFromDb(doc, clients, projects, leads));
-        const credentials = (d.credentials || []).filter((r: any) => !r.deleted_at).map((c: any) => mapCredentialFromDb(c, clients, projects));
-        const events = (d.events || []).filter((r: any) => !r.deleted_at).map((e: any) => mapCalendarEventFromDb(e, leads));
-        const notifications = (d.notifications || []).map(mapNotificationFromDb);
-        const auditLogs = (d.auditLogs || []).map(mapAuditLogFromDb);
-        const partners = (d.partners || []).filter((r: any) => !r.deleted_at).map(mapPartnerFromDb);
-        const partnerReferrals = (d.partnerReferrals || []).filter((r: any) => !r.deleted_at).map((r: any) => mapPartnerReferralFromDb(r, partners));
-        const partnerPayouts = (d.partnerPayouts || []).filter((r: any) => !r.deleted_at).map((p: any) => mapPartnerPayoutFromDb(p, partners));
-        const quotations = (d.quotations || []).filter((r: any) => !r.deleted_at).map((q: any) => mapQuotationFromDb(q, leads, clients, projects));
-
-        return {
-          profiles: (d.profiles || []).map(mapProfileFromDb),
-          leads,
-          leadActivities,
-          clients,
-          projects,
-          tasks,
-          invoices,
-          quotations,
-          payments,
-          expenses,
-          agreements,
-          documents,
-          credentials,
-          events,
-          notifications,
-          auditLogs,
-          partners,
-          partnerReferrals,
-          partnerPayouts
-        };
-      }
-    } catch (nodeErr) {
-      console.warn('[crmService] Node.js MySQL API unavailable, falling back to Supabase:', nodeErr);
+    const apiRes = await apiClient.get<any>('/crm/all');
+    if (!apiRes || !apiRes.success || !apiRes.data) {
+      throw new Error(apiRes?.error || 'Failed to fetch data from MySQL backend');
     }
-
-    // 2. Supabase Cloud Fallback Fetch
-    const [
-      profilesRes,
-      leadsRes,
-      leadActivitiesRes,
-      clientsRes,
-      projectsRes,
-      milestonesRes,
-      tasksRes,
-      invoicesRes,
-      paymentsRes,
-      expensesRes,
-      agreementsRes,
-      documentsRes,
-      credentialsRes,
-      eventsRes,
-      notificationsRes,
-      auditLogsRes,
-      partnersRes,
-      referralsRes,
-      payoutsRes,
-      quotationsRes
-    ] = await Promise.all([
-      supabase.from('profiles').select('*').order('created_at', { ascending: true }),
-      supabase.from('leads').select('*').order('created_at', { ascending: false }),
-      supabase.from('lead_activities').select('*').order('created_at', { ascending: false }),
-      supabase.from('clients').select('*').order('created_at', { ascending: false }),
-      supabase.from('projects').select('*').order('created_at', { ascending: false }),
-      supabase.from('project_milestones').select('*').order('created_at', { ascending: true }),
-      supabase.from('tasks').select('*').order('created_at', { ascending: false }),
-      supabase.from('invoices').select('*').order('created_at', { ascending: false }),
-      supabase.from('payments').select('*').order('created_at', { ascending: false }),
-      supabase.from('expenses').select('*').order('created_at', { ascending: false }),
-      supabase.from('agreements').select('*').order('created_at', { ascending: false }),
-      supabase.from('documents').select('*').order('created_at', { ascending: false }),
-      supabase.from('credentials_vault').select('*').order('created_at', { ascending: false }),
-      supabase.from('calendar_events').select('*').order('start_time', { ascending: true }),
-      supabase.from('notifications').select('*').order('created_at', { ascending: false }),
-      supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100),
-      supabase.from('partners').select('*').order('created_at', { ascending: false }),
-      supabase.from('partner_referrals').select('*').order('created_at', { ascending: false }),
-      supabase.from('partner_payouts').select('*').order('created_at', { ascending: false }),
-      supabase.from('quotations').select('*').order('created_at', { ascending: false })
-    ]);
-
-    // Verify whether critical entity queries failed (e.g. paused DB, network offline, missing tables)
-    const criticalQueries = [
-      { name: 'profiles', res: profilesRes },
-      { name: 'leads', res: leadsRes },
-      { name: 'clients', res: clientsRes },
-      { name: 'projects', res: projectsRes }
-    ];
-
-    const failedQueries = criticalQueries.filter(q => q.res.error);
-    if (failedQueries.length > 0) {
-      const errorMsg = failedQueries.map(q => `${q.name}: ${q.res.error?.message}`).join('; ');
-      console.warn(`[crmService.fetchAllData] Critical table queries failed: ${errorMsg}`);
-      throw new Error(`Supabase query failed: ${failedQueries[0].res.error?.message || 'Network / Schema Error'}`);
-    }
-
-    const leadActivities = leadActivitiesRes.error ? undefined : (leadActivitiesRes.data || []).map(mapLeadActivityFromDb);
-    const milestones = milestonesRes.error ? undefined : (milestonesRes.data || []).map(mapMilestoneFromDb);
-    const clients = clientsRes.error ? undefined : (clientsRes.data || []).filter((r: any) => !r.deleted_at).map(mapClientFromDb);
-    const projects = projectsRes.error ? undefined : (projectsRes.data || []).filter((r: any) => !r.deleted_at).map(p => mapProjectFromDb(p, milestones || []));
-    const invoices = invoicesRes.error ? undefined : (invoicesRes.data || []).filter((r: any) => !r.deleted_at).map(i => mapInvoiceFromDb(i, projects || []));
-    const leads = leadsRes.error ? undefined : (leadsRes.data || []).filter((r: any) => !r.deleted_at).map(l => mapLeadFromDb(l, leadActivities || []));
-    const tasks = tasksRes.error ? undefined : (tasksRes.data || []).filter((r: any) => !r.deleted_at).map(t => mapTaskFromDb(t, clients || [], projects || [], leads || []));
-    const payments = paymentsRes.error ? undefined : (paymentsRes.data || []).filter((r: any) => !r.deleted_at).map(p => mapPaymentFromDb(p, clients || [], projects || [], invoices || []));
-    const expenses = expensesRes.error ? undefined : (expensesRes.data || []).filter((r: any) => !r.deleted_at).map(e => mapExpenseFromDb(e, clients || [], projects || []));
-    const agreements = agreementsRes.error ? undefined : (agreementsRes.data || []).filter((r: any) => !r.deleted_at).map(a => mapAgreementFromDb(a, clients || [], projects || [], leads || []));
-    const documents = documentsRes.error ? undefined : (documentsRes.data || []).filter((r: any) => !r.deleted_at).map(d => mapDocumentFromDb(d, clients || [], projects || [], leads || []));
-    const credentials = credentialsRes.error ? undefined : (credentialsRes.data || []).filter((r: any) => !r.deleted_at).map(c => mapCredentialFromDb(c, clients || [], projects || []));
-    const events = eventsRes.error ? undefined : (eventsRes.data || []).filter((r: any) => !r.deleted_at).map(e => mapCalendarEventFromDb(e, leads || []));
-    const notifications = notificationsRes.error ? undefined : (notificationsRes.data || []).map(mapNotificationFromDb);
-    const auditLogs = auditLogsRes.error ? undefined : (auditLogsRes.data || []).map(mapAuditLogFromDb);
-    const partners = (partnersRes as any)?.error ? undefined : ((partnersRes as any)?.data || []).filter((r: any) => !r.deleted_at).map(mapPartnerFromDb);
-    const partnerReferrals = (referralsRes as any)?.error ? undefined : ((referralsRes as any)?.data || []).filter((r: any) => !r.deleted_at).map((r: any) => mapPartnerReferralFromDb(r, partners || []));
-    const partnerPayouts = (payoutsRes as any)?.error ? undefined : ((payoutsRes as any)?.data || []).filter((r: any) => !r.deleted_at).map((p: any) => mapPartnerPayoutFromDb(p, partners || []));
-    const quotations = (quotationsRes as any)?.error ? undefined : ((quotationsRes as any)?.data || []).filter((r: any) => !r.deleted_at).map((q: any) => mapQuotationFromDb(q, leads || [], clients || [], projects || []));
+    const d = apiRes.data;
+    const leadActivities = (d.leadActivities || []).map(mapLeadActivityFromDb);
+    const milestones = (d.milestones || []).map(mapMilestoneFromDb);
+    const clients = (d.clients || []).filter((r: any) => !r.deleted_at).map(mapClientFromDb);
+    const projects = (d.projects || []).filter((r: any) => !r.deleted_at).map((p: any) => mapProjectFromDb(p, milestones));
+    const invoices = (d.invoices || []).filter((r: any) => !r.deleted_at).map((i: any) => mapInvoiceFromDb(i, projects));
+    const leads = (d.leads || []).filter((r: any) => !r.deleted_at).map((l: any) => mapLeadFromDb(l, leadActivities));
+    const tasks = (d.tasks || []).filter((r: any) => !r.deleted_at).map((t: any) => mapTaskFromDb(t, clients, projects, leads));
+    const payments = (d.payments || []).filter((r: any) => !r.deleted_at).map((p: any) => mapPaymentFromDb(p, clients, projects, invoices));
+    const expenses = (d.expenses || []).filter((r: any) => !r.deleted_at).map((e: any) => mapExpenseFromDb(e, clients, projects));
+    const agreements = (d.agreements || []).filter((r: any) => !r.deleted_at).map((a: any) => mapAgreementFromDb(a, clients, projects, leads));
+    const documents = (d.documents || []).filter((r: any) => !r.deleted_at).map((doc: any) => mapDocumentFromDb(doc, clients, projects, leads));
+    const credentials = (d.credentials || []).filter((r: any) => !r.deleted_at).map((c: any) => mapCredentialFromDb(c, clients, projects));
+    const events = (d.events || []).filter((r: any) => !r.deleted_at).map((e: any) => mapCalendarEventFromDb(e, leads));
+    const notifications = (d.notifications || []).map(mapNotificationFromDb);
+    const auditLogs = (d.auditLogs || []).map(mapAuditLogFromDb);
+    const partners = (d.partners || []).filter((r: any) => !r.deleted_at).map(mapPartnerFromDb);
+    const partnerReferrals = (d.partnerReferrals || []).filter((r: any) => !r.deleted_at).map((r: any) => mapPartnerReferralFromDb(r, partners));
+    const partnerPayouts = (d.partnerPayouts || []).filter((r: any) => !r.deleted_at).map((p: any) => mapPartnerPayoutFromDb(p, partners));
+    const quotations = (d.quotations || []).filter((r: any) => !r.deleted_at).map((q: any) => mapQuotationFromDb(q, leads, clients, projects));
+    const issues = (d.issues || []).filter((r: any) => !r.deleted_at).map(mapIssueFromDb);
 
     return {
-      profiles: (profilesRes.data || []).map(mapProfileFromDb),
+      mysqlConnected: Boolean(apiRes.mysqlConnected),
+      profiles: (d.profiles || []).map(mapProfileFromDb),
       leads,
       leadActivities,
       clients,
@@ -1103,47 +995,34 @@ export const crmService = {
       events,
       notifications,
       auditLogs,
+      issues,
       partners,
       partnerReferrals,
       partnerPayouts
     };
   },
 
-  // Resilient Soft Delete helper with fallback
+  // Soft Delete helper
   async softDelete(tableName: string, id: string): Promise<void> {
-    try {
-      const { error } = await supabase.from(tableName).update({ deleted_at: new Date().toISOString() }).eq('id', id);
-      if (error) {
-        console.warn(`Soft delete fallback on ${tableName}:`, error.message);
-        const { error: hardDelErr } = await supabase.from(tableName).delete().eq('id', id);
-        if (hardDelErr) {
-          console.error(`Hard delete error on ${tableName}:`, hardDelErr);
-          throw hardDelErr;
-        }
-      }
-    } catch (_) {
-      const { error: hardDelErr } = await supabase.from(tableName).delete().eq('id', id);
-      if (hardDelErr) {
-        console.error(`Hard delete error on ${tableName}:`, hardDelErr);
-        throw hardDelErr;
-      }
+    const res = await apiClient.delete(`/crm/${tableName}/${id}`);
+    if (!res.success) {
+      console.warn(`Soft delete warning on ${tableName}:`, res.error);
     }
   },
 
   // Restore soft-deleted record
   async restore(tableName: string, id: string): Promise<void> {
-    try {
-      await supabase.from(tableName).update({ deleted_at: null }).eq('id', id);
-    } catch (e) {
-      console.warn(`Restore failed on ${tableName}:`, e);
+    const res = await apiClient.post(`/crm/${tableName}/restore/${id}`, {});
+    if (!res.success) {
+      console.warn(`Restore warning on ${tableName}:`, res.error);
     }
   },
 
   // Atomic Number Sequence Generators
   async generateNextInvoiceNumber(): Promise<string> {
     try {
-      const { data, error } = await supabase.rpc('next_invoice_number');
-      if (!error && data) return data;
+      const res = await apiClient.get<any>('/crm/next-number/invoice');
+      if (res?.success && res.data?.number) return res.data.number;
     } catch (_) {}
     const year = new Date().getFullYear();
     const rand = Math.floor(1000 + Math.random() * 9000);
@@ -1152,8 +1031,8 @@ export const crmService = {
 
   async generateNextQuotationNumber(): Promise<string> {
     try {
-      const { data, error } = await supabase.rpc('next_quotation_number');
-      if (!error && data) return data;
+      const res = await apiClient.get<any>('/crm/next-number/quotation');
+      if (res?.success && res.data?.number) return res.data.number;
     } catch (_) {}
     const year = new Date().getFullYear();
     const rand = Math.floor(1000 + Math.random() * 9000);
@@ -1185,15 +1064,10 @@ export const crmService = {
       converted_client_id: lead.convertedClientId || null,
       converted_project_id: lead.convertedProjectId || null
     };
-
-    if (lead.id) {
-      insertPayload.id = lead.id;
-    }
-
-    const { data, error } = await supabase.from('leads').insert([insertPayload]).select().single();
-
-    if (error) throw error;
-    return mapLeadFromDb(data);
+    if (lead.id) insertPayload.id = lead.id;
+    const res = await apiClient.post<any>('/crm/leads', insertPayload);
+    if (!res.success) throw new Error(res.error || 'Failed to create lead in MySQL');
+    return mapLeadFromDb(res.data || { ...insertPayload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updateLead(id: string, updates: Partial<Lead>): Promise<void> {
@@ -1220,48 +1094,37 @@ export const crmService = {
     if (updates.convertedClientId !== undefined) payload.converted_client_id = updates.convertedClientId;
     if (updates.convertedProjectId !== undefined) payload.converted_project_id = updates.convertedProjectId;
 
-    const { error } = await supabase.from('leads').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/leads/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update lead');
   },
 
   async updateLeadStatus(id: string, status: LeadStatus, lossReason?: string): Promise<void> {
-    const payload: any = {
-      status,
-      updated_at: new Date().toISOString()
-    };
-    if (lossReason !== undefined) {
-      payload.loss_reason = lossReason;
-    }
-    const { error } = await supabase.from('leads').update(payload).eq('id', id);
-    if (error) throw error;
+    const payload: any = { status, updated_at: new Date().toISOString() };
+    if (lossReason !== undefined) payload.loss_reason = lossReason;
+    const res = await apiClient.put(`/crm/leads/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update lead status');
   },
 
   async deleteLead(id: string): Promise<void> {
     await this.softDelete('leads', id);
   },
 
-  // --- Lead Activities ---
   async fetchLeadActivities(leadId: string): Promise<LeadActivity[]> {
-    const { data, error } = await supabase
-      .from('lead_activities')
-      .select('*')
-      .eq('lead_id', leadId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return (data || []).map(mapLeadActivityFromDb);
+    const res = await apiClient.get<any>('/crm/lead-activities');
+    const items = (res.data || []).filter((r: any) => r.lead_id === leadId);
+    return items.map(mapLeadActivityFromDb);
   },
 
   async createLeadActivity(activity: { leadId: string; userName: string; activityType: LeadActivityType; notes: string }): Promise<LeadActivity> {
-    const { data, error } = await supabase.from('lead_activities').insert([{
+    const payload = {
       lead_id: activity.leadId,
       user_name: activity.userName,
       activity_type: activity.activityType,
       notes: activity.notes
-    }]).select().single();
-
-    if (error) throw error;
-    return mapLeadActivityFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/lead-activities', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create lead activity');
+    return mapLeadActivityFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   // --- Clients CRUD ---
@@ -1279,6 +1142,8 @@ export const crmService = {
       partner_id: client.partnerId || null,
       partner_name: client.partnerName || null,
       partner_code: client.partnerCode || null,
+      created_by_id: (client as any).createdById || null,
+      created_by_name: (client as any).createdByName || null,
       total_value: client.totalValue,
       total_paid: client.totalPaid,
       outstanding_amount: client.outstandingAmount,
@@ -1286,15 +1151,10 @@ export const crmService = {
       notes: client.notes || null,
       status: client.status
     };
-
-    if (client.id) {
-      insertPayload.id = client.id;
-    }
-
-    const { data, error } = await supabase.from('clients').insert([insertPayload]).select().single();
-
-    if (error) throw error;
-    return mapClientFromDb(data);
+    if (client.id) insertPayload.id = client.id;
+    const res = await apiClient.post<any>('/crm/clients', insertPayload);
+    if (!res.success) throw new Error(res.error || 'Failed to create client');
+    return mapClientFromDb(res.data || { ...insertPayload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updateClient(id: string, updates: Partial<Client>): Promise<void> {
@@ -1311,14 +1171,16 @@ export const crmService = {
     if (updates.partnerId !== undefined) payload.partner_id = updates.partnerId || null;
     if (updates.partnerName !== undefined) payload.partner_name = updates.partnerName || null;
     if (updates.partnerCode !== undefined) payload.partner_code = updates.partnerCode || null;
+    if ((updates as any).createdById !== undefined) payload.created_by_id = (updates as any).createdById;
+    if ((updates as any).createdByName !== undefined) payload.created_by_name = (updates as any).createdByName;
     if (updates.totalValue !== undefined) payload.total_value = updates.totalValue;
     if (updates.totalPaid !== undefined) payload.total_paid = updates.totalPaid;
     if (updates.outstandingAmount !== undefined) payload.outstanding_amount = updates.outstandingAmount;
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.notes !== undefined) payload.notes = updates.notes;
 
-    const { error } = await supabase.from('clients').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/clients/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update client');
   },
 
   async deleteClient(id: string): Promise<void> {
@@ -1327,7 +1189,7 @@ export const crmService = {
 
   // --- Projects & Milestones CRUD ---
   async createProject(project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
-    const { data, error } = await supabase.from('projects').insert([{
+    const payload = {
       name: project.name,
       client_id: project.clientId || null,
       client_name: project.clientName || null,
@@ -1343,10 +1205,10 @@ export const crmService = {
       priority: project.priority,
       progress: project.progress,
       description: project.description || null
-    }]).select().single();
-
-    if (error) throw error;
-    return mapProjectFromDb(data, []);
+    };
+    const res = await apiClient.post<any>('/crm/projects', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create project');
+    return mapProjectFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() }, []);
   },
 
   async updateProject(id: string, updates: Partial<Project>): Promise<void> {
@@ -1367,15 +1229,15 @@ export const crmService = {
     if (updates.progress !== undefined) payload.progress = updates.progress;
     if (updates.description !== undefined) payload.description = updates.description;
 
-    const { error } = await supabase.from('projects').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/projects/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update project');
   },
 
   async updateProjectStatus(id: string, status: ProjectStatus, progress?: number): Promise<void> {
     const payload: any = { status, updated_at: new Date().toISOString() };
     if (progress !== undefined) payload.progress = progress;
-    const { error } = await supabase.from('projects').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/projects/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update project status');
   },
 
   async deleteProject(id: string): Promise<void> {
@@ -1383,7 +1245,7 @@ export const crmService = {
   },
 
   async createMilestone(milestone: Omit<ProjectMilestone, 'id'>): Promise<ProjectMilestone> {
-    const { data, error } = await supabase.from('project_milestones').insert([{
+    const payload = {
       project_id: milestone.projectId,
       title: milestone.title,
       due_date: milestone.dueDate || null,
@@ -1392,15 +1254,16 @@ export const crmService = {
       amount: milestone.amount,
       invoice_id: milestone.invoiceId || null,
       is_invoiced: milestone.isBilled || false
-    }]).select().single();
-
-    if (error) throw error;
-    return mapMilestoneFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/project_milestones', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create milestone');
+    return mapMilestoneFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async createMilestonesBatch(milestones: Omit<ProjectMilestone, 'id'>[]): Promise<ProjectMilestone[]> {
     if (!milestones.length) return [];
-    const rows = milestones.map(m => ({
+    const rows = milestones.map((m, idx) => ({
+      id: (m as any).id || `ms_${Date.now()}_${idx}`,
       project_id: m.projectId,
       title: m.title,
       due_date: m.dueDate || null,
@@ -1410,9 +1273,9 @@ export const crmService = {
       invoice_id: m.invoiceId || null,
       is_invoiced: m.isBilled || false
     }));
-    const { data, error } = await supabase.from('project_milestones').insert(rows).select();
-    if (error) throw error;
-    return (data || []).map(mapMilestoneFromDb);
+    const res = await apiClient.post<any>('/crm/milestones/batch', { milestones: rows });
+    if (!res.success) throw new Error(res.error || 'Failed to batch create milestones');
+    return rows.map(r => mapMilestoneFromDb({ ...r, created_at: new Date().toISOString() }));
   },
 
   async updateMilestone(id: string, updates: Partial<ProjectMilestone>): Promise<void> {
@@ -1425,8 +1288,8 @@ export const crmService = {
     if (updates.invoiceId !== undefined) payload.invoice_id = updates.invoiceId;
     if (updates.isBilled !== undefined) payload.is_invoiced = updates.isBilled;
 
-    const { error } = await supabase.from('project_milestones').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/project_milestones/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update milestone');
   },
 
   async deleteMilestone(id: string): Promise<void> {
@@ -1435,7 +1298,7 @@ export const crmService = {
 
   // --- Tasks CRUD ---
   async createTask(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
-    const { data, error } = await supabase.from('tasks').insert([{
+    const payload = {
       title: task.title,
       description: task.description || null,
       client_id: task.clientId || null,
@@ -1448,10 +1311,10 @@ export const crmService = {
       due_date: task.dueDate || null,
       estimated_hours: task.estimatedHours,
       actual_hours: task.actualHours
-    }]).select().single();
-
-    if (error) throw error;
-    return mapTaskFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/tasks', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create task');
+    return mapTaskFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updateTask(id: string, updates: Partial<Task>): Promise<void> {
@@ -1469,16 +1332,13 @@ export const crmService = {
     if (updates.estimatedHours !== undefined) payload.estimated_hours = updates.estimatedHours;
     if (updates.actualHours !== undefined) payload.actual_hours = updates.actualHours;
 
-    const { error } = await supabase.from('tasks').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/tasks/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update task');
   },
 
   async updateTaskStatus(id: string, status: TaskStatus): Promise<void> {
-    const { error } = await supabase.from('tasks').update({
-      status,
-      updated_at: new Date().toISOString()
-    }).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/tasks/${id}`, { status, updated_at: new Date().toISOString() });
+    if (!res.success) throw new Error(res.error || 'Failed to update task status');
   },
 
   async deleteTask(id: string): Promise<void> {
@@ -1488,7 +1348,7 @@ export const crmService = {
   // --- Quotations CRUD ---
   async createQuotation(quotation: Omit<Quotation, 'id' | 'createdAt' | 'updatedAt'>): Promise<Quotation> {
     const isGst = quotation.isGst !== false;
-    const { data, error } = await supabase.from('quotations').insert([{
+    const payload = {
       quotation_number: quotation.quotationNumber,
       lead_id: quotation.leadId || null,
       lead_name: quotation.leadName || null,
@@ -1516,10 +1376,10 @@ export const crmService = {
       hsn_sac_code: quotation.hsnSacCode || (isGst ? '998313' : null),
       notes: quotation.notes || null,
       terms_conditions: quotation.termsConditions || null
-    }]).select().single();
-
-    if (error) throw error;
-    return mapQuotationFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/quotations', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create quotation');
+    return mapQuotationFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updateQuotation(id: string, updates: Partial<Quotation>): Promise<void> {
@@ -1552,8 +1412,8 @@ export const crmService = {
     if (updates.notes !== undefined) payload.notes = updates.notes || null;
     if (updates.termsConditions !== undefined) payload.terms_conditions = updates.termsConditions || null;
 
-    const { error } = await supabase.from('quotations').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/quotations/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update quotation');
   },
 
   async deleteQuotation(id: string): Promise<void> {
@@ -1563,7 +1423,7 @@ export const crmService = {
   // --- Invoices CRUD ---
   async createInvoice(invoice: Omit<Invoice, 'id' | 'createdAt'>): Promise<Invoice> {
     const isGst = invoice.isGst !== false;
-    const { data, error } = await supabase.from('invoices').insert([{
+    const payload = {
       invoice_number: invoice.invoiceNumber,
       client_id: invoice.clientId || null,
       client_name: invoice.clientName,
@@ -1589,25 +1449,10 @@ export const crmService = {
       status: invoice.status,
       notes: invoice.notes || null,
       terms_conditions: invoice.termsConditions || null
-    }]).select().single();
-
-    if (error) throw error;
-
-    // Sync client financial balance in Supabase if independent invoice (no project)
-    if (invoice.clientId && !invoice.projectId) {
-      try {
-        const { data: cl } = await supabase.from('clients').select('id, total_value, outstanding_amount').eq('id', invoice.clientId).maybeSingle();
-        if (cl) {
-          const newTotal = (Number(cl.total_value) || 0) + (invoice.total || 0);
-          const newOutstanding = (Number(cl.outstanding_amount) || 0) + (invoice.total || 0);
-          await supabase.from('clients').update({ total_value: newTotal, outstanding_amount: newOutstanding, updated_at: new Date().toISOString() }).eq('id', invoice.clientId);
-        }
-      } catch (e) {
-        console.warn('Client balance sync error on invoice create:', e);
-      }
-    }
-
-    return mapInvoiceFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/invoices', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create invoice');
+    return mapInvoiceFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updateInvoice(id: string, updates: Partial<Invoice>): Promise<void> {
@@ -1638,30 +1483,17 @@ export const crmService = {
     if (updates.notes !== undefined) payload.notes = updates.notes;
     if (updates.termsConditions !== undefined) payload.terms_conditions = updates.termsConditions;
 
-    const { error } = await supabase.from('invoices').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/invoices/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update invoice');
   },
 
   async deleteInvoice(id: string): Promise<void> {
-    try {
-      const { data: inv } = await supabase.from('invoices').select('id, client_id, project_id, total, paid_amount').eq('id', id).maybeSingle();
-      if (inv && inv.client_id && !inv.project_id) {
-        const { data: cl } = await supabase.from('clients').select('id, total_value, outstanding_amount').eq('id', inv.client_id).maybeSingle();
-        if (cl) {
-          const newTotal = Math.max(0, (Number(cl.total_value) || 0) - (Number(inv.total) || 0));
-          const newOutstanding = Math.max(0, (Number(cl.outstanding_amount) || 0) - (Number(inv.total) - Number(inv.paid_amount || 0)));
-          await supabase.from('clients').update({ total_value: newTotal, outstanding_amount: newOutstanding, updated_at: new Date().toISOString() }).eq('id', inv.client_id);
-        }
-      }
-    } catch (e) {
-      console.warn('Client balance sync error on invoice delete:', e);
-    }
     await this.softDelete('invoices', id);
   },
 
   // --- Payments CRUD ---
   async recordPayment(payment: Omit<Payment, 'id' | 'createdAt'>): Promise<Payment> {
-    const { data, error } = await supabase.from('payments').insert([{
+    const payload = {
       invoice_id: payment.invoiceId || null,
       client_id: payment.clientId || null,
       project_id: payment.projectId || null,
@@ -1671,181 +1503,20 @@ export const crmService = {
       transaction_id: payment.transactionId || null,
       status: payment.status,
       notes: payment.notes || null
-    }]).select().single();
-
-    if (error) throw error;
-
-    // 1. Reconcile linked Invoice in Supabase
-    if (payment.invoiceId) {
-      try {
-        const { data: invRow } = await supabase
-          .from('invoices')
-          .select('id, total, paid_amount')
-          .eq('id', payment.invoiceId)
-          .maybeSingle();
-
-        if (invRow) {
-          const currentPaid = Number(invRow.paid_amount) || 0;
-          const invoiceTotal = Number(invRow.total) || 0;
-          const newPaid = currentPaid + payment.amount;
-          const newStatus: InvoiceStatus = newPaid >= invoiceTotal ? 'Paid' : 'Partially Paid';
-
-          await supabase
-            .from('invoices')
-            .update({ paid_amount: newPaid, status: newStatus })
-            .eq('id', payment.invoiceId);
-        }
-      } catch (invErr) {
-        console.warn('Supabase invoice balance sync warning:', invErr);
-      }
-    }
-
-    // 2. Reconcile linked Client in Supabase
-    if (payment.clientId) {
-      try {
-        const { data: clientRow } = await supabase
-          .from('clients')
-          .select('id, total_value, total_paid')
-          .eq('id', payment.clientId)
-          .maybeSingle();
-
-        if (clientRow) {
-          const clientTotalVal = Number(clientRow.total_value) || 0;
-          const currentClientPaid = Number(clientRow.total_paid) || 0;
-          const newClientPaid = currentClientPaid + payment.amount;
-          const newOutstanding = Math.max(0, clientTotalVal - newClientPaid);
-
-          await supabase
-            .from('clients')
-            .update({ total_paid: newClientPaid, outstanding_amount: newOutstanding, updated_at: new Date().toISOString() })
-            .eq('id', payment.clientId);
-        }
-      } catch (clErr) {
-        console.warn('Supabase client balance sync warning:', clErr);
-      }
-    }
-
-    // 3. Reconcile linked Project in Supabase
-    const targetProjectId = payment.projectId;
-    if (targetProjectId) {
-      try {
-        const { data: projRow } = await supabase
-          .from('projects')
-          .select('id, project_value, received_amount')
-          .eq('id', targetProjectId)
-          .maybeSingle();
-
-        if (projRow) {
-          const projVal = Number(projRow.project_value) || 0;
-          const curReceived = Number(projRow.received_amount) || 0;
-          const newReceived = curReceived + payment.amount;
-          const newPending = Math.max(0, projVal - newReceived);
-
-          await supabase
-            .from('projects')
-            .update({ received_amount: newReceived, pending_amount: newPending, updated_at: new Date().toISOString() })
-            .eq('id', targetProjectId);
-        }
-      } catch (prErr) {
-        console.warn('Supabase project balance sync warning:', prErr);
-      }
-    }
-
-    return mapPaymentFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/payments', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to record payment');
+    return mapPaymentFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async deletePayment(id: string): Promise<void> {
-    // Fetch payment before deletion to know amounts for reversal
-    const { data: payRow } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-
-    const { error } = await supabase.from('payments').delete().eq('id', id);
-    if (error) throw error;
-
-    if (payRow) {
-      // Reverse invoice in Supabase
-      if (payRow.invoice_id) {
-        try {
-          const { data: invRow } = await supabase
-            .from('invoices')
-            .select('id, total, paid_amount')
-            .eq('id', payRow.invoice_id)
-            .maybeSingle();
-
-          if (invRow) {
-            const currentPaid = Number(invRow.paid_amount) || 0;
-            const invoiceTotal = Number(invRow.total) || 0;
-            const newPaid = Math.max(0, currentPaid - Number(payRow.amount));
-            const newStatus: InvoiceStatus = newPaid <= 0 ? 'Sent' : (newPaid >= invoiceTotal ? 'Paid' : 'Partially Paid');
-
-            await supabase
-              .from('invoices')
-              .update({ paid_amount: newPaid, status: newStatus })
-              .eq('id', payRow.invoice_id);
-          }
-        } catch (e) {
-          console.warn('Reversal invoice sync warning:', e);
-        }
-      }
-
-      // Reverse client in Supabase
-      if (payRow.client_id) {
-        try {
-          const { data: clientRow } = await supabase
-            .from('clients')
-            .select('id, total_value, total_paid')
-            .eq('id', payRow.client_id)
-            .maybeSingle();
-
-          if (clientRow) {
-            const clientTotalVal = Number(clientRow.total_value) || 0;
-            const currentClientPaid = Number(clientRow.total_paid) || 0;
-            const newClientPaid = Math.max(0, currentClientPaid - Number(payRow.amount));
-            const newOutstanding = Math.max(0, clientTotalVal - newClientPaid);
-
-            await supabase
-              .from('clients')
-              .update({ total_paid: newClientPaid, outstanding_amount: newOutstanding, updated_at: new Date().toISOString() })
-              .eq('id', payRow.client_id);
-          }
-        } catch (e) {
-          console.warn('Reversal client sync warning:', e);
-        }
-      }
-
-      // Reverse project in Supabase
-      if (payRow.project_id) {
-        try {
-          const { data: projRow } = await supabase
-            .from('projects')
-            .select('id, project_value, received_amount')
-            .eq('id', payRow.project_id)
-            .maybeSingle();
-
-          if (projRow) {
-            const projVal = Number(projRow.project_value) || 0;
-            const curReceived = Number(projRow.received_amount) || 0;
-            const newReceived = Math.max(0, curReceived - Number(payRow.amount));
-            const newPending = Math.max(0, projVal - newReceived);
-
-            await supabase
-              .from('projects')
-              .update({ received_amount: newReceived, pending_amount: newPending, updated_at: new Date().toISOString() })
-              .eq('id', payRow.project_id);
-          }
-        } catch (e) {
-          console.warn('Reversal project sync warning:', e);
-        }
-      }
-    }
+    const res = await apiClient.delete(`/crm/payments/${id}`);
+    if (!res.success) throw new Error(res.error || 'Failed to delete payment');
   },
 
   // --- Expenses CRUD ---
   async createExpense(expense: Omit<Expense, 'id' | 'createdAt'>): Promise<Expense> {
-    const { data, error } = await supabase.from('expenses').insert([{
+    const payload = {
       category: expense.category,
       amount: expense.amount,
       expense_date: expense.expenseDate,
@@ -1856,10 +1527,10 @@ export const crmService = {
       project_id: expense.projectId || null,
       approved_by: expense.approvedBy || null,
       status: expense.status
-    }]).select().single();
-
-    if (error) throw error;
-    return mapExpenseFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/expenses', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create expense');
+    return mapExpenseFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async deleteExpense(id: string): Promise<void> {
@@ -1868,7 +1539,7 @@ export const crmService = {
 
   // --- Agreements CRUD ---
   async createAgreement(agreement: Omit<Agreement, 'id' | 'createdAt'>): Promise<Agreement> {
-    const { data, error } = await supabase.from('agreements').insert([{
+    const payload = {
       name: agreement.name,
       agreement_type: agreement.agreementType,
       client_id: agreement.clientId || null,
@@ -1880,10 +1551,10 @@ export const crmService = {
       status: agreement.status,
       signed_date: agreement.signedDate || null,
       file_url: agreement.fileUrl || null
-    }]).select().single();
-
-    if (error) throw error;
-    return mapAgreementFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/agreements', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create agreement');
+    return mapAgreementFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updateAgreement(id: string, updates: Partial<Agreement>): Promise<void> {
@@ -1898,8 +1569,8 @@ export const crmService = {
     if (updates.signedDate !== undefined) payload.signed_date = updates.signedDate;
     if (updates.fileUrl !== undefined) payload.file_url = updates.fileUrl;
 
-    const { error } = await supabase.from('agreements').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/agreements/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update agreement');
   },
 
   async deleteAgreement(id: string): Promise<void> {
@@ -1908,7 +1579,7 @@ export const crmService = {
 
   // --- Documents CRUD ---
   async createDocument(doc: Omit<DocumentItem, 'id' | 'createdAt'>): Promise<DocumentItem> {
-    const { data, error } = await supabase.from('documents').insert([{
+    const payload = {
       title: doc.title,
       doc_type: doc.docType,
       client_id: doc.clientId || null,
@@ -1917,10 +1588,10 @@ export const crmService = {
       file_url: doc.fileUrl,
       file_size: doc.fileSize,
       uploaded_by: doc.uploadedBy
-    }]).select().single();
-
-    if (error) throw error;
-    return mapDocumentFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/documents', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create document');
+    return mapDocumentFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async deleteDocument(id: string): Promise<void> {
@@ -1929,24 +1600,22 @@ export const crmService = {
 
   // --- Credentials Vault CRUD ---
   async createCredential(cred: Omit<CredentialVaultItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<CredentialVaultItem> {
-    const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
-
-    const { data, error } = await supabase.from('credentials_vault').insert([{
+    const payload = {
       platform_name: cred.platformName,
       service_url: cred.serviceUrl || null,
       username: cred.username || null,
       password_encrypted: cred.passwordEncrypted || null,
       api_key_encrypted: cred.apiKeyEncrypted || null,
-      client_id: isUuid(cred.clientId) ? cred.clientId : null,
-      project_id: isUuid(cred.projectId) ? cred.projectId : null,
+      client_id: cred.clientId || null,
+      project_id: cred.projectId || null,
       notes: cred.notes || null,
       access_roles: cred.accessRoles || ['Super Admin', 'Admin', 'Developer'],
       environment: cred.environment || 'Production',
       status: cred.status || 'Active'
-    }]).select().single();
-
-    if (error) throw error;
-    const mapped = mapCredentialFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/credentials_vault', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create credential');
+    const mapped = mapCredentialFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
     return {
       ...mapped,
       clientName: cred.clientName || mapped.clientName,
@@ -1955,22 +1624,21 @@ export const crmService = {
   },
 
   async updateCredential(id: string, updates: Partial<CredentialVaultItem>): Promise<void> {
-    const isUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
     const payload: any = { updated_at: new Date().toISOString() };
     if (updates.platformName !== undefined) payload.platform_name = updates.platformName;
     if (updates.serviceUrl !== undefined) payload.service_url = updates.serviceUrl || null;
     if (updates.username !== undefined) payload.username = updates.username || null;
     if (updates.passwordEncrypted !== undefined) payload.password_encrypted = updates.passwordEncrypted || null;
     if (updates.apiKeyEncrypted !== undefined) payload.api_key_encrypted = updates.apiKeyEncrypted || null;
-    if (updates.clientId !== undefined) payload.client_id = isUuid(updates.clientId) ? updates.clientId : null;
-    if (updates.projectId !== undefined) payload.project_id = isUuid(updates.projectId) ? updates.projectId : null;
+    if (updates.clientId !== undefined) payload.client_id = updates.clientId || null;
+    if (updates.projectId !== undefined) payload.project_id = updates.projectId || null;
     if (updates.notes !== undefined) payload.notes = updates.notes || null;
     if (updates.accessRoles !== undefined) payload.access_roles = updates.accessRoles;
     if (updates.environment !== undefined) payload.environment = updates.environment;
     if (updates.status !== undefined) payload.status = updates.status;
 
-    const { error } = await supabase.from('credentials_vault').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/credentials_vault/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update credential');
   },
 
   async deleteCredential(id: string): Promise<void> {
@@ -1979,7 +1647,7 @@ export const crmService = {
 
   // --- Calendar Events CRUD ---
   async createCalendarEvent(event: Omit<CalendarEvent, 'id' | 'createdAt'>): Promise<CalendarEvent> {
-    const { data, error } = await supabase.from('calendar_events').insert([{
+    const payload = {
       title: event.title,
       event_type: event.eventType,
       start_time: event.startTime,
@@ -1990,10 +1658,10 @@ export const crmService = {
       related_project_id: event.relatedProjectId || null,
       related_lead_id: event.relatedLeadId || null,
       notes: event.notes || null
-    }]).select().single();
-
-    if (error) throw error;
-    return mapCalendarEventFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/calendar_events', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create calendar event');
+    return mapCalendarEventFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async deleteCalendarEvent(id: string): Promise<void> {
@@ -2002,7 +1670,7 @@ export const crmService = {
 
   // --- Team Profile CRUD ---
   async createProfile(profile: Omit<UserProfile, 'id'>): Promise<UserProfile> {
-    const { data, error } = await supabase.from('profiles').insert([{
+    const payload = {
       email: profile.email.trim().toLowerCase(),
       full_name: profile.fullName,
       role: profile.role,
@@ -2012,17 +1680,14 @@ export const crmService = {
       is_active: profile.isActive !== false,
       permissions: profile.permissions || {},
       avatar_url: profile.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(profile.fullName)}`
-    }]).select().single();
-
-    if (error) {
-      console.error('[crmService.createProfile] Error inserting profile:', error);
-      throw error;
-    }
-    return mapProfileFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/profiles', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create profile');
+    return mapProfileFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updateProfile(id: string, updates: Partial<UserProfile>): Promise<void> {
-    const payload: any = {};
+    const payload: any = { updated_at: new Date().toISOString() };
     if (updates.fullName !== undefined) payload.full_name = updates.fullName;
     if (updates.email !== undefined) payload.email = updates.email.trim().toLowerCase();
     if (updates.role !== undefined) payload.role = updates.role;
@@ -2032,68 +1697,69 @@ export const crmService = {
     if (updates.passwordHash !== undefined) payload.password_hash = updates.passwordHash;
     if (updates.isActive !== undefined) payload.is_active = updates.isActive;
     if (updates.permissions !== undefined) payload.permissions = updates.permissions;
-    payload.updated_at = new Date().toISOString();
 
-    const { error } = await supabase.from('profiles').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/profiles/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update profile');
   },
 
   async resetStaffPassword(id: string, newPassword: string): Promise<void> {
-    const { error } = await supabase.from('profiles').update({
+    const res = await apiClient.put(`/crm/profiles/${id}`, {
       password_hash: newPassword,
       updated_at: new Date().toISOString()
-    }).eq('id', id);
-    if (error) throw error;
+    });
+    if (!res.success) throw new Error(res.error || 'Failed to reset staff password');
   },
 
   async toggleStaffStatus(id: string, isActive: boolean): Promise<void> {
-    const { error } = await supabase.from('profiles').update({
+    const res = await apiClient.put(`/crm/profiles/${id}`, {
       is_active: isActive,
       updated_at: new Date().toISOString()
-    }).eq('id', id);
-    if (error) throw error;
+    });
+    if (!res.success) throw new Error(res.error || 'Failed to update staff status');
   },
 
   async updateProfileRole(id: string, role: UserRole): Promise<void> {
-    const { error } = await supabase.from('profiles').update({
+    const res = await apiClient.put(`/crm/profiles/${id}`, {
       role,
       updated_at: new Date().toISOString()
-    }).eq('id', id);
-    if (error) throw error;
+    });
+    if (!res.success) throw new Error(res.error || 'Failed to update profile role');
   },
 
   async deleteProfile(id: string): Promise<void> {
-    const { error } = await supabase.from('profiles').delete().eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.delete(`/crm/profiles/${id}`);
+    if (!res.success) throw new Error(res.error || 'Failed to delete profile');
   },
 
   // --- Notifications ---
   async markNotificationRead(id: string): Promise<void> {
-    const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/notifications/${id}`, { is_read: true });
+    if (!res.success) throw new Error(res.error || 'Failed to mark notification read');
   },
 
   async markAllNotificationsRead(): Promise<void> {
-    const { error } = await supabase.from('notifications').update({ is_read: true }).neq('id', '00000000-0000-0000-0000-000000000000');
-    if (error) throw error;
+    const res = await apiClient.put('/crm/notifications/all/read', {});
+    if (!res.success) {
+      console.warn('Mark all notifications error:', res.error);
+    }
   },
 
   async createNotification(notif: { title: string; message: string; type?: string; userId?: string }): Promise<NotificationItem> {
-    const { data, error } = await supabase.from('notifications').insert([{
+    const payload = {
       title: notif.title,
       message: notif.message,
       notification_type: notif.type || 'info',
       user_id: notif.userId || null,
       is_read: false
-    }]).select().single();
-
-    if (error) throw error;
-    return mapNotificationFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/notifications', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create notification');
+    return mapNotificationFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   // --- Audit Logs ---
   async createAuditLog(log: Omit<AuditLog, 'id' | 'createdAt'>): Promise<AuditLog> {
-    const { data, error } = await supabase.from('audit_logs').insert([{
+    const payload = {
       user_name: log.userName,
       user_role: log.userRole,
       action_type: log.actionType,
@@ -2102,32 +1768,21 @@ export const crmService = {
       description: log.description,
       before_state: log.beforeState || null,
       after_state: log.afterState || null
-    }]).select().single();
-
-    if (error) throw error;
-    return mapAuditLogFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/audit_logs', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create audit log');
+    return mapAuditLogFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   // --- Project Issues / Client Tickets ---
   async fetchAllIssues(): Promise<ProjectIssue[]> {
     try {
-      const apiRes = await apiClient.get<any>('/crm/issues');
-      if (apiRes && apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
-        return apiRes.data.map(mapIssueFromDb);
+      const res = await apiClient.get<any>('/crm/project_issues');
+      if (res && res.success && Array.isArray(res.data)) {
+        return res.data.map(mapIssueFromDb);
       }
     } catch (_) {}
-
-    try {
-      const { data, error } = await supabase.from('project_issues').select('*').order('created_at', { ascending: false });
-      if (error) {
-        console.warn('Supabase fetchAllIssues warning (table may not exist yet):', error.message);
-        return [];
-      }
-      return (data || []).map(mapIssueFromDb);
-    } catch (e) {
-      console.warn('Supabase fetchAllIssues failed, using fallback:', e);
-      return [];
-    }
+    return [];
   },
 
   async createIssue(issue: Omit<ProjectIssue, 'id' | 'createdAt' | 'updatedAt'>): Promise<ProjectIssue> {
@@ -2151,10 +1806,9 @@ export const crmService = {
       assigned_to: issue.assignedTo || null,
       resolved_at: issue.resolvedAt || null
     };
-
-    const { data, error } = await supabase.from('project_issues').insert([payload]).select().single();
-    if (error) throw error;
-    return mapIssueFromDb(data);
+    const res = await apiClient.post<any>('/crm/project_issues', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create issue');
+    return mapIssueFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updateIssue(id: string, updates: Partial<ProjectIssue>): Promise<void> {
@@ -2170,8 +1824,8 @@ export const crmService = {
     if (updates.resolvedAt !== undefined) payload.resolved_at = updates.resolvedAt;
     if (updates.attachments !== undefined) payload.attachments = updates.attachments;
 
-    const { error } = await supabase.from('project_issues').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/project_issues/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update issue');
   },
 
   async deleteIssue(id: string): Promise<void> {
@@ -2181,17 +1835,18 @@ export const crmService = {
   // --- Partners CRUD ---
   async fetchPartners(): Promise<Partner[]> {
     try {
-      const { data, error } = await supabase.from('partners').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []).map(mapPartnerFromDb);
+      const res = await apiClient.get<any>('/crm/partners');
+      if (res && res.success && Array.isArray(res.data)) {
+        return res.data.map(mapPartnerFromDb);
+      }
     } catch (err) {
-      console.warn('fetchPartners error / offline fallback:', err);
-      return [];
+      console.warn('fetchPartners error:', err);
     }
+    return [];
   },
 
   async createPartner(partner: Omit<Partner, 'id' | 'createdAt' | 'updatedAt'>): Promise<Partner> {
-    const { data, error } = await supabase.from('partners').insert([{
+    const payload = {
       user_id: partner.userId || null,
       name: partner.name,
       email: partner.email,
@@ -2206,11 +1861,19 @@ export const crmService = {
       paid_earnings: partner.paidEarnings || 0,
       pending_earnings: partner.pendingEarnings || 0,
       notes: partner.notes || null,
-      last_login_at: partner.lastLoginAt || new Date().toISOString()
-    }]).select().single();
-
-    if (error) throw error;
-    return mapPartnerFromDb(data);
+      last_login_at: partner.lastLoginAt || new Date().toISOString(),
+      terms_accepted: partner.termsAccepted ? 1 : 0,
+      terms_accepted_at: partner.termsAcceptedAt || null,
+      terms_version: partner.termsVersion || '1.0',
+      is_custom_rate: partner.isCustomRate ? 1 : 0,
+      custom_commission_rate: partner.customCommissionRate || null,
+      custom_rate_reason: partner.customRateReason || null,
+      custom_rate_set_at: partner.customRateSetAt || null,
+      custom_rate_set_by: partner.customRateSetBy || null
+    };
+    const res = await apiClient.post<any>('/crm/partners', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create partner');
+    return mapPartnerFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updatePartner(id: string, updates: Partial<Partner>): Promise<void> {
@@ -2228,10 +1891,18 @@ export const crmService = {
     if (updates.pendingEarnings !== undefined) payload.pending_earnings = updates.pendingEarnings;
     if (updates.notes !== undefined) payload.notes = updates.notes;
     if (updates.lastLoginAt !== undefined) payload.last_login_at = updates.lastLoginAt;
+    if (updates.termsAccepted !== undefined) payload.terms_accepted = updates.termsAccepted ? 1 : 0;
+    if (updates.termsAcceptedAt !== undefined) payload.terms_accepted_at = updates.termsAcceptedAt;
+    if (updates.termsVersion !== undefined) payload.terms_version = updates.termsVersion;
+    if (updates.isCustomRate !== undefined) payload.is_custom_rate = updates.isCustomRate ? 1 : 0;
+    if (updates.customCommissionRate !== undefined) payload.custom_commission_rate = updates.customCommissionRate;
+    if (updates.customRateReason !== undefined) payload.custom_rate_reason = updates.customRateReason;
+    if (updates.customRateSetAt !== undefined) payload.custom_rate_set_at = updates.customRateSetAt;
+    if (updates.customRateSetBy !== undefined) payload.custom_rate_set_by = updates.customRateSetBy;
     if ((updates as any).passwordHash !== undefined) payload.password_hash = (updates as any).passwordHash;
 
-    const { error } = await supabase.from('partners').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/partners/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update partner');
   },
 
   async deletePartner(id: string): Promise<void> {
@@ -2241,17 +1912,15 @@ export const crmService = {
   // --- Partner Referrals CRUD ---
   async fetchPartnerReferrals(partnerId?: string): Promise<PartnerReferral[]> {
     try {
-      let query = supabase.from('partner_referrals').select('*').order('created_at', { ascending: false });
-      if (partnerId) {
-        query = query.eq('partner_id', partnerId);
+      const res = await apiClient.get<any>('/crm/partner_referrals');
+      if (res && res.success && Array.isArray(res.data)) {
+        const filtered = partnerId ? res.data.filter((r: any) => r.partner_id === partnerId) : res.data;
+        return filtered.map((r: any) => mapPartnerReferralFromDb(r));
       }
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []).map(r => mapPartnerReferralFromDb(r));
     } catch (err) {
-      console.warn('fetchPartnerReferrals error / offline fallback:', err);
-      return [];
+      console.warn('fetchPartnerReferrals error:', err);
     }
+    return [];
   },
 
   async createPartnerReferral(referral: Omit<PartnerReferral, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<PartnerReferral> {
@@ -2275,24 +1944,10 @@ export const crmService = {
       commission_paid: referral.commissionPaid || 0,
       notes: referral.notes || null
     };
-
-    if (referral.id) {
-      insertPayload.id = referral.id;
-    }
-
-    let { data, error } = await supabase.from('partner_referrals').insert([insertPayload]).select().single();
-
-    // Resilient fallback: If foreign key on lead_id fails because lead is still committing or offline
-    if (error && error.message?.includes('partner_referrals_lead_id_fkey') && insertPayload.lead_id) {
-      console.warn('Retrying partner referral insert without strict lead_id foreign key constraint...', error);
-      insertPayload.lead_id = null;
-      const retryRes = await supabase.from('partner_referrals').insert([insertPayload]).select().single();
-      data = retryRes.data;
-      error = retryRes.error;
-    }
-
-    if (error) throw error;
-    return mapPartnerReferralFromDb(data);
+    if (referral.id) insertPayload.id = referral.id;
+    const res = await apiClient.post<any>('/crm/partner_referrals', insertPayload);
+    if (!res.success) throw new Error(res.error || 'Failed to create partner referral');
+    return mapPartnerReferralFromDb(res.data || { ...insertPayload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updatePartnerReferral(id: string, updates: Partial<PartnerReferral>): Promise<void> {
@@ -2314,8 +1969,8 @@ export const crmService = {
     if (updates.commissionPaid !== undefined) payload.commission_paid = updates.commissionPaid;
     if (updates.notes !== undefined) payload.notes = updates.notes;
 
-    const { error } = await supabase.from('partner_referrals').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/partner_referrals/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update partner referral');
   },
 
   async deletePartnerReferral(id: string): Promise<void> {
@@ -2325,21 +1980,19 @@ export const crmService = {
   // --- Partner Payouts CRUD ---
   async fetchPartnerPayouts(partnerId?: string): Promise<PartnerPayout[]> {
     try {
-      let query = supabase.from('partner_payouts').select('*').order('created_at', { ascending: false });
-      if (partnerId) {
-        query = query.eq('partner_id', partnerId);
+      const res = await apiClient.get<any>('/crm/partner_payouts');
+      if (res && res.success && Array.isArray(res.data)) {
+        const filtered = partnerId ? res.data.filter((r: any) => r.partner_id === partnerId) : res.data;
+        return filtered.map((p: any) => mapPartnerPayoutFromDb(p));
       }
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []).map(p => mapPartnerPayoutFromDb(p));
     } catch (err) {
-      console.warn('fetchPartnerPayouts error / offline fallback:', err);
-      return [];
+      console.warn('fetchPartnerPayouts error:', err);
     }
+    return [];
   },
 
   async createPartnerPayout(payout: Omit<PartnerPayout, 'id' | 'createdAt'>): Promise<PartnerPayout> {
-    const { data, error } = await supabase.from('partner_payouts').insert([{
+    const payload = {
       partner_id: payout.partnerId,
       amount: payout.amount,
       payout_date: payout.payoutDate,
@@ -2347,10 +2000,10 @@ export const crmService = {
       transaction_ref: payout.transactionRef || null,
       status: payout.status || 'Completed',
       notes: payout.notes || null
-    }]).select().single();
-
-    if (error) throw error;
-    return mapPartnerPayoutFromDb(data);
+    };
+    const res = await apiClient.post<any>('/crm/partner_payouts', payload);
+    if (!res.success) throw new Error(res.error || 'Failed to create partner payout');
+    return mapPartnerPayoutFromDb(res.data || { ...payload, id: res.id, created_at: new Date().toISOString() });
   },
 
   async updatePartnerPayout(id: string, updates: Partial<PartnerPayout>): Promise<void> {
@@ -2362,28 +2015,27 @@ export const crmService = {
     if (updates.notes !== undefined) payload.notes = updates.notes;
     if (updates.payoutDate !== undefined) payload.payout_date = updates.payoutDate;
 
-    const { error } = await supabase.from('partner_payouts').update(payload).eq('id', id);
-    if (error) throw error;
+    const res = await apiClient.put(`/crm/partner_payouts/${id}`, payload);
+    if (!res.success) throw new Error(res.error || 'Failed to update partner payout');
   },
 
   async findPartnerByCode(code: string): Promise<Partner | null> {
     try {
       if (!code || !code.trim()) return null;
       const cleanCode = code.trim().toUpperCase();
-      const { data, error } = await supabase
-        .from('partners')
-        .select('*')
-        .ilike('referral_code', cleanCode)
-        .maybeSingle();
-
-      if (error || !data) return null;
-      return mapPartnerFromDb(data);
+      const res = await apiClient.get<any>('/crm/partners');
+      if (res && res.success && Array.isArray(res.data)) {
+        const row = res.data.find((p: any) => (p.referral_code || '').toUpperCase() === cleanCode);
+        if (row) return mapPartnerFromDb(row);
+      }
+      return null;
     } catch (err) {
       console.warn('findPartnerByCode error:', err);
       return null;
     }
   },
 
+  // --- Client Portal Data & Interactivity ---
   async fetchClientPortalData(token: string): Promise<{
     project: Project;
     client: Client;
@@ -2394,72 +2046,18 @@ export const crmService = {
   } | null> {
     try {
       if (!token || !token.trim()) return null;
-      const cleanToken = token.trim();
-
-      // 1. Fetch project by portal_token or client_portal_token
-      const { data: projectRow, error: projError } = await supabase
-        .from('projects')
-        .select('*')
-        .or(`portal_token.eq.${cleanToken},client_portal_token.eq.${cleanToken}`)
-        .maybeSingle();
-
-      if (projError || !projectRow) return null;
-      if (projectRow.portal_enabled === false) {
-        console.warn('Client portal is disabled for this project.');
-        return null;
-      }
-
-      // 2. Fetch client
-      const { data: clientRow, error: clientError } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('id', projectRow.client_id)
-        .maybeSingle();
-
-      if (clientError || !clientRow) return null;
-      if (clientRow.portal_enabled === false) {
-        console.warn('Client portal is disabled for this account.');
-        return null;
-      }
-
-      // 3. Fetch milestones
-      const { data: milestoneRows } = await supabase
-        .from('project_milestones')
-        .select('*')
-        .eq('project_id', projectRow.id)
-        .order('order_index', { ascending: true });
-
-      // 4. Fetch invoices (by project or client)
-      const { data: invoiceRows } = await supabase
-        .from('invoices')
-        .select('*')
-        .or(`project_id.eq.${projectRow.id},client_id.eq.${clientRow.id}`)
-        .order('issue_date', { ascending: false });
-
-      // 5. Fetch issues
-      const { data: issueRows } = await supabase
-        .from('project_issues')
-        .select('*')
-        .eq('project_id', projectRow.id)
-        .order('created_at', { ascending: false });
-
-      // 6. Fetch documents & agreements
-      const { data: docRows } = await supabase
-        .from('documents')
-        .select('*')
-        .or(`project_id.eq.${projectRow.id},client_id.eq.${clientRow.id}`)
-        .order('created_at', { ascending: false });
-
-      const mappedClient = mapClientFromDb(clientRow);
-      const mappedProject = mapProjectFromDb(projectRow);
-
+      const res = await apiClient.get<any>(`/portal/${encodeURIComponent(token.trim())}`);
+      if (!res || !res.success || !res.data) return null;
+      const d = res.data;
+      const mappedClient = mapClientFromDb(d.client);
+      const mappedProject = mapProjectFromDb(d.project);
       return {
         project: mappedProject,
         client: mappedClient,
-        milestones: (milestoneRows || []).map(m => mapMilestoneFromDb(m)),
-        invoices: (invoiceRows || []).map(i => mapInvoiceFromDb(i)),
-        issues: (issueRows || []).map(iss => mapIssueFromDb(iss)),
-        documents: (docRows || []).map(d => mapDocumentFromDb(d, [mappedClient], [mappedProject], []))
+        milestones: (d.milestones || []).map((m: any) => mapMilestoneFromDb(m)),
+        invoices: (d.invoices || []).map((i: any) => mapInvoiceFromDb(i)),
+        issues: (d.issues || []).map((iss: any) => mapIssueFromDb(iss)),
+        documents: (d.documents || []).map((doc: any) => mapDocumentFromDb(doc, [mappedClient], [mappedProject], []))
       };
     } catch (err) {
       console.error('fetchClientPortalData error:', err);
@@ -2469,143 +2067,53 @@ export const crmService = {
 
   async updateMilestoneInvoiced(id: string, isInvoiced: boolean, invoiceId?: string): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('project_milestones')
-        .update({
-          is_invoiced: isInvoiced,
-          invoice_id: invoiceId || null
-        })
-        .eq('id', id);
-
-      if (error) console.warn('updateMilestoneInvoiced error:', error);
+      await apiClient.put(`/crm/project_milestones/${id}`, {
+        is_invoiced: isInvoiced,
+        invoice_id: invoiceId || null
+      });
     } catch (err) {
-      console.warn('updateMilestoneInvoiced fallback error:', err);
+      console.warn('updateMilestoneInvoiced error:', err);
     }
   },
 
   async revertPaymentBalances(payment: Payment): Promise<void> {
     try {
-      // 1. Revert invoice balance if attached to an invoice
+      // Revert invoice
       if (payment.invoiceId) {
-        const { data: inv } = await supabase
-          .from('invoices')
-          .select('*')
-          .eq('id', payment.invoiceId)
-          .maybeSingle();
-
+        const invRes = await apiClient.get<any>('/crm/invoices');
+        const inv = (invRes?.data || []).find((i: any) => i.id === payment.invoiceId);
         if (inv) {
           const currentPaid = Number(inv.paid_amount || 0);
           const newPaid = Math.max(0, currentPaid - Number(payment.amount));
           const total = Number(inv.total || 0);
           let newStatus = 'SENT';
-          if (newPaid >= total && total > 0) {
-            newStatus = 'PAID';
-          } else if (newPaid > 0) {
-            newStatus = 'PARTIALLY_PAID';
-          } else if (inv.due_date && new Date(inv.due_date) < new Date()) {
-            newStatus = 'OVERDUE';
-          }
-
-          await supabase
-            .from('invoices')
-            .update({ paid_amount: newPaid, status: newStatus })
-            .eq('id', payment.invoiceId);
+          if (newPaid >= total && total > 0) newStatus = 'PAID';
+          else if (newPaid > 0) newStatus = 'PARTIALLY_PAID';
+          await apiClient.put(`/crm/invoices/${payment.invoiceId}`, { paid_amount: newPaid, status: newStatus });
         }
       }
 
-      // 2. Revert client balance
+      // Revert client
       if (payment.clientId) {
-        const { data: cl } = await supabase
-          .from('clients')
-          .select('*')
-          .eq('id', payment.clientId)
-          .maybeSingle();
-
+        const clRes = await apiClient.get<any>('/crm/clients');
+        const cl = (clRes?.data || []).find((c: any) => c.id === payment.clientId);
         if (cl) {
           const currentPaid = Number(cl.total_paid || 0);
           const currentVal = Number(cl.total_value || 0);
           const newPaid = Math.max(0, currentPaid - Number(payment.amount));
           const newOutstanding = Math.max(0, currentVal - newPaid);
-
-          await supabase
-            .from('clients')
-            .update({ total_paid: newPaid, outstanding_amount: newOutstanding })
-            .eq('id', payment.clientId);
+          await apiClient.put(`/crm/clients/${payment.clientId}`, { total_paid: newPaid, outstanding_amount: newOutstanding });
         }
       }
 
-      // 3. Revert project balance
+      // Revert project
       if (payment.projectId) {
-        const { data: prj } = await supabase
-          .from('projects')
-          .select('*')
-          .eq('id', payment.projectId)
-          .maybeSingle();
-
+        const prjRes = await apiClient.get<any>('/crm/projects');
+        const prj = (prjRes?.data || []).find((p: any) => p.id === payment.projectId);
         if (prj) {
-          const currentPaid = Number(prj.paid_amount || 0);
+          const currentPaid = Number(prj.received_amount || prj.paid_amount || 0);
           const newPaid = Math.max(0, currentPaid - Number(payment.amount));
-
-          await supabase
-            .from('projects')
-            .update({ paid_amount: newPaid })
-            .eq('id', payment.projectId);
-        }
-      }
-
-      // 4. Revert partner referral earnings if attached to client or project
-      if (payment.clientId || payment.projectId) {
-        let query = supabase.from('partner_referrals').select('*');
-        if (payment.clientId && payment.projectId) {
-          query = query.or(`client_id.eq.${payment.clientId},project_id.eq.${payment.projectId}`);
-        } else if (payment.clientId) {
-          query = query.eq('client_id', payment.clientId);
-        } else if (payment.projectId) {
-          query = query.eq('project_id', payment.projectId);
-        }
-
-        const { data: refs } = await query;
-        if (refs && refs.length > 0) {
-          for (const ref of refs) {
-            const currentTotalPaid = Number(ref.total_paid || 0);
-            const newTotalPaid = Math.max(0, currentTotalPaid - Number(payment.amount));
-            const rawRate = Number(ref.commission_rate || 0.10);
-            const commRate = rawRate >= 1 ? rawRate / 100 : rawRate;
-            const newCommEarned = Math.round(newTotalPaid * commRate);
-            const newPending = Math.max(0, Number(ref.deal_value || 0) - newTotalPaid);
-            const commDiff = Number(ref.commission_earned || 0) - newCommEarned;
-
-            await supabase
-              .from('partner_referrals')
-              .update({
-                total_paid: newTotalPaid,
-                pending_payment: newPending,
-                commission_earned: newCommEarned,
-                payment_status: newTotalPaid <= 0 ? 'UNPAID' : (newPending === 0 ? 'PAID' : 'PARTIAL')
-              })
-              .eq('id', ref.id);
-
-            // Revert partner aggregate earnings
-            if (commDiff > 0 && ref.partner_id) {
-              const { data: partner } = await supabase
-                .from('partners')
-                .select('*')
-                .eq('id', ref.partner_id)
-                .maybeSingle();
-
-              if (partner) {
-                const newTotalEarn = Math.max(0, Number(partner.total_earnings || 0) - commDiff);
-                const newPendingEarn = Math.max(0, Number(partner.pending_earnings || 0) - commDiff);
-                await supabase
-                  .from('partners')
-                  .update({
-                    total_earnings: newTotalEarn,
-                    pending_earnings: newPendingEarn
-                  })
-                  .eq('id', ref.partner_id);
-              }
-            }
-          }
+          await apiClient.put(`/crm/projects/${payment.projectId}`, { received_amount: newPaid, paid_amount: newPaid });
         }
       }
     } catch (err) {
@@ -2613,39 +2121,8 @@ export const crmService = {
     }
   },
 
-  // --- Realtime WebSocket Channel Listener ---
   subscribeToChanges(onUpdate: (table: string, payload: any) => void) {
-    try {
-      const channelName = `crm_realtime_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      const channel = supabase
-        .channel(channelName)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public' },
-          (payload) => {
-            try {
-              onUpdate(payload.table, payload);
-            } catch (err) {
-              console.warn('[Realtime] Handler error:', err);
-            }
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            console.log(`[Realtime Supabase] Connected on ${channelName}`);
-          }
-        });
-
-      return () => {
-        try {
-          supabase.removeChannel(channel);
-        } catch (e) {
-          console.warn('[Realtime] Cleanup error:', e);
-        }
-      };
-    } catch (e) {
-      console.warn('[Realtime] Setup error:', e);
-      return () => {};
-    }
+    // MySQL REST connection uses optimistic updates & manual/polling refresh
+    return () => {};
   }
 };

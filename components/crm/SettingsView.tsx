@@ -26,7 +26,8 @@ const ALL_ROLES: UserRole[] = [
   'Developer',
   'Sales Manager',
   'Sales Executive',
-  'Accountant'
+  'Accountant',
+  'Partnership'
 ];
 
 const MODULE_DEFINITIONS: { key: CrmModuleKey; label: string; desc: string; icon: any }[] = [
@@ -48,11 +49,11 @@ const MODULE_DEFINITIONS: { key: CrmModuleKey; label: string; desc: string; icon
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate }) => {
   const {
-    currentUser, isSupabaseConnected, teamMembers, isSyncing, refreshFromCloud,
+    currentUser, isMySQLConnected, teamMembers, isSyncing, refreshFromCloud,
     createTeamMember, updateTeamMember, resetStaffPassword, toggleStaffStatus,
     deleteTeamMember, updateTeamMemberRole,
     leads, clients, projects, tasks, invoices, payments, expenses, agreements, credentials,
-    issues, partners, partnerReferrals, partnerPayouts
+    issues, partners, partnerReferrals, partnerPayouts, quotations, documents, events, auditLogs, notifications
   } = store;
 
   const [activeSubTab, setActiveSubTab] = useState<'Team' | 'RBAC' | 'Database' | 'MCP'>('Team');
@@ -116,7 +117,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
     { role: 'Sales Executive', desc: 'Direct lead outreach, contact logging, and quotation generation', access: 'Dashboard, Leads, Clients, Tasks, Documents, Calendar' },
     { role: 'Project Manager', desc: 'Project deliverables, milestone tracking, sprint assignments, and client briefs', access: 'Dashboard, Clients, Projects, Tasks, Documents, Vault, Calendar, Analytics' },
     { role: 'Developer', desc: 'Assigned engineering tasks, code deliveries, milestone statuses, and sprint items', access: 'Dashboard, Projects, Tasks, Calendar' },
-    { role: 'Accountant', desc: 'Commercial invoices, payment reconciliations, GST compliance, and expense logs', access: 'Dashboard, Clients, Finance, Documents, Calendar, Analytics' }
+    { role: 'Accountant', desc: 'Commercial invoices, payment reconciliations, GST compliance, and expense logs', access: 'Dashboard, Clients, Finance, Documents, Calendar, Analytics' },
+    { role: 'Partnership', desc: 'Isolated partnership portfolio: sees only assigned and added clients, plus their revenue, projects, tasks, agreements, keys & calendars', access: 'Dashboard, Clients, Projects, Tasks, Finance, Documents, Vault, Calendar, Analytics (Scoped)' }
   ];
 
   const tableStats = [
@@ -125,6 +127,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
     { name: 'Active Projects', count: projects.length, table: 'projects' },
     { name: 'Sprint Tasks', count: tasks.length, table: 'tasks' },
     { name: 'Client QA Issues', count: issues.length, table: 'project_issues' },
+    { name: 'Commercial Quotations', count: (quotations || []).length, table: 'quotations' },
     { name: 'Commercial Invoices', count: invoices.length, table: 'invoices' },
     { name: 'Recorded Payments', count: payments.length, table: 'payments' },
     { name: 'Expense Logs', count: expenses.length, table: 'expenses' },
@@ -132,8 +135,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
     { name: 'Partner Referrals', count: partnerReferrals.length, table: 'partner_referrals' },
     { name: 'Partner Payouts', count: partnerPayouts.length, table: 'partner_payouts' },
     { name: 'Legal Agreements', count: agreements.length, table: 'agreements' },
+    { name: 'Documents & Specs', count: (documents || []).length, table: 'documents' },
     { name: 'Encrypted Vault', count: credentials.length, table: 'credentials_vault' },
-    { name: 'Staff Profiles', count: teamMembers.length, table: 'profiles' }
+    { name: 'Calendar Events', count: (events || []).length, table: 'calendar_events' },
+    { name: 'Staff Profiles', count: teamMembers.length, table: 'profiles' },
+    { name: 'Audit Trail Logs', count: (auditLogs || []).length, table: 'audit_logs' },
+    { name: 'Notifications', count: (notifications || []).length, table: 'notifications' },
+    { name: 'Lead Touchpoints', count: leads.reduce((s, l) => s + (l.activities?.length || 0), 0), table: 'lead_activities' },
+    { name: 'Milestone Deliverables', count: projects.reduce((s, p) => s + (p.milestones?.length || 0), 0), table: 'project_milestones' }
   ];
 
   // Settings & Governance KPIs
@@ -242,7 +251,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
     if (!staffToDelete) return;
     deleteTeamMember(staffToDelete.id);
     setStaffToDelete(null);
-    toast.success('Staff Removed', 'Staff account deleted from Supabase.');
+    toast.success('Staff Removed', 'Staff account deleted from MySQL database.');
   };
 
   const handleExportTeamCsv = () => {
@@ -262,7 +271,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
 
   const handleSyncCloud = async () => {
     await refreshFromCloud();
-    toast.success('Database Synced', 'Refreshed all live schemas from Supabase Cloud.');
+    toast.success('Database Synced', 'Refreshed all live schemas from MySQL Database.');
   };
 
   const getRoleBadgeStyle = (role: UserRole) => {
@@ -274,6 +283,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
       case 'Project Manager': return 'bg-amber-100 text-amber-800 border-amber-200';
       case 'Developer': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
       case 'Accountant': return 'bg-rose-100 text-rose-800 border-rose-200';
+      case 'Partnership': return 'bg-lime-100 text-lime-900 border-lime-300 font-bold';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
@@ -295,7 +305,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
             Staff Management & Access Control
           </h2>
           <p className="text-xs text-gray-500">
-            Create staff accounts, configure passwords, assign granular module permissions, and manage live Supabase PostgreSQL RBAC.
+            Create staff accounts, configure passwords, assign granular module permissions, and manage live MySQL RBAC.
           </p>
         </div>
 
@@ -354,7 +364,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
         <div className="double-bezel-outer card-tactile">
           <div className="double-bezel-inner p-5 flex items-start justify-between">
             <div>
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Supabase Schemas</span>
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">MySQL Schemas</span>
               <span className="text-2xl font-black text-purple-600 mt-1 block tabular-nums">
                 {governanceMetrics.totalTables} Tables
               </span>
@@ -399,7 +409,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
             >
               {tab === 'Team' ? `Staff & Team (${teamMembers.length})` : 
                tab === 'RBAC' ? 'Role Permissions Matrix' : 
-               tab === 'Database' ? 'Supabase Infrastructure' : 
+               tab === 'Database' ? 'MySQL Database Engine' : 
                'AI & MCP Connectors'}
               {tab === 'MCP' && (
                 <span className="w-2 h-2 rounded-full bg-[#CCFF00] inline-block animate-pulse" />
@@ -761,27 +771,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
                 <Database size={22} />
               </div>
               <div>
-                <h3 className="font-extrabold text-base text-gray-900">Supabase Cloud PostgreSQL</h3>
-                <span className="text-xs text-gray-400 font-mono">Project ID: lgvqkumqjmeyycqvgycv</span>
+                <h3 className="font-extrabold text-base text-gray-900">Hostinger MySQL & phpMyAdmin Database</h3>
+                <span className="text-xs text-gray-400 font-mono">Database: agx_crm | Host: localhost:3306</span>
               </div>
             </div>
-            <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Connected & Active
+            <span className={`text-xs font-bold px-3 py-1 rounded-full ${isMySQLConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'} flex items-center gap-1.5`}>
+              <span className={`w-2 h-2 rounded-full ${isMySQLConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} /> {isMySQLConnected ? 'Connected & Active (MySQL)' : 'Offline / Local Fallback'}
             </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
               <span className="text-gray-400 block mb-1 font-bold">Database Engine</span>
-              <strong className="text-gray-900 text-sm">PostgreSQL 17.6 (Supabase Cloud)</strong>
+              <strong className="text-gray-900 text-sm">MySQL 8.0 / MariaDB (InnoDB)</strong>
             </div>
             <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
-              <span className="text-gray-400 block mb-1 font-bold">Region</span>
-              <strong className="text-gray-900 text-sm">ap-southeast-1 (Singapore)</strong>
+              <span className="text-gray-400 block mb-1 font-bold">Hostinger Server Host</span>
+              <strong className="text-gray-900 text-sm">localhost:3306 (phpMyAdmin)</strong>
             </div>
             <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
-              <span className="text-gray-400 block mb-1 font-bold">Storage Buckets</span>
-              <strong className="text-emerald-700 text-sm">4 Active Buckets</strong>
+              <span className="text-gray-400 block mb-1 font-bold">Active Schemas</span>
+              <strong className="text-emerald-700 text-sm">21 Operational Tables</strong>
             </div>
           </div>
 
@@ -1286,7 +1296,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ store, onNavigate })
             </div>
             <h3 className="font-extrabold text-lg text-gray-900 mb-2">Remove Staff Member?</h3>
             <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-              Are you sure you want to remove <strong>{staffToDelete.fullName}</strong> ({staffToDelete.email})? This staff account and role permissions will be removed from Supabase.
+              Are you sure you want to remove <strong>{staffToDelete.fullName}</strong> ({staffToDelete.email})? This staff account and role permissions will be removed from the MySQL database.
             </p>
             <div className="flex gap-2">
               <button onClick={() => setStaffToDelete(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 font-bold text-xs text-gray-600 hover:bg-gray-50 cursor-pointer">Cancel</button>

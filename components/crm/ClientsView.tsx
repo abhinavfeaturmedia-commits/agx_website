@@ -37,7 +37,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
   const {
     clients, addClient, updateClient, deleteClient, projects, invoices, payments, agreements,
     documents, tasks, credentials, teamMembers, leads, currentUser, events, addCalendarEvent,
-    quotations, convertQuotationToInvoice, updateQuotation
+    quotations, convertQuotationToInvoice, updateQuotation, partners
   } = store;
 
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
@@ -86,10 +86,13 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
     industry: 'Enterprise Technology',
     gstTaxId: '',
     accountManager: currentUser?.fullName || 'Abhinav',
+    partnerId: currentUser?.role === 'Partnership' ? currentUser.id : '',
+    partnerName: currentUser?.role === 'Partnership' ? currentUser.fullName : '',
+    partnerCode: '',
     totalValue: 25000,
     totalPaid: 0,
     outstandingAmount: 25000,
-    source: 'Inbound Referral',
+    source: currentUser?.role === 'Partnership' ? 'Partnership Referral' : 'Inbound Referral',
     notes: '',
     status: 'Active' as const
   });
@@ -111,6 +114,28 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
     });
     return Array.from(set);
   }, [teamMembers, clients]);
+
+  // Partnership assignment options (Staff with 'Partnership' role + Registered external partners)
+  const partnershipOptions = useMemo(() => {
+    const staffPartners = (teamMembers || [])
+      .filter(m => m.role === 'Partnership')
+      .map(m => ({
+        id: m.id,
+        name: m.fullName,
+        code: '',
+        label: `🤝 ${m.fullName} (Partnership Lead)`
+      }));
+
+    const externalPartners = (partners || [])
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        code: p.referralCode || p.code || '',
+        label: `🌐 ${p.name} (${p.referralCode || p.code || 'Affiliate'})`
+      }));
+
+    return [...staffPartners, ...externalPartners];
+  }, [teamMembers, partners]);
 
   // Dynamic Financial Reconciled Helper
   const getClientFinancials = (client: Client) => {
@@ -315,10 +340,13 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
       industry: 'Enterprise Technology',
       gstTaxId: '',
       accountManager: currentUser?.fullName || 'Abhinav',
+      partnerId: currentUser?.role === 'Partnership' ? currentUser.id : '',
+      partnerName: currentUser?.role === 'Partnership' ? currentUser.fullName : '',
+      partnerCode: '',
       totalValue: 25000,
       totalPaid: 0,
       outstandingAmount: 25000,
-      source: 'Inbound Referral',
+      source: currentUser?.role === 'Partnership' ? 'Partnership Referral' : 'Inbound Referral',
       notes: '',
       status: 'Active'
     });
@@ -772,8 +800,13 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                           {client.company.substring(0, 2).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-extrabold text-sm text-gray-900 group-hover:text-black truncate">
-                            {client.company}
+                          <h3 className="font-extrabold text-sm text-gray-900 group-hover:text-black truncate flex items-center gap-1.5">
+                            <span className="truncate">{client.company}</span>
+                            {client.partnerName && (
+                              <span className="shrink-0 inline-flex items-center px-1.5 py-0.2 rounded bg-lime-100 text-lime-900 text-[9px] font-bold border border-lime-300" title={`Partnership: ${client.partnerName} (${client.partnerCode || 'Lead'})`}>
+                                🤝 {client.partnerName}
+                              </span>
+                            )}
                           </h3>
                           <span className="text-xs text-gray-400 font-medium truncate block">{client.industry || 'Technology'}</span>
                         </div>
@@ -1009,7 +1042,14 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                           {currentClient.status}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-500">{currentClient.industry || 'Technology'} • Account Lead: {currentClient.accountManager}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-gray-500">{currentClient.industry || 'Technology'} • Account Lead: {currentClient.accountManager}</span>
+                        {currentClient.partnerName && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-lime-100 text-lime-900 border border-lime-300 font-bold text-[10px]">
+                            🤝 Partnership: {currentClient.partnerName} {currentClient.partnerCode ? `(${currentClient.partnerCode})` : ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1929,14 +1969,33 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Address / Location</label>
-                  <input
-                    type="text"
-                    value={newClientData.address}
-                    onChange={(e) => setNewClientData({ ...newClientData, address: e.target.value })}
-                    placeholder="e.g. Bengaluru, India"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black"
-                  />
+                  <label className="block font-bold text-gray-700 mb-1">Assigned Partnership</label>
+                  {currentUser.role === 'Partnership' ? (
+                    <div className="w-full bg-lime-50 border border-lime-300 rounded-xl p-2.5 text-lime-900 font-bold flex items-center gap-1.5 truncate">
+                      <span>🤝</span>
+                      <span className="truncate">{currentUser.fullName} (You)</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={newClientData.partnerId || ''}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        const opt = partnershipOptions.find(p => p.id === selectedId);
+                        setNewClientData({
+                          ...newClientData,
+                          partnerId: opt ? opt.id : '',
+                          partnerName: opt ? opt.name : '',
+                          partnerCode: opt ? opt.code : ''
+                        });
+                      }}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none cursor-pointer"
+                    >
+                      <option value="">None (Direct Company Client)</option>
+                      {partnershipOptions.map(p => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Account Status</label>
@@ -1950,6 +2009,17 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                     <option value="On Hold">On Hold</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Address / Location</label>
+                <input
+                  type="text"
+                  value={newClientData.address}
+                  onChange={(e) => setNewClientData({ ...newClientData, address: e.target.value })}
+                  placeholder="e.g. Bengaluru, India"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black"
+                />
               </div>
 
               <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
@@ -2080,13 +2150,33 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Address</label>
-                  <input
-                    type="text"
-                    value={editingClient.address || ''}
-                    onChange={(e) => setEditingClient({ ...editingClient, address: e.target.value })}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black"
-                  />
+                  <label className="block font-bold text-gray-700 mb-1">Assigned Partnership</label>
+                  {currentUser.role === 'Partnership' ? (
+                    <div className="w-full bg-lime-50 border border-lime-300 rounded-xl p-2.5 text-lime-900 font-bold flex items-center gap-1.5 truncate">
+                      <span>🤝</span>
+                      <span className="truncate">{editingClient.partnerName || currentUser.fullName} (Locked)</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={editingClient.partnerId || ''}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        const opt = partnershipOptions.find(p => p.id === selectedId);
+                        setEditingClient({
+                          ...editingClient,
+                          partnerId: opt ? opt.id : undefined,
+                          partnerName: opt ? opt.name : undefined,
+                          partnerCode: opt ? opt.code : undefined
+                        });
+                      }}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none cursor-pointer"
+                    >
+                      <option value="">None (Direct Company Client)</option>
+                      {partnershipOptions.map(p => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Status</label>
@@ -2100,6 +2190,16 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                     <option value="On Hold">On Hold</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Address</label>
+                <input
+                  type="text"
+                  value={editingClient.address || ''}
+                  onChange={(e) => setEditingClient({ ...editingClient, address: e.target.value })}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 outline-none focus:border-black"
+                />
               </div>
 
               <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">

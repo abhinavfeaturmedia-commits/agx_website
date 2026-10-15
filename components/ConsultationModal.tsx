@@ -90,7 +90,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         ? (sessionStorage.getItem('agx_partner_ref') || localStorage.getItem('agx_partner_ref')) 
         : '') || '';
 
-      // 1. Create Lead in CRM Supabase Database
+      // 1. Create Lead in CRM MySQL Database
       const estDealVal = selectedLeak.includes('40+') ? 350000 : 150000;
       const createdLead = await crmService.createLead({
         name: name.trim(),

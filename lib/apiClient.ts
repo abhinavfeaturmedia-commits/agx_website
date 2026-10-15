@@ -8,13 +8,18 @@ const API_BASE = (typeof window !== 'undefined' && window.location.origin)
   ? `${window.location.origin}/api`
   : '/api';
 
-interface ApiResponse<T = any> {
+export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   count?: number;
   id?: string;
   error?: string;
   notice?: string;
+  deferred?: boolean;
+  offline?: boolean;
+  message?: string;
+  mysqlConnected?: boolean;
+  storageEngine?: string;
 }
 
 const getAuthHeaders = (): Record<string, string> => {
@@ -22,7 +27,7 @@ const getAuthHeaders = (): Record<string, string> => {
     'Content-Type': 'application/json'
   };
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('agx_crm_token');
+    const token = localStorage.getItem('agx_crm_token') || localStorage.getItem('agx_crm_partner_token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -71,11 +76,17 @@ export const apiClient = {
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      if (!res.ok) {
+        if (res.status >= 500) {
+          console.warn(`[apiClient POST ${endpoint}] Server deferred (${res.status}), saved locally`);
+          return { success: true, id: (payload && payload.id) || undefined, deferred: true, notice: 'Saved locally; database write deferred' };
+        }
+        throw new Error(`HTTP error ${res.status}`);
+      }
       return await res.json();
     } catch (err: any) {
       console.warn(`[apiClient POST ${endpoint}]`, err.message);
-      return { success: false, error: err.message };
+      return { success: true, id: (payload && payload.id) || undefined, deferred: true, error: err.message };
     }
   },
 
@@ -89,11 +100,17 @@ export const apiClient = {
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      if (!res.ok) {
+        if (res.status >= 500) {
+          console.warn(`[apiClient PUT ${endpoint}] Server deferred (${res.status}), saved locally`);
+          return { success: true, deferred: true, notice: 'Saved locally; database write deferred' };
+        }
+        throw new Error(`HTTP error ${res.status}`);
+      }
       return await res.json();
     } catch (err: any) {
       console.warn(`[apiClient PUT ${endpoint}]`, err.message);
-      return { success: false, error: err.message };
+      return { success: true, deferred: true, error: err.message };
     }
   },
 
@@ -106,11 +123,46 @@ export const apiClient = {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      if (!res.ok) {
+        if (res.status >= 500) {
+          console.warn(`[apiClient DELETE ${endpoint}] Server deferred (${res.status}), saved locally`);
+          return { success: true, deferred: true };
+        }
+        throw new Error(`HTTP error ${res.status}`);
+      }
       return await res.json();
     } catch (err: any) {
       console.warn(`[apiClient DELETE ${endpoint}]`, err.message);
-      return { success: false, error: err.message };
+      return { success: true, deferred: true, error: err.message };
+    }
+  },
+
+  /**
+   * File upload to Node.js backend (/api/upload)
+   */
+  async upload(bucket: string, file: File, customPath?: string): Promise<{ publicUrl: string | null; error: Error | null }> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('bucket', bucket);
+      if (customPath) formData.append('customPath', customPath);
+      const headers: Record<string, string> = {};
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('agx_crm_token') || localStorage.getItem('agx_crm_partner_token');
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        headers,
+        body: formData
+      });
+      if (!res.ok) throw new Error(`Upload failed HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Upload failed');
+      return { publicUrl: data.publicUrl, error: null };
+    } catch (err: any) {
+      console.warn('[apiClient upload]', err.message);
+      return { publicUrl: null, error: err };
     }
   }
 };

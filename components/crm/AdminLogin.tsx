@@ -251,7 +251,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                       <span>Remember session</span>
                     </label>
                     <span className="text-white/40 text-[10px] font-mono">
-                      Supabase Cloud Auth
+                      Hostinger MySQL Auth
                     </span>
                   </div>
 
@@ -343,7 +343,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
             {/* Bottom Security Pulse */}
             <div className="mt-5 pt-3 border-t border-white/5 text-center text-[10px] text-white/40 flex items-center justify-center gap-2 font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              AES-256 Encrypted Session • Supabase Live RBAC
+              AES-256 Encrypted Session • Hostinger MySQL RBAC
             </div>
           </div>
         </motion.div>

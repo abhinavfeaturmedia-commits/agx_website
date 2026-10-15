@@ -17,7 +17,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ store, onNavigate,
   const {
     currentUser, leads, clients, projects, tasks, invoices, payments, expenses, events,
     totalRevenue, totalExpenses, netProfit, profitMargin, conversionRate, pipelineValue,
-    taskCompletionRate, outstandingInvoicesTotal, isSupabaseConnected, isSyncing, refreshFromCloud
+    taskCompletionRate, outstandingInvoicesTotal, isMySQLConnected, isSyncing, refreshFromCloud
   } = store;
 
   const [timeRange, setTimeRange] = useState<'Weekly' | 'Monthly' | 'Yearly'>('Weekly');
@@ -388,13 +388,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ store, onNavigate,
                   AG<span className="text-[#CCFF00]">X</span> OS
                 </span>
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#CCFF00]/20 text-[#CCFF00] border border-[#CCFF00]/30 flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseConnected ? 'bg-[#CCFF00] animate-pulse shadow-[0_0_6px_#CCFF00]' : 'bg-amber-400'}`} />
-                  {isSupabaseConnected ? 'Live Cloud' : 'Cache Mode'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${isMySQLConnected ? 'bg-[#CCFF00] animate-pulse shadow-[0_0_6px_#CCFF00]' : 'bg-amber-400'}`} />
+                  {isMySQLConnected ? 'Live MySQL' : 'Cache Mode'}
                 </span>
               </div>
               <h4 className="font-extrabold text-base text-white">Automate AGX</h4>
               <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                Connect Supabase, WhatsApp triggers & AI agent pipelines.
+                Connect MySQL, WhatsApp triggers & AI agent pipelines.
               </p>
             </div>
 

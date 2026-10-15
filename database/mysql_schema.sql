@@ -105,6 +105,8 @@ CREATE TABLE `clients` (
     `partner_id` VARCHAR(36) NULL,
     `partner_name` VARCHAR(255) NULL,
     `partner_code` VARCHAR(64) NULL,
+    `created_by_id` VARCHAR(36) NULL,
+    `created_by_name` VARCHAR(255) NULL,
     `total_value` DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
     `total_paid` DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
     `outstanding_amount` DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
@@ -516,13 +518,24 @@ CREATE TABLE `partners` (
     `pending_earnings` DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
     `notes` TEXT NULL,
     `last_login_at` DATETIME NULL,
+    `terms_accepted` TINYINT(1) NOT NULL DEFAULT 0,
+    `terms_accepted_at` DATETIME NULL,
+    `terms_version` VARCHAR(32) NULL DEFAULT '1.0',
+    `is_custom_rate` TINYINT(1) NOT NULL DEFAULT 0,
+    `custom_commission_rate` DECIMAL(6, 4) NULL,
+    `custom_rate_reason` VARCHAR(255) NULL,
+    `custom_rate_set_at` DATETIME NULL,
+    `custom_rate_set_by` VARCHAR(255) NULL,
+    `google_id` VARCHAR(255) NULL,
+    `avatar_url` TEXT NULL,
     `deleted_at` DATETIME NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_partners_email` (`email`),
     UNIQUE KEY `uk_partners_code` (`referral_code`),
-    KEY `idx_partners_deleted` (`deleted_at`)
+    KEY `idx_partners_deleted` (`deleted_at`),
+    KEY `idx_partners_google_id` (`google_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------

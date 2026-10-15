@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Handshake, Users, DollarSign, IndianRupee, Wallet, Search, Filter, Plus, Edit2,
   Trash2, ExternalLink, CheckCircle2, AlertCircle, Clock, ArrowUpRight,
-  Sparkles, Shield, ChevronRight, X, Phone, Mail, Building, CreditCard, TrendingUp, Download
+  Sparkles, Shield, ChevronRight, X, Phone, Mail, Building, CreditCard, TrendingUp, Download,
+  Award, Zap
 } from 'lucide-react';
-import { Partner, PartnerReferral, PartnerPayout } from '../../types/crm';
+import { Partner, PartnerReferral, PartnerPayout, calculatePartnerTier, getEffectivePartnerRate } from '../../types/crm';
 import { useCrmStore } from '../../lib/crmStore';
 import { toast } from '../../lib/toastStore';
 import { exportService } from '../../lib/exportService';
@@ -67,12 +68,23 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [payoutTargetPartner, setPayoutTargetPartner] = useState<Partner | null>(null);
 
+  // Configure Commission Rate Modal State (Tier vs Custom Fixed %)
+  const [isRateModalOpen, setIsRateModalOpen] = useState(false);
+  const [rateTargetPartner, setRateTargetPartner] = useState<Partner | null>(null);
+  const [editRateMode, setEditRateMode] = useState<'tier' | 'custom'>('tier');
+  const [editTierRate, setEditTierRate] = useState<number>(0.10);
+  const [editCustomRatePct, setEditCustomRatePct] = useState<string>('30');
+  const [editCustomRateReason, setEditCustomRateReason] = useState<string>('');
+
   // Add Partner Form State
   const [addName, setAddName] = useState('');
   const [addEmail, setAddEmail] = useState('');
   const [addCompany, setAddCompany] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addCommissionRate, setAddCommissionRate] = useState('0.10');
+  const [addIsCustomRate, setAddIsCustomRate] = useState(false);
+  const [addCustomRatePct, setAddCustomRatePct] = useState('30');
+  const [addCustomRateReason, setAddCustomRateReason] = useState('');
   const [addPayoutMethod, setAddPayoutMethod] = useState<'UPI' | 'Bank Transfer' | 'PayPal'>('UPI');
   const [addUpiId, setAddUpiId] = useState('');
 
@@ -129,13 +141,22 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const referralCode = `AGX-${cleanSlug}-${randomSuffix}`;
 
+    const isCustom = addIsCustomRate;
+    const customRate = isCustom ? (parseFloat(addCustomRatePct) || 30) / 100 : undefined;
+    const baseRate = isCustom ? customRate! : (parseFloat(addCommissionRate) || 0.10);
+
     store.createPartner({
       name: addName.trim(),
       email: addEmail.trim().toLowerCase(),
       company: addCompany.trim() || undefined,
       phone: addPhone.trim() || undefined,
       referralCode,
-      commissionRate: parseFloat(addCommissionRate) || 0.10,
+      commissionRate: baseRate,
+      isCustomRate: isCustom,
+      customCommissionRate: customRate,
+      customRateReason: isCustom ? (addCustomRateReason.trim() || 'Custom partner agreement upon onboarding') : undefined,
+      customRateSetAt: isCustom ? new Date().toISOString() : undefined,
+      customRateSetBy: isCustom ? 'Super Admin' : undefined,
       status: 'Active',
       payoutMethod: addPayoutMethod,
       payoutDetails: addPayoutMethod === 'UPI' ? { upiId: addUpiId.trim() } : {},
@@ -150,6 +171,9 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
     setAddCompany('');
     setAddPhone('');
     setAddUpiId('');
+    setAddIsCustomRate(false);
+    setAddCustomRatePct('30');
+    setAddCustomRateReason('');
   };
 
   // Open Payout Modal
@@ -187,11 +211,75 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
     setPayoutTargetPartner(null);
   };
 
-  // Upgrade / Adjust Commission Rate
-  const handleToggleCommissionRate = (partner: Partner) => {
-    const nextRate = partner.commissionRate === 0.10 ? 0.15 : 0.10;
-    store.updatePartner(partner.id, { commissionRate: nextRate });
-    toast.success('Commission Tier Updated', `${partner.name} upgraded to ${Math.round(nextRate * 100)}% tier.`);
+  // Open Commission Rate Modal for any partner
+  const handleOpenRateModal = (partner: Partner, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setRateTargetPartner(partner);
+    if (partner.isCustomRate && partner.customCommissionRate !== undefined) {
+      setEditRateMode('custom');
+      setEditCustomRatePct(String(Math.round(partner.customCommissionRate * 1000) / 10));
+      setEditCustomRateReason(partner.customRateReason || '');
+      setEditTierRate(partner.commissionRate || 0.10);
+    } else {
+      setEditRateMode('tier');
+      setEditTierRate(partner.commissionRate || 0.10);
+      setEditCustomRatePct('30');
+      setEditCustomRateReason('');
+    }
+    setIsRateModalOpen(true);
+  };
+
+  // Save Commission Rate Settings (Super Admin Action)
+  const handleSaveRateConfiguration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rateTargetPartner) return;
+
+    if (editRateMode === 'custom') {
+      const parsedPct = parseFloat(editCustomRatePct);
+      if (isNaN(parsedPct) || parsedPct <= 0 || parsedPct > 100) {
+        toast.error('Invalid Percentage', 'Please enter a valid percentage between 0.1% and 100%.');
+        return;
+      }
+      const decimalRate = parsedPct / 100;
+      const nowIso = new Date().toISOString();
+      const reason = editCustomRateReason.trim() || 'Super Admin Custom Fixed Rate Agreement';
+
+      await store.updatePartner(rateTargetPartner.id, {
+        isCustomRate: true,
+        customCommissionRate: decimalRate,
+        customRateReason: reason,
+        customRateSetAt: nowIso,
+        customRateSetBy: 'Super Admin',
+        commissionRate: decimalRate
+      });
+
+      toast.success('Custom Fixed Rate Applied ⚡', `${rateTargetPartner.name} locked at ${parsedPct}% fixed commission.`);
+    } else {
+      await store.updatePartner(rateTargetPartner.id, {
+        isCustomRate: false,
+        customCommissionRate: undefined,
+        customRateReason: undefined,
+        customRateSetAt: undefined,
+        customRateSetBy: undefined,
+        commissionRate: editTierRate
+      });
+
+      const tierLabels: Record<number, string> = {
+        0.10: 'Starter Tier (10%)',
+        0.15: 'Base Tier (15%)',
+        0.20: 'Pro Tier (20%)',
+        0.25: 'Elite Tier (25%)'
+      };
+      toast.success('Tier Plan Restored', `${rateTargetPartner.name} restored to standard dynamic tiers (${tierLabels[editTierRate] || `${Math.round(editTierRate * 100)}%`}).`);
+    }
+
+    if (selectedPartner && selectedPartner.id === rateTargetPartner.id) {
+      const updated = store.partners.find(p => p.id === rateTargetPartner.id);
+      if (updated) setSelectedPartner(updated);
+    }
+
+    setIsRateModalOpen(false);
+    setRateTargetPartner(null);
   };
 
   const allPendingPayouts = useMemo(() => {
@@ -409,17 +497,44 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleToggleCommissionRate(partner); }}
-                          title="Click to toggle between 10% Standard and 15% VIP"
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
-                            partner.commissionRate >= 0.15
-                              ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
-                        >
-                          {Math.round((partner.commissionRate || 0.10) * 100)}% {partner.commissionRate >= 0.15 ? 'VIP' : 'Std'}
-                        </button>
+                        {(() => {
+                          const partnerVol = store.partnerReferrals
+                            .filter(r => r.partnerId === partner.id)
+                            .reduce((sum, r) => sum + (r.totalPaid || r.dealValue || 0), 0);
+                          const effective = getEffectivePartnerRate(partner, partnerVol);
+                          
+                          if (effective.isCustom) {
+                            return (
+                              <button
+                                onClick={(e) => handleOpenRateModal(partner, e)}
+                                title={`Custom Fixed Rate: ${effective.percentage}% (${partner.customRateReason || 'Super Admin Override'}). Click to adjust.`}
+                                className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all border font-mono inline-flex items-center gap-1.5 shadow-2xs hover:scale-105 active:scale-95 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-300"
+                              >
+                                <Zap size={11} className="text-purple-600 fill-purple-600" />
+                                <span>Fixed {effective.percentage}%</span>
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <button
+                              onClick={(e) => handleOpenRateModal(partner, e)}
+                              title={`Standard Tier: ${effective.tier} (${effective.percentage}%). Click to configure custom rate or tier.`}
+                              className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all border font-mono inline-flex items-center gap-1.5 hover:scale-105 active:scale-95"
+                              style={{
+                                backgroundColor: `${effective.tierColor}15`,
+                                color: effective.tierColor === '#CCFF00' ? '#166534' : effective.tierColor,
+                                borderColor: `${effective.tierColor}40`
+                              }}
+                            >
+                              <span 
+                                className="w-1.5 h-1.5 rounded-full shrink-0" 
+                                style={{ backgroundColor: effective.tierColor === '#CCFF00' ? '#166534' : effective.tierColor }} 
+                              />
+                              <span>{effective.percentage}% {effective.tier}</span>
+                            </button>
+                          );
+                        })()}
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -531,27 +646,109 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                   </button>
                 </div>
 
-                {/* Partner Coordinates */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-gray-50 text-xs">
-                  <div>
-                    <span className="text-[10px] text-gray-400 block font-medium">Referral Code</span>
-                    <strong className="text-gray-900 tracking-wide">{selectedPartner.referralCode}</strong>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-400 block font-medium">Commission Rate</span>
-                    <strong className="text-gray-900 tabular-nums">{Math.round((selectedPartner.commissionRate || 0.10) * 100)}%</strong>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-400 block font-medium">Payout Method</span>
-                    <strong className="text-gray-900">{selectedPartner.payoutMethod}</strong>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-400 block font-medium">Balance Ready</span>
-                    <strong className="text-amber-600 tabular-nums">
-                      ₹{Math.max(0, selectedPartner.totalEarnings - selectedPartner.paidEarnings).toLocaleString('en-IN')}
-                    </strong>
-                  </div>
-                </div>
+                {/* Partner Coordinates & Tier Status */}
+                {(() => {
+                  const selectedPartnerVol = store.partnerReferrals
+                    .filter(r => r.partnerId === selectedPartner.id)
+                    .reduce((sum, r) => sum + (r.totalPaid || r.dealValue || 0), 0);
+                  const effective = getEffectivePartnerRate(selectedPartner, selectedPartnerVol);
+                  return (
+                    <div className="space-y-3">
+                      {/* Tier / Custom Rate Status Banner */}
+                      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        effective.isCustom 
+                          ? 'bg-purple-50/70 border-purple-200' 
+                          : 'bg-gray-50 border-gray-100'
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm border shrink-0 ${
+                              effective.isCustom 
+                                ? 'bg-purple-100 text-purple-700 border-purple-300' 
+                                : ''
+                            }`}
+                            style={!effective.isCustom ? { 
+                              backgroundColor: `${effective.tierColor}15`, 
+                              color: effective.tierColor === '#CCFF00' ? '#166534' : effective.tierColor,
+                              borderColor: `${effective.tierColor}35`
+                            } : undefined}
+                          >
+                            {effective.isCustom ? <Zap size={20} className="fill-purple-600" /> : <Award size={20} />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] uppercase font-bold text-gray-400 font-mono">Commission Structure</span>
+                              <span 
+                                className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase font-mono tracking-wider border ${
+                                  effective.isCustom 
+                                    ? 'bg-purple-600 text-white border-purple-700' 
+                                    : ''
+                                }`}
+                                style={!effective.isCustom ? { 
+                                  backgroundColor: `${effective.tierColor}15`, 
+                                  color: effective.tierColor === '#CCFF00' ? '#166534' : effective.tierColor,
+                                  borderColor: `${effective.tierColor}35`
+                                } : undefined}
+                              >
+                                {effective.badgeLabel}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-700 block mt-0.5">
+                              {effective.isCustom ? (
+                                <>
+                                  <strong className="text-purple-900">VIP Guaranteed {effective.percentage}% on all deals</strong>
+                                  {selectedPartner.customRateReason && (
+                                    <span className="text-purple-700 block text-[11px] font-medium mt-0.5">
+                                      Terms: {selectedPartner.customRateReason}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  {effective.nextTier ? (
+                                    <>Needs <strong>₹{effective.volumeNeededForNextTier?.toLocaleString('en-IN')}</strong> more for {effective.nextTier} Tier ({effective.nextTier === 'Elite' ? '25%' : effective.nextTier === 'Pro' ? '20%' : '15%'})</>
+                                  ) : (
+                                    <strong className="text-emerald-700">Top Elite Tier Qualified (+5% Bonus on total business)</strong>
+                                  )}
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleOpenRateModal(selectedPartner)}
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-gray-200 hover:border-black text-gray-900 transition-all cursor-pointer shadow-2xs shrink-0 self-start sm:self-auto flex items-center gap-1.5 hover:bg-gray-50"
+                          title="Configure commission rate or set fixed percentage"
+                        >
+                          <Edit2 size={12} />
+                          <span>Configure Rate</span>
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-gray-50 text-xs">
+                        <div>
+                          <span className="text-[10px] text-gray-400 block font-medium">Referral Code</span>
+                          <strong className="text-gray-900 tracking-wide font-mono">{selectedPartner.referralCode}</strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-gray-400 block font-medium">Business Generated</span>
+                          <strong className="text-gray-900 tabular-nums">₹{selectedPartnerVol.toLocaleString('en-IN')}</strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-gray-400 block font-medium">Payout Method</span>
+                          <strong className="text-gray-900">{selectedPartner.payoutMethod}</strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-gray-400 block font-medium">Balance Ready</span>
+                          <strong className="text-amber-600 tabular-nums">
+                            ₹{Math.max(0, selectedPartner.totalEarnings - selectedPartner.paidEarnings).toLocaleString('en-IN')}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Last Login Info Box */}
                 <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200/70 flex items-center justify-between text-xs">
@@ -779,15 +976,24 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Commission Rate</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">Commission Plan</label>
                     <select
-                      value={addCommissionRate}
-                      onChange={(e) => setAddCommissionRate(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-black"
+                      value={addIsCustomRate ? 'custom' : addCommissionRate}
+                      onChange={(e) => {
+                        if (e.target.value === 'custom') {
+                          setAddIsCustomRate(true);
+                        } else {
+                          setAddIsCustomRate(false);
+                          setAddCommissionRate(e.target.value);
+                        }
+                      }}
+                      className="w-full p-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-black text-xs"
                     >
-                      <option value="0.10">10% Standard</option>
-                      <option value="0.15">15% VIP Tier</option>
-                      <option value="0.20">20% Strategic</option>
+                      <option value="0.10">Dynamic Tiers (10% Starter)</option>
+                      <option value="0.15">Dynamic Tiers (15% Base)</option>
+                      <option value="0.20">Dynamic Tiers (20% Pro)</option>
+                      <option value="0.25">Dynamic Tiers (25% Elite)</option>
+                      <option value="custom">⚡ Custom Fixed % (Selective Partner)</option>
                     </select>
                   </div>
 
@@ -796,7 +1002,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                     <select
                       value={addPayoutMethod}
                       onChange={(e) => setAddPayoutMethod(e.target.value as any)}
-                      className="w-full p-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-black"
+                      className="w-full p-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-black text-xs"
                     >
                       <option value="UPI">UPI</option>
                       <option value="Bank Transfer">Bank Transfer</option>
@@ -804,6 +1010,44 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                     </select>
                   </div>
                 </div>
+
+                {addIsCustomRate && (
+                  <div className="p-3 rounded-2xl bg-purple-50/70 border border-purple-200 space-y-2">
+                    <div className="flex items-center gap-1.5 text-purple-900 font-bold text-xs">
+                      <Zap size={13} className="text-purple-600 fill-purple-600" />
+                      <span>Custom Fixed Commission Percentage</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-purple-800 block mb-1">Fixed Rate (%) *</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            max="100"
+                            required
+                            value={addCustomRatePct}
+                            onChange={(e) => setAddCustomRatePct(e.target.value)}
+                            placeholder="e.g. 30"
+                            className="w-full p-2 rounded-xl border border-purple-300 bg-white focus:outline-none focus:border-purple-600 font-bold text-xs tabular-nums pr-6"
+                          />
+                          <span className="absolute right-2.5 top-2 text-purple-600 font-bold text-xs">%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-purple-800 block mb-1">Agreement Memo / Reason</label>
+                        <input
+                          type="text"
+                          value={addCustomRateReason}
+                          onChange={(e) => setAddCustomRateReason(e.target.value)}
+                          placeholder="e.g. Strategic Channel VIP"
+                          className="w-full p-2 rounded-xl border border-purple-300 bg-white focus:outline-none focus:border-purple-600 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {addPayoutMethod === 'UPI' && (
                   <div>
@@ -920,6 +1164,221 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                     className="flex-1 py-2.5 rounded-xl bg-black text-[#CCFF00] font-bold uppercase tracking-wider"
                   >
                     Confirm Payout
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal 3: Configure Commission Rate (Tier vs Custom Fixed %) */}
+      <AnimatePresence>
+        {isRateModalOpen && rateTargetPartner && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-lg p-6 sm:p-7 rounded-3xl bg-white shadow-2xl border border-gray-200 space-y-5"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                    editRateMode === 'custom' ? 'bg-purple-100 text-purple-700' : 'bg-black text-[#CCFF00]'
+                  }`}>
+                    {editRateMode === 'custom' ? <Zap size={20} className="fill-purple-600" /> : <Award size={20} />}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900">Configure Commission Rate</h3>
+                    <span className="text-xs text-gray-500">{rateTargetPartner.name} · {rateTargetPartner.company || rateTargetPartner.email}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsRateModalOpen(false)}
+                  className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveRateConfiguration} className="space-y-4 text-xs">
+                {/* Plan Mode Selection: Dynamic Tiers vs Custom Fixed */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block">
+                    Commission Model
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* Mode 1: Dynamic Monthly Tiers */}
+                    <button
+                      type="button"
+                      onClick={() => setEditRateMode('tier')}
+                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative ${
+                        editRateMode === 'tier'
+                          ? 'bg-gray-50 border-black ring-2 ring-black/10 shadow-xs'
+                          : 'bg-white border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-gray-900 text-xs">Dynamic Tiers</span>
+                        {editRateMode === 'tier' && (
+                          <span className="w-2 h-2 rounded-full bg-black shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-1 leading-snug">
+                        10% → 15% → 20% → 25% scale based on monthly business closed.
+                      </p>
+                    </button>
+
+                    {/* Mode 2: Custom Fixed Percentage */}
+                    <button
+                      type="button"
+                      onClick={() => setEditRateMode('custom')}
+                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative ${
+                        editRateMode === 'custom'
+                          ? 'bg-purple-50/80 border-purple-600 ring-2 ring-purple-500/20 shadow-xs'
+                          : 'bg-white border-gray-200 hover:border-purple-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-purple-900 text-xs flex items-center gap-1">
+                          <Zap size={13} className="text-purple-600 fill-purple-600" />
+                          Custom Fixed %
+                        </span>
+                        {editRateMode === 'custom' && (
+                          <span className="w-2 h-2 rounded-full bg-purple-600 shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-purple-700/80 mt-1 leading-snug">
+                        Guaranteed fixed cut on all deals. Bypasses volume tiers.
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-panel 1: Dynamic Tiers Options */}
+                {editRateMode === 'tier' && (
+                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200/80 space-y-3">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-gray-600 block mb-1">
+                        Default Base Tier
+                      </label>
+                      <select
+                        value={editTierRate}
+                        onChange={(e) => setEditTierRate(parseFloat(e.target.value))}
+                        className="w-full p-2.5 rounded-xl border border-gray-300 bg-white font-medium text-xs focus:outline-none focus:border-black"
+                      >
+                        <option value="0.10">Starter Tier (10% standard • Up to ₹2.5L business)</option>
+                        <option value="0.15">Base Tier (15% standard • ₹2.5L — ₹4.0L business)</option>
+                        <option value="0.20">Pro Tier (20% standard • ₹4.0L — ₹12.0L business)</option>
+                        <option value="0.25">Elite Bonus Tier (25% top tier • &gt; ₹12.0L business)</option>
+                      </select>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-white border border-gray-200 text-[11px] text-gray-600 leading-relaxed">
+                      💡 <strong>Flexible Automatic Progression:</strong> When the partner brings client deals, their monthly volume automatically upgrades them across the tiers. All business in that month is paid out at the highest qualified rate.
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-panel 2: Custom Fixed Percentage Options */}
+                {editRateMode === 'custom' && (
+                  <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200 space-y-3.5">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-purple-900 block mb-1.5">
+                        Fixed Commission Percentage *
+                      </label>
+
+                      {/* Quick Presets */}
+                      <div className="flex flex-wrap gap-1.5 mb-2.5">
+                        {['10', '15', '18', '20', '22.5', '25', '30', '35', '40', '50'].map(pct => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setEditCustomRatePct(pct)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all cursor-pointer ${
+                              editCustomRatePct === pct
+                                ? 'bg-purple-700 text-white shadow-xs'
+                                : 'bg-white text-purple-900 border border-purple-200 hover:border-purple-400'
+                            }`}
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Percentage Input */}
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          max="100"
+                          required
+                          value={editCustomRatePct}
+                          onChange={(e) => setEditCustomRatePct(e.target.value)}
+                          placeholder="e.g. 30"
+                          className="w-full p-2.5 rounded-xl border border-purple-300 bg-white font-mono font-black text-sm text-purple-950 focus:outline-none focus:border-purple-700 pr-8"
+                        />
+                        <span className="absolute right-3 top-2.5 text-purple-600 font-black text-sm">%</span>
+                      </div>
+                    </div>
+
+                    {/* Simulation Preview */}
+                    {(() => {
+                      const numPct = parseFloat(editCustomRatePct) || 0;
+                      const exampleDeal = 500000;
+                      const exampleCut = Math.round(exampleDeal * (numPct / 100));
+                      return (
+                        <div className="p-2.5 rounded-xl bg-white border border-purple-200 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="text-[10px] text-gray-400 font-bold uppercase block">Deal Example (₹5,00,000)</span>
+                            <span className="text-purple-950 font-extrabold font-mono text-sm">
+                              ₹{exampleCut.toLocaleString('en-IN')} Take-Home
+                            </span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-mono font-bold">
+                            Guaranteed {numPct}%
+                          </span>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Agreement Memo / Reason */}
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-purple-900 block mb-1">
+                        Agreement Note / Audit Memo
+                      </label>
+                      <input
+                        type="text"
+                        value={editCustomRateReason}
+                        onChange={(e) => setEditCustomRateReason(e.target.value)}
+                        placeholder="e.g. Strategic Channel VIP / Enterprise closer pre-agreed cut"
+                        className="w-full p-2.5 rounded-xl border border-purple-300 bg-white text-xs focus:outline-none focus:border-purple-700"
+                      />
+                      <span className="text-[10px] text-purple-700/70 block mt-1">
+                        Visible on partner profile and ledger audit trails.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal Actions */}
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsRateModalOpen(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold text-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-black hover:bg-gray-800 text-[#CCFF00] font-bold uppercase tracking-wider transition-all shadow-sm"
+                  >
+                    Save Rate Settings
                   </button>
                 </div>
               </form>
