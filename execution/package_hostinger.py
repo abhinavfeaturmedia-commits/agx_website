@@ -84,7 +84,8 @@ def package_deployment(output_zip_name="agx-hostinger-deploy.zip"):
     dirs_to_copy = [
         ("server", staging_dir / "server"),
         ("database", staging_dir / "database"),
-        ("dist", staging_dir / "dist")
+        ("dist", staging_dir / "dist"),
+        ("public", staging_dir / "public")
     ]
 
     for src_name, dest_path in dirs_to_copy:
@@ -92,6 +93,11 @@ def package_deployment(output_zip_name="agx-hostinger-deploy.zip"):
         if src.exists():
             shutil.copytree(src, dest_path, dirs_exist_ok=True)
             print(f"  + Copied directory {src_name}/")
+
+    # Sync dist files directly into staging public folder as well
+    if (workspace_root / "dist").exists():
+        shutil.copytree(workspace_root / "dist", staging_dir / "public", dirs_exist_ok=True)
+        print("  + Synced dist/ into public/ for universal static web server compatibility")
 
     print(f"[3/4] Creating deployment archive: {output_zip_name}...")
     if output_zip_path.exists():
@@ -103,6 +109,12 @@ def package_deployment(output_zip_name="agx-hostinger-deploy.zip"):
                 file_path = Path(root) / file
                 archive_name = file_path.relative_to(staging_dir)
                 zipf.write(file_path, archive_name)
+
+    # Also mirror as shravya-deploy.zip for full Hostinger skill compatibility
+    shravya_zip = workspace_root / "shravya-deploy.zip"
+    if shravya_zip.resolve() != output_zip_path.resolve():
+        shutil.copy2(output_zip_path, shravya_zip)
+        print(f"  + Mirrored deployment archive as {shravya_zip.name}")
 
     print(f"[4/4] Cleaning temporary staging directory...")
     shutil.rmtree(staging_dir, ignore_errors=True)

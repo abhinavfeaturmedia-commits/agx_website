@@ -953,6 +953,32 @@ export const crmService = {
   async fetchAllData() {
     const apiRes = await apiClient.get<any>('/crm/all');
     if (!apiRes || !apiRes.success || !apiRes.data) {
+      if (apiRes && (apiRes.deferred || apiRes.offline || apiRes.success)) {
+        return {
+          mysqlConnected: false,
+          isOfflineFallback: true,
+          profiles: undefined,
+          leads: undefined,
+          leadActivities: undefined,
+          clients: undefined,
+          projects: undefined,
+          tasks: undefined,
+          invoices: undefined,
+          quotations: undefined,
+          payments: undefined,
+          expenses: undefined,
+          agreements: undefined,
+          documents: undefined,
+          credentials: undefined,
+          events: undefined,
+          notifications: undefined,
+          auditLogs: undefined,
+          issues: undefined,
+          partners: undefined,
+          partnerReferrals: undefined,
+          partnerPayouts: undefined
+        };
+      }
       throw new Error(apiRes?.error || 'Failed to fetch data from MySQL backend');
     }
     const d = apiRes.data;
@@ -2073,6 +2099,51 @@ export const crmService = {
       });
     } catch (err) {
       console.warn('updateMilestoneInvoiced error:', err);
+    }
+  },
+
+  async syncPaymentBalances(payment: Payment): Promise<void> {
+    try {
+      // Sync invoice
+      if (payment.invoiceId) {
+        const invRes = await apiClient.get<any>('/crm/invoices');
+        const inv = (invRes?.data || []).find((i: any) => i.id === payment.invoiceId);
+        if (inv) {
+          const currentPaid = Number(inv.paid_amount || 0);
+          const newPaid = currentPaid + Number(payment.amount);
+          const total = Number(inv.total || 0);
+          let newStatus = inv.status;
+          if (newPaid >= total && total > 0) newStatus = 'PAID';
+          else if (newPaid > 0) newStatus = 'PARTIALLY_PAID';
+          await apiClient.put(`/crm/invoices/${payment.invoiceId}`, { paid_amount: newPaid, status: newStatus });
+        }
+      }
+
+      // Sync client
+      if (payment.clientId) {
+        const clRes = await apiClient.get<any>('/crm/clients');
+        const cl = (clRes?.data || []).find((c: any) => c.id === payment.clientId);
+        if (cl) {
+          const currentPaid = Number(cl.total_paid || 0);
+          const currentVal = Number(cl.total_value || 0);
+          const newPaid = currentPaid + Number(payment.amount);
+          const newOutstanding = Math.max(0, currentVal - newPaid);
+          await apiClient.put(`/crm/clients/${payment.clientId}`, { total_paid: newPaid, outstanding_amount: newOutstanding });
+        }
+      }
+
+      // Sync project
+      if (payment.projectId) {
+        const prjRes = await apiClient.get<any>('/crm/projects');
+        const prj = (prjRes?.data || []).find((p: any) => p.id === payment.projectId);
+        if (prj) {
+          const currentPaid = Number(prj.received_amount || prj.paid_amount || 0);
+          const newPaid = currentPaid + Number(payment.amount);
+          await apiClient.put(`/crm/projects/${payment.projectId}`, { received_amount: newPaid, paid_amount: newPaid });
+        }
+      }
+    } catch (err) {
+      console.warn('syncPaymentBalances error:', err);
     }
   },
 

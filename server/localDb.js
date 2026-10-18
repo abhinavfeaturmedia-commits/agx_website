@@ -46,6 +46,23 @@ const INITIAL_SEED_DATA = {
         audit: false, settings: false
       },
       created_at: '2026-08-01 00:00:00'
+    },
+    {
+      id: '00000000-0000-0000-0000-000000000006',
+      email: 'rohit@agxperience.com',
+      full_name: 'Rohit Sankpal',
+      role: 'Developer',
+      avatar_url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
+      department: 'Engineering',
+      is_active: 1,
+      password_hash: 'agx@2026',
+      permissions: {
+        dashboard: true, leads: false, clients: false, projects: true,
+        tasks: true, issues: true, finance: false, partners: false,
+        documents: true, vault: false, calendar: true, analytics: false,
+        audit: false, settings: false
+      },
+      created_at: '2026-08-01 00:00:00'
     }
   ],
   leads: [

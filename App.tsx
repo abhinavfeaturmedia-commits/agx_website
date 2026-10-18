@@ -136,12 +136,8 @@ const App: React.FC = () => {
 
   const navigateToCrm = (role: UserRole, profile?: any) => {
     if (profile) {
-      try {
-        localStorage.setItem('agx_crm_current_user', JSON.stringify(profile));
-        localStorage.setItem('agx_crm_authenticated', 'true');
-      } catch (e) {
-        console.warn(e);
-      }
+      authService.setStaffSession(profile);
+      authService.notifyAuthChange('SIGNED_IN', profile);
     }
     setCurrentView('crm');
     if (typeof window !== 'undefined') {
@@ -361,7 +357,7 @@ const App: React.FC = () => {
       <ErrorBoundary fallbackRoute={navigateToWebsite}>
         <Suspense fallback={<PortalLoadingSpinner label="Decrypting Workspace OS..." />}>
           <CrmLayout
-            onLogout={navigateToLogin}
+            onLogout={() => navigateToLogin(true)}
             onBackToWebsite={navigateToWebsite}
           />
         </Suspense>

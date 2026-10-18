@@ -1,6 +1,6 @@
 // AGX CRM & Business Operating System Store & Data Provider
 // Enterprise MySQL & Express REST Integration with Optimistic UI, Full CRUD, Realtime Sync, and Toast Alerts
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import { crmService } from './crmService';
 import { authService } from './authService';
 import { toast } from './toastStore';
@@ -25,10 +25,116 @@ export const DEFAULT_ADMIN_USER: UserProfile = {
   permissions: ROLE_DEFAULT_PERMISSIONS['Super Admin']
 };
 
-export const INITIAL_USERS: UserProfile[] = [DEFAULT_ADMIN_USER];
-export const INITIAL_LEADS: Lead[] = [];
-export const INITIAL_CLIENTS: Client[] = [];
-export const INITIAL_PROJECTS: Project[] = [];
+export const ROHIT_USER: UserProfile = {
+  id: '00000000-0000-0000-0000-000000000006',
+  email: 'rohit@agxperience.com',
+  fullName: 'Rohit Sankpal',
+  role: 'Developer',
+  avatarUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
+  department: 'Engineering',
+  isActive: true,
+  passwordHash: 'agx@2026',
+  permissions: ROLE_DEFAULT_PERMISSIONS['Developer']
+};
+
+export const INITIAL_USERS: UserProfile[] = [DEFAULT_ADMIN_USER, ROHIT_USER];
+
+export const INITIAL_PARTNERS: Partner[] = [
+  {
+    id: 'part-00000000-0000-0000-0000-000000000001',
+    name: 'Abhinav',
+    email: 'abhinav@agxperience.com',
+    company: 'AGXperience Partners',
+    phone: '+91 98765 43210',
+    referralCode: 'AGX-ABHI-2124',
+    commissionRate: 0.10,
+    status: 'Active',
+    payoutMethod: 'UPI',
+    payoutDetails: {
+      upiId: 'abhinav@okhdfcbank',
+      notifyOnWhatsApp: true,
+      autoPayoutThreshold: 1000
+    },
+    totalEarnings: 0,
+    paidEarnings: 0,
+    pendingEarnings: 0,
+    createdAt: '2026-08-01 00:00:00',
+    updatedAt: '2026-08-01 00:00:00'
+  }
+];
+
+export const INITIAL_LEADS: Lead[] = [
+  {
+    id: '10000000-0000-0000-0000-000000000001',
+    name: 'Sarah Jenkins',
+    company: 'Apex Logistics Inc.',
+    phone: '+1 (555) 382-9012',
+    email: 'sjenkins@apexlogistics.io',
+    whatsapp: '+15553829012',
+    location: 'Chicago, USA',
+    interestedService: 'AI Customer Support & Dispatch Automation',
+    estimatedDealValue: 125000,
+    probability: 80,
+    source: 'Website',
+    assignedTo: 'Taylor Vance',
+    priority: 'High',
+    status: 'NEGOTIATION',
+    notes: 'Needs webhook integration with TMS and WhatsApp alert triggers for fleet drivers.',
+    activities: [],
+    createdAt: '2026-08-01 00:00:00',
+    updatedAt: '2026-08-01 00:00:00'
+  }
+];
+
+export const INITIAL_CLIENTS: Client[] = [
+  {
+    id: '20000000-0000-0000-0000-000000000001',
+    name: 'Karan Mehta',
+    company: 'Shrawello Systems',
+    phone: '+91 98450 12345',
+    email: 'karan@shrawello.com',
+    website: 'https://shrawello.com',
+    address: 'Bengaluru, Karnataka, India',
+    industry: 'Enterprise E-Commerce',
+    gstTaxId: '29ABCDE1234F1Z5',
+    accountManager: 'Abhinav',
+    totalValue: 250000,
+    totalPaid: 150000,
+    outstandingAmount: 100000,
+    source: 'Direct Referral',
+    notes: 'Long-term enterprise partner for AI automated search and voice agents.',
+    status: 'Active',
+    createdAt: '2026-08-01 00:00:00',
+    updatedAt: '2026-08-01 00:00:00'
+  }
+];
+
+export const INITIAL_PROJECTS: Project[] = [
+  {
+    id: '30000000-0000-0000-0000-000000000001',
+    name: 'AI Voice Agent & Support Pipeline',
+    clientId: '20000000-0000-0000-0000-000000000001',
+    clientName: 'Shrawello Systems',
+    serviceType: 'Custom AI Agent',
+    projectManager: 'Michael Andrew',
+    assignedTeam: ['Natalia Varnan', 'Abhinav'],
+    startDate: '2026-08-01',
+    dueDate: '2026-09-15',
+    projectValue: 250000,
+    receivedAmount: 150000,
+    pendingAmount: 100000,
+    status: 'IN PROGRESS',
+    priority: 'High',
+    progress: 65,
+    description: 'Deploying ultra-low latency voicebot using LiveKit WebRTC and ElevenLabs with LangChain tool calling.',
+    milestones: [],
+    portalToken: 'prj_sec_shrawello_8f9a2b',
+    portalEnabled: true,
+    createdAt: '2026-08-01 00:00:00',
+    updatedAt: '2026-08-01 00:00:00'
+  }
+];
+
 export const INITIAL_TASKS: Task[] = [];
 export const INITIAL_INVOICES: Invoice[] = [];
 export const INITIAL_QUOTATIONS: Quotation[] = [];
@@ -41,24 +147,34 @@ export const INITIAL_EVENTS: CalendarEvent[] = [];
 export const INITIAL_NOTIFICATIONS: NotificationItem[] = [];
 export const INITIAL_AUDIT_LOGS: AuditLog[] = [];
 export const INITIAL_ISSUES: ProjectIssue[] = [];
-export const INITIAL_PARTNERS: Partner[] = [];
 export const INITIAL_PARTNER_REFERRALS: PartnerReferral[] = [];
 export const INITIAL_PARTNER_PAYOUTS: PartnerPayout[] = [];
 
 const STORAGE_PREFIX = 'agx_crm_';
+const TOMBSTONE_STORAGE_KEY = 'agx_crm_tombstones';
 
-// Purge legacy mock data and stale offline cache once on initial load / version bump
-const CLEAN_VERSION_KEY = 'agx_crm_prod_clean_v2';
-if (typeof window !== 'undefined' && localStorage.getItem(CLEAN_VERSION_KEY) !== 'true') {
-  const keysToClean = [
-    'leads', 'clients', 'projects', 'tasks', 'invoices', 'quotations', 'payments',
-    'expenses', 'agreements', 'documents', 'credentials', 'events',
-    'notifications', 'audit_logs', 'issues', 'team_members', 'partners',
-    'partner_referrals', 'partner_payouts'
-  ];
-  keysToClean.forEach(k => localStorage.removeItem(STORAGE_PREFIX + k));
-  localStorage.setItem(CLEAN_VERSION_KEY, 'true');
-}
+export const getTombstones = (): Set<string> => {
+  try {
+    if (typeof window === 'undefined') return new Set();
+    const raw = localStorage.getItem(TOMBSTONE_STORAGE_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch (_) {
+    return new Set();
+  }
+};
+
+export const recordTombstone = (id: string) => {
+  if (!id) return;
+  try {
+    if (typeof window === 'undefined') return;
+    const set = getTombstones();
+    set.add(id);
+    const arr = Array.from(set).slice(-500);
+    localStorage.setItem(TOMBSTONE_STORAGE_KEY, JSON.stringify(arr));
+  } catch (_) {}
+};
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -67,12 +183,8 @@ function loadFromStorage<T>(key: string, fallback: T): T {
     const parsed = JSON.parse(item);
     if (Array.isArray(fallback)) {
       if (!Array.isArray(parsed)) return fallback;
-      const cleaned = parsed.filter((entry: any) => {
-        if (!entry || typeof entry !== 'object') return false;
-        const id = String(entry.id || '');
-        if (/^[1-9a-d]0000000-0000-0000-0000-/.test(id)) return false;
-        return true;
-      });
+      const tombstones = getTombstones();
+      const cleaned = parsed.filter((entry: any) => entry && typeof entry === 'object' && (!entry.id || !tombstones.has(entry.id)));
       if (key === 'projects') {
         return cleaned.map((p: any) => ({
           ...p,
@@ -146,6 +258,7 @@ export function generateUniqueQuotationNumber(existing: { quotationNumber?: stri
 
 // Global hook & store state
 function useCrmStoreInternal() {
+  const convertingLeadIdsRef = useRef<Set<string>>(new Set());
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => 
     authService.getStaffSession() || loadFromStorage('current_user', DEFAULT_ADMIN_USER)
   );
@@ -181,9 +294,47 @@ function useCrmStoreInternal() {
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Retain active session identity and team members in local storage
-  useEffect(() => saveToStorage('current_user', currentUser), [currentUser]);
+  // Retain active session identity and team members in local storage (guarded when authenticated)
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      saveToStorage('current_user', currentUser);
+    }
+  }, [currentUser, isAuthenticated]);
   useEffect(() => saveToStorage('team_members', teamMembers), [teamMembers]);
+  useEffect(() => saveToStorage('leads', leads), [leads]);
+  useEffect(() => saveToStorage('clients', clients), [clients]);
+  useEffect(() => saveToStorage('projects', projects), [projects]);
+  useEffect(() => saveToStorage('tasks', tasks), [tasks]);
+  useEffect(() => saveToStorage('invoices', invoices), [invoices]);
+  useEffect(() => saveToStorage('quotations', quotations), [quotations]);
+  useEffect(() => saveToStorage('payments', payments), [payments]);
+  useEffect(() => saveToStorage('expenses', expenses), [expenses]);
+  useEffect(() => saveToStorage('agreements', agreements), [agreements]);
+  useEffect(() => saveToStorage('documents', documents), [documents]);
+  useEffect(() => saveToStorage('credentials', credentials), [credentials]);
+  useEffect(() => saveToStorage('events', events), [events]);
+  useEffect(() => saveToStorage('notifications', notifications), [notifications]);
+  useEffect(() => saveToStorage('audit_logs', auditLogs), [auditLogs]);
+  useEffect(() => saveToStorage('issues', issues), [issues]);
+  useEffect(() => saveToStorage('partners', partners), [partners]);
+  useEffect(() => saveToStorage('partner_referrals', partnerReferrals), [partnerReferrals]);
+  useEffect(() => saveToStorage('partner_payouts', partnerPayouts), [partnerPayouts]);
+
+  // Synchronize authentication changes across components and storage
+  useEffect(() => {
+    const unsub = authService.onAuthStateChange((event, data) => {
+      if (event === 'SIGNED_IN' && data) {
+        setCurrentUser(data);
+        setIsAuthenticated(true);
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(DEFAULT_ADMIN_USER);
+        setIsAuthenticated(false);
+      }
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
 
   // Cloud Data Loader
   const refreshFromCloud = useCallback(async (silent = false) => {
@@ -191,31 +342,53 @@ function useCrmStoreInternal() {
       if (!silent) setIsSyncing(true);
       const data = await crmService.fetchAllData();
 
-      if (data.profiles !== undefined) setTeamMembers(data.profiles.length > 0 ? data.profiles : INITIAL_USERS);
-      if (data.leads !== undefined) setLeads(data.leads);
-      if (data.clients !== undefined) setClients(data.clients);
-      if (data.projects !== undefined) setProjects(data.projects);
-      if (data.tasks !== undefined) setTasks(data.tasks);
-      if (data.invoices !== undefined) setInvoices(data.invoices);
-      if ((data as any).quotations !== undefined) setQuotations((data as any).quotations);
-      if (data.payments !== undefined) setPayments(data.payments);
-      if (data.expenses !== undefined) setExpenses(data.expenses);
-      if (data.agreements !== undefined) setAgreements(data.agreements);
-      if (data.documents !== undefined) setDocuments(data.documents);
-      if (data.credentials !== undefined) setCredentials(data.credentials);
-      if (data.events !== undefined) setEvents(data.events);
-      if (data.notifications !== undefined) setNotifications(data.notifications);
-      if (data.auditLogs !== undefined) setAuditLogs(data.auditLogs);
-      if ((data as any).partners !== undefined) setPartners((data as any).partners);
-      if ((data as any).partnerReferrals !== undefined) setPartnerReferrals((data as any).partnerReferrals);
-      if ((data as any).partnerPayouts !== undefined) setPartnerPayouts((data as any).partnerPayouts);
+      const mergeWithLocal = <T extends { id: string; createdAt?: string }>(cloudItems: T[] | undefined, prev: T[]): T[] => {
+        if (!cloudItems) return prev;
+        const tombstones = getTombstones();
+        const validCloudItems = cloudItems.filter(item => !tombstones.has(item.id));
+        if (validCloudItems.length === 0 && prev.length > 0) {
+          return prev.filter(item => !tombstones.has(item.id));
+        }
+        const cloudIds = new Set(validCloudItems.map(item => item.id));
+        const now = Date.now();
+        // Only keep local-only items that are not tombstoned and were created within the last 15 seconds or explicitly marked temporary
+        const localOnly = prev.filter(item => {
+          if (cloudIds.has(item.id) || tombstones.has(item.id)) return false;
+          if (item.id.startsWith('temp_') || (item as any)._isOptimistic) return true;
+          if (item.createdAt) {
+            const ageMs = now - new Date(item.createdAt).getTime();
+            return ageMs >= 0 && ageMs < 15000;
+          }
+          return false;
+        });
+        return [...validCloudItems, ...localOnly];
+      };
+
+      if (data.profiles !== undefined && data.profiles.length > 0) setTeamMembers(data.profiles);
+      if (data.leads !== undefined) setLeads(prev => mergeWithLocal(data.leads, prev));
+      if (data.clients !== undefined) setClients(prev => mergeWithLocal(data.clients, prev));
+      if (data.projects !== undefined) setProjects(prev => mergeWithLocal(data.projects, prev));
+      if (data.tasks !== undefined) setTasks(prev => mergeWithLocal(data.tasks, prev));
+      if (data.invoices !== undefined) setInvoices(prev => mergeWithLocal(data.invoices, prev));
+      if ((data as any).quotations !== undefined) setQuotations(prev => mergeWithLocal((data as any).quotations, prev));
+      if (data.payments !== undefined) setPayments(prev => mergeWithLocal(data.payments, prev));
+      if (data.expenses !== undefined) setExpenses(prev => mergeWithLocal(data.expenses, prev));
+      if (data.agreements !== undefined) setAgreements(prev => mergeWithLocal(data.agreements, prev));
+      if (data.documents !== undefined) setDocuments(prev => mergeWithLocal(data.documents, prev));
+      if (data.credentials !== undefined) setCredentials(prev => mergeWithLocal(data.credentials, prev));
+      if (data.events !== undefined) setEvents(prev => mergeWithLocal(data.events, prev));
+      if (data.notifications !== undefined) setNotifications(prev => mergeWithLocal(data.notifications, prev));
+      if (data.auditLogs !== undefined) setAuditLogs(prev => mergeWithLocal(data.auditLogs, prev));
+      if ((data as any).partners !== undefined) setPartners(prev => mergeWithLocal((data as any).partners, prev));
+      if ((data as any).partnerReferrals !== undefined) setPartnerReferrals(prev => mergeWithLocal((data as any).partnerReferrals, prev));
+      if ((data as any).partnerPayouts !== undefined) setPartnerPayouts(prev => mergeWithLocal((data as any).partnerPayouts, prev));
 
       if ((data as any).issues !== undefined) {
-        setIssues((data as any).issues);
+        setIssues(prev => mergeWithLocal((data as any).issues, prev));
       } else {
         const cloudIssues = await crmService.fetchAllIssues();
         if (cloudIssues !== undefined) {
-          setIssues(cloudIssues);
+          setIssues(prev => mergeWithLocal(cloudIssues, prev));
         }
       }
 
@@ -434,21 +607,10 @@ function useCrmStoreInternal() {
       probability: newProbability,
       lossReason: effectiveLossReason
     }).catch(err => console.warn('MySQL update lead status error:', err));
-
-    // Deterministic Workflow Automation Hook: Lead moved to WON
-    if (newStatus === 'WON' && oldStatus !== 'WON' && !lead.convertedClientId) {
-      setTimeout(() => {
-        convertLeadToClient(leadId, {
-          createAgreement: false,
-          createInitialInvoice: true,
-          milestoneSplit: '40/30/30'
-        });
-        toast.success('⚡ Automation: Deal Won Engine', `${lead.name} automatically initialized as Client, Project & Kickoff Tasks.`);
-      }, 100);
-    }
   };
 
   const deleteLead = (leadId: string) => {
+    recordTombstone(leadId);
     const lead = leads.find(l => l.id === leadId);
     setLeads(prev => prev.filter(l => l.id !== leadId));
     try {
@@ -479,6 +641,19 @@ function useCrmStoreInternal() {
   }) => {
     const lead = leads.find(l => l.id === leadId);
     if (!lead) return;
+
+    if (convertingLeadIdsRef.current.has(leadId)) {
+      console.warn(`[Lead Conversion] Lead ${leadId} conversion is already in progress.`);
+      return;
+    }
+
+    if (lead.convertedClientId) {
+      const existingClient = clients.find(c => c.id === lead.convertedClientId);
+      const existingProject = projects.find(p => p.id === lead.convertedProjectId);
+      return { client: existingClient, project: existingProject };
+    }
+
+    convertingLeadIdsRef.current.add(leadId);
 
     const tempClientId = generateUUID();
     const tempProjectId = generateUUID();
@@ -578,7 +753,15 @@ function useCrmStoreInternal() {
     // Optimistic local state update
     setClients(prev => [initialClient, ...prev]);
     setProjects(prev => [initialProject, ...prev]);
-    updateLeadStatus(leadId, 'WON');
+    setLeads(prev => prev.map(l => l.id === leadId ? {
+      ...l,
+      status: 'WON',
+      probability: 100,
+      convertedClientId: tempClientId,
+      convertedProjectId: tempProjectId,
+      updatedAt: new Date().toISOString()
+    } : l));
+    crmService.updateLead(leadId, { status: 'WON', probability: 100, convertedClientId: tempClientId, convertedProjectId: tempProjectId }).catch(() => {});
     logAudit('CONVERT_LEAD', 'Client', initialClient.id, `Converted won lead ${lead.name} into client ${initialClient.company} (${split} split)`);
     toast.success('Lead Converted! 🎉', `${lead.company} is now an active client with ${optimisticMilestones.length} milestones generated.`);
 
@@ -747,6 +930,8 @@ function useCrmStoreInternal() {
     } catch (err) {
       console.warn('MySQL lead conversion sync exception:', err);
       return { client: initialClient, project: initialProject };
+    } finally {
+      convertingLeadIdsRef.current.delete(leadId);
     }
   };
 
@@ -828,6 +1013,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteClient = (clientId: string) => {
+    recordTombstone(clientId);
     const client = clients.find(c => c.id === clientId);
     setClients(prev => prev.filter(c => c.id !== clientId));
     logAudit('DELETE', 'Client', clientId, `Deleted client: ${client?.company || clientId}`);
@@ -877,6 +1063,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteProject = (projectId: string) => {
+    recordTombstone(projectId);
     const project = projects.find(p => p.id === projectId);
     setProjects(prev => prev.filter(p => p.id !== projectId));
     logAudit('DELETE', 'Project', projectId, `Deleted project: ${project?.name || projectId}`);
@@ -965,6 +1152,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteMilestone = (projectId: string, milestoneId: string) => {
+    recordTombstone(milestoneId);
     setProjects(prev => prev.map(p => {
       if (p.id === projectId) {
         const nextMilestones = p.milestones.filter(m => m.id !== milestoneId);
@@ -1077,6 +1265,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteTask = (taskId: string) => {
+    recordTombstone(taskId);
     const task = tasks.find(t => t.id === taskId);
     setTasks(prev => prev.filter(t => t.id !== taskId));
     logAudit('DELETE', 'Task', taskId, `Deleted task: ${task?.title || taskId}`);
@@ -1110,6 +1299,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteQuotation = (quotationId: string) => {
+    recordTombstone(quotationId);
     const quote = quotations.find(q => q.id === quotationId);
     setQuotations(prev => prev.filter(q => q.id !== quotationId));
     logAudit('DELETE', 'Quotation', quotationId, `Deleted quotation: ${quote?.quotationNumber || quotationId}`);
@@ -1279,6 +1469,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteInvoice = (invoiceId: string) => {
+    recordTombstone(invoiceId);
     const invoice = invoices.find(i => i.id === invoiceId);
     setInvoices(prev => prev.filter(i => i.id !== invoiceId));
 
@@ -1391,12 +1582,14 @@ function useCrmStoreInternal() {
     logAudit('PAYMENT_RECORDED', 'Payment', newPayment.id, `Recorded payment of ₹${newPayment.amount.toLocaleString('en-IN')} from ${newPayment.clientName}`);
     toast.success('Payment Received 💰', `₹${newPayment.amount.toLocaleString('en-IN')} logged via ${newPayment.paymentMethod}`);
 
+    crmService.syncPaymentBalances(newPayment).catch(err => console.warn('MySQL sync payment balances error:', err));
     crmService.recordPayment(payment).then(savedPayment => {
       setPayments(prev => prev.map(p => p.id === tempId ? savedPayment : p));
     }).catch(err => console.warn('MySQL record payment error:', err));
   };
 
   const deletePayment = (paymentId: string) => {
+    recordTombstone(paymentId);
     const payment = payments.find(p => p.id === paymentId);
     if (payment) {
       // 1. Reverse Invoice in local state
@@ -1567,6 +1760,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteExpense = (expenseId: string) => {
+    recordTombstone(expenseId);
     setExpenses(prev => prev.filter(e => e.id !== expenseId));
     toast.warning('Expense Removed', 'Expense item deleted.');
     crmService.deleteExpense(expenseId).catch(err => console.warn('MySQL delete expense error:', err));
@@ -1597,6 +1791,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteAgreement = (agreementId: string) => {
+    recordTombstone(agreementId);
     setAgreements(prev => prev.filter(a => a.id !== agreementId));
     toast.warning('Agreement Deleted', 'Agreement record removed.');
     crmService.deleteAgreement(agreementId).catch(err => console.warn('MySQL delete agreement error:', err));
@@ -1619,6 +1814,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteDocument = (docId: string) => {
+    recordTombstone(docId);
     setDocuments(prev => prev.filter(d => d.id !== docId));
     toast.warning('Document Deleted', 'Document file removed.');
     crmService.deleteDocument(docId).catch(err => console.warn('MySQL delete document error:', err));
@@ -1666,6 +1862,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteCredential = async (credId: string) => {
+    recordTombstone(credId);
     setCredentials(prev => prev.filter(c => c.id !== credId));
     logAudit('DELETE', 'Credential', credId, `Deleted vault credential ID ${credId}`);
     toast.warning('Credential Deleted', 'Vault key permanently purged.');
@@ -1797,6 +1994,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteIssue = (issueId: string) => {
+    recordTombstone(issueId);
     const issue = issues.find(i => i.id === issueId);
     setIssues(prev => prev.filter(i => i.id !== issueId));
     logAudit('DELETE', 'Issue', issueId, `Deleted issue ticket: ${issue?.ticketNumber || issueId}`);
@@ -1855,6 +2053,7 @@ function useCrmStoreInternal() {
   };
 
   const deleteCalendarEvent = (eventId: string) => {
+    recordTombstone(eventId);
     setEvents(prev => prev.filter(e => e.id !== eventId));
     toast.warning('Event Removed', 'Calendar item removed.');
     crmService.deleteCalendarEvent(eventId).catch(err => console.warn('MySQL delete event error:', err));
@@ -2129,6 +2328,7 @@ function useCrmStoreInternal() {
   };
 
   const deletePartner = (id: string) => {
+    recordTombstone(id);
     const partner = partners.find(p => p.id === id);
     setPartners(prev => prev.filter(p => p.id !== id));
     logAudit('DELETE', 'Partner', id, `Removed partner ${partner?.name || id}`);
@@ -2246,6 +2446,7 @@ function useCrmStoreInternal() {
   };
 
   const deletePartnerReferral = (id: string) => {
+    recordTombstone(id);
     setPartnerReferrals(prev => prev.filter(r => r.id !== id));
     toast.warning('Referral Removed', 'Referral link removed.');
     crmService.deletePartnerReferral(id).catch(err => console.warn('MySQL delete referral err:', err));

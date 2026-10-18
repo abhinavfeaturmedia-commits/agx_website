@@ -28,6 +28,8 @@ service-account.json
 scratch/
 server/data/*.json
 !server/data/.gitkeep
+public/uploads/*
+!public/uploads/.gitkeep
 
 # Python artifacts
 __pycache__/

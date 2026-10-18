@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Handshake, Users, DollarSign, IndianRupee, Wallet, Search, Filter, Plus, Edit2,
-  Trash2, ExternalLink, CheckCircle2, AlertCircle, Clock, ArrowUpRight,
+  Trash2, ExternalLink, CheckCircle2, AlertCircle, AlertTriangle, Clock, ArrowUpRight,
   Sparkles, Shield, ChevronRight, X, Phone, Mail, Building, CreditCard, TrendingUp, Download,
   Award, Zap
 } from 'lucide-react';
@@ -64,6 +64,13 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
     return null;
   });
 
+  useEffect(() => {
+    if (initialSelectedId) {
+      const match = store.partners.find(p => p.id === initialSelectedId);
+      if (match) setSelectedPartner(match);
+    }
+  }, [initialSelectedId, store.partners]);
+
   const [isAddPartnerModalOpen, setIsAddPartnerModalOpen] = useState(false);
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [payoutTargetPartner, setPayoutTargetPartner] = useState<Partner | null>(null);
@@ -75,6 +82,35 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
   const [editTierRate, setEditTierRate] = useState<number>(0.10);
   const [editCustomRatePct, setEditCustomRatePct] = useState<string>('30');
   const [editCustomRateReason, setEditCustomRateReason] = useState<string>('');
+
+  // Super Admin Partner Deletion State
+  const [partnerToDelete, setPartnerToDelete] = useState<Partner | null>(null);
+  const [isDeletingPartner, setIsDeletingPartner] = useState(false);
+
+  // Check if current user has Super Admin or Partner Management deletion authority
+  const canDeletePartner = useMemo(() => {
+    const role = store.currentUser?.role;
+    // Super Admin, Admin, and Executive Partnership leads have deletion authority
+    return !role || ['Super Admin', 'Admin', 'Partnership', 'Leadership'].includes(role);
+  }, [store.currentUser?.role]);
+
+  const handleConfirmDelete = async () => {
+    if (!partnerToDelete) return;
+    setIsDeletingPartner(true);
+    try {
+      const partnerId = partnerToDelete.id;
+      if (selectedPartner?.id === partnerId) {
+        setSelectedPartner(null);
+      }
+      store.deletePartner(partnerId);
+      setPartnerToDelete(null);
+    } catch (err: any) {
+      console.error('Failed to delete partner:', err);
+      toast.error('Deletion Failed', err?.message || 'Could not delete partner. Please try again.');
+    } finally {
+      setIsDeletingPartner(false);
+    }
+  };
 
   // Add Partner Form State
   const [addName, setAddName] = useState('');
@@ -598,9 +634,22 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                           >
                             Pay Cut
                           </button>
+                          {canDeletePartner && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPartnerToDelete(partner);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-rose-50 text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
+                              title="Delete Partner (Super Admin)"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                           <button
                             onClick={() => setSelectedPartner(partner)}
-                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors cursor-pointer"
+                            title="View Partner Dossier"
                           >
                             <ChevronRight size={15} />
                           </button>
@@ -906,6 +955,30 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                   Close
                 </button>
               </div>
+
+              {/* Danger Zone: Super Admin Partner Deletion */}
+              {canDeletePartner && selectedPartner && (
+                <div className="pt-4 mt-2 border-t border-rose-100">
+                  <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200/80 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                        <AlertTriangle size={14} className="text-rose-600" />
+                        Danger Zone: Decommission Partner
+                      </p>
+                      <p className="text-[11px] text-rose-700/80 mt-0.5">
+                        Soft-delete this partner account. Referral history & ledgers are preserved for financial audits.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setPartnerToDelete(selectedPartner)}
+                      className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                    >
+                      <Trash2 size={13} />
+                      Delete Partner
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
@@ -1382,6 +1455,136 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal 4: Superadmin Delete Partner Confirmation Modal */}
+      <AnimatePresence>
+        {partnerToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative overflow-hidden"
+            >
+              {/* Red warning header bar */}
+              <div className="h-1.5 bg-gradient-to-r from-rose-500 via-rose-600 to-amber-500 absolute top-0 left-0 right-0" />
+
+              <div className="flex items-start gap-3.5 mb-4 mt-1">
+                <div className="w-11 h-11 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                    Decommission Partner Account
+                    <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-mono font-bold uppercase">
+                      Super Admin Authority
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Confirm deletion of partner profile from active directory.
+                  </p>
+                </div>
+              </div>
+
+              {/* Partner Card Summary */}
+              <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200/80 mb-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-black text-[#CCFF00] flex items-center justify-center font-bold text-xs">
+                      {partnerToDelete.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-900">{partnerToDelete.name}</p>
+                      <p className="text-[11px] text-gray-500">{partnerToDelete.company || 'Independent Partner'} • {partnerToDelete.email}</p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold bg-white px-2 py-1 rounded border border-gray-200 text-gray-700">
+                    {partnerToDelete.referralCode}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200/60 text-center">
+                  <div className="bg-white p-2 rounded-lg border border-gray-100">
+                    <p className="text-[10px] uppercase font-bold text-gray-400">Deals Brought</p>
+                    <p className="text-xs font-bold text-gray-800 mt-0.5">
+                      {store.partnerReferrals.filter(r => r.partnerId === partnerToDelete.id).length} deals
+                    </p>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-gray-100">
+                    <p className="text-[10px] uppercase font-bold text-gray-400">Total Earned</p>
+                    <p className="text-xs font-bold text-emerald-700 font-mono mt-0.5">
+                      ₹{(partnerToDelete.totalEarnings || 0).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-gray-100">
+                    <p className="text-[10px] uppercase font-bold text-gray-400">Balance Due</p>
+                    <p className={`text-xs font-bold font-mono mt-0.5 ${
+                      ((partnerToDelete.totalEarnings || 0) - (partnerToDelete.paidEarnings || 0)) > 0
+                        ? 'text-rose-600'
+                        : 'text-gray-600'
+                    }`}>
+                      ₹{Math.max(0, (partnerToDelete.totalEarnings || 0) - (partnerToDelete.paidEarnings || 0)).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Outstanding balance warning if balanceDue > 0 */}
+              {((partnerToDelete.totalEarnings || 0) - (partnerToDelete.paidEarnings || 0)) > 0 && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 mb-4 flex items-start gap-2.5">
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="text-xs leading-relaxed">
+                    <span className="font-bold">Outstanding Commission Balance Warning:</span> This partner has an unsettled commission balance of <span className="font-bold font-mono text-amber-950">₹{((partnerToDelete.totalEarnings || 0) - (partnerToDelete.paidEarnings || 0)).toLocaleString('en-IN')}</span>. Deleting will remove them from the active dashboard, but past payout ledgers remain saved for legal and tax compliance.
+                  </div>
+                </div>
+              )}
+
+              {/* Logical safety safeguards notice */}
+              <div className="p-3 rounded-xl bg-gray-50 border border-gray-200/60 mb-5 text-[11px] text-gray-600 space-y-1">
+                <p className="font-semibold text-gray-700 flex items-center gap-1.5">
+                  <Shield size={13} className="text-emerald-600" />
+                  Enterprise Data Integrity Rules Applied:
+                </p>
+                <ul className="list-disc list-inside space-y-0.5 text-gray-500 pl-1">
+                  <li>Referral clients, deals, and invoices linked to this code are preserved.</li>
+                  <li>Soft-deleted in Hostinger MySQL with timestamped audit trail.</li>
+                  <li>Partner will no longer be able to log in to the Partner Portal.</li>
+                </ul>
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingPartner}
+                  onClick={() => setPartnerToDelete(null)}
+                  className="px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingPartner}
+                  onClick={handleConfirmDelete}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-sm hover:shadow-rose-600/20 disabled:opacity-50"
+                >
+                  {isDeletingPartner ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} />
+                      <span>Confirm & Delete Partner</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
