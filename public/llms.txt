@@ -1,0 +1,29 @@
+# AGXperience (AGX) — Official Site
+
+> AGXperience (commonly known as AGX, https://agxperience.com) is Maharashtra's premier custom software engineering and AI automation studio based in Pune, India. AGX builds bespoke Personalized WebApps (CRM, ERP, Websites), autonomous AI workflows, native Android & iOS mobile applications, and resilient Business DevOps pipelines.
+
+## Core Capabilities
+- **Personalized WebApps (CRM, ERP, Websites)**: Bespoke internal operating systems, custom customer management software, multi-tenant inventory/ERP ledgers, and sub-400ms web platforms. Clients receive 100% full source code ownership with zero recurring per-user software licensing fees.
+- **Intelligent AI Automations**: Autonomous multi-step agent workflows, 24/7 WhatsApp Business API & email lead qualification (<12s reply), automated PDF invoice generation, payment confirmation, and real-time CRM updates with zero dropped leads.
+- **Mobile App Development (Android & iOS)**: High-speed native mobile applications engineered with Kotlin, Jetpack Compose, Swift, SwiftUI, and React Native. Built with offline-first SQLite/Room caching, biometric security, and app store deployment.
+- **Business DevOps & Cloud Infrastructure**: Production server hardening, Docker containerization, automated CI/CD pipelines, nightly encrypted database backups, and 99.98% uptime SLA on Hostinger VPS, AWS, and GCP.
+- **Custom API & System Integrations**: Razorpay, Stripe, and PayPal payment gateway integrations, bidirectional webhooks, and communication bots (WhatsApp, Slack).
+
+## Headquarters & Service Locations
+- **Headquarters**: Pune, Maharashtra, India.
+- **Primary Regional Service Areas**: Pune, Mumbai, Thane, Pimpri-Chinchwad, Nashik, Nagpur, Chhatrapati Sambhaji Nagar, and across Maharashtra.
+- **National Hubs**: Bengaluru, Hyderabad, Delhi NCR, Ahmedabad, Chennai, Kolkata.
+- **Global Delivery**: Serving clients worldwide with remote 14-day production sprints.
+
+## Key Differentiators & Performance Guarantees
+- **Sprint Velocity**: Complete production deployment in 14 business days.
+- **30-Day Zero-Risk Guarantee**: Save 10+ hours per week within 30 days of launch or AGXperience continues engineering completely free of charge until the metric is achieved.
+- **Full IP Handover**: 100% client source code and database ownership. No vendor lock-in.
+- **Production SLA**: 99.98% execution uptime with self-healing webhook queues.
+
+## Contact Information
+- **Website**: https://agxperience.com
+- **Direct WhatsApp VIP Line**: https://wa.me/918698324316
+- **Email**: abhinavagxprience@gmail.com
+- **Location**: Pune, Maharashtra, India
+

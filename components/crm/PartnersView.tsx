@@ -4,12 +4,15 @@ import {
   Handshake, Users, DollarSign, IndianRupee, Wallet, Search, Filter, Plus, Edit2,
   Trash2, ExternalLink, CheckCircle2, AlertCircle, AlertTriangle, Clock, ArrowUpRight,
   Sparkles, Shield, ChevronRight, X, Phone, Mail, Building, CreditCard, TrendingUp, Download,
-  Award, Zap
+  Award, Zap, Calendar, FileText
 } from 'lucide-react';
 import { Partner, PartnerReferral, PartnerPayout, calculatePartnerTier, getEffectivePartnerRate } from '../../types/crm';
 import { useCrmStore } from '../../lib/crmStore';
 import { toast } from '../../lib/toastStore';
 import { exportService } from '../../lib/exportService';
+import { AdminDemoQueueView } from './sop/AdminDemoQueueView';
+import { AdminEodReviewHub } from './sop/AdminEodReviewHub';
+import { AdminGametapeHub } from './sop/AdminGametapeHub';
 
 function formatLastLogin(dateStr?: string): { relative: string; full: string; isRecent: boolean } {
   if (!dateStr) return { relative: 'Never', full: 'No login record', isRecent: false };
@@ -56,6 +59,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
   initialSelectedId
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [adminSubTab, setAdminSubTab] = useState<'directory' | 'demos' | 'eod' | 'gametape'>('directory');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'Active' | 'Pending' | 'Suspended'>('ALL');
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(() => {
     if (initialSelectedId) {
@@ -449,6 +453,97 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
         </div>
       )}
 
+      {/* SOP Admin Command Center Navigation Tabs */}
+      <div className="flex items-center gap-2 p-1.5 bg-gray-100 rounded-2xl w-fit flex-wrap">
+        <button
+          onClick={() => setAdminSubTab('directory')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+            adminSubTab === 'directory'
+              ? 'bg-white text-black shadow-xs font-extrabold'
+              : 'text-gray-500 hover:text-black'
+          }`}
+        >
+          <Handshake size={14} className={adminSubTab === 'directory' ? 'text-black' : 'text-gray-400'} />
+          <span>Partner Directory</span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+            {store.partners.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setAdminSubTab('demos')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+            adminSubTab === 'demos'
+              ? 'bg-white text-black shadow-xs font-extrabold'
+              : 'text-gray-500 hover:text-black'
+          }`}
+        >
+          <Calendar size={14} className={adminSubTab === 'demos' ? 'text-black' : 'text-gray-400'} />
+          <span>Demo Queue</span>
+          {(store.demoBookingRequests || []).filter(d => d.status === 'Requested').length > 0 && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500 text-white font-extrabold">
+              {(store.demoBookingRequests || []).filter(d => d.status === 'Requested').length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setAdminSubTab('eod')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+            adminSubTab === 'eod'
+              ? 'bg-white text-black shadow-xs font-extrabold'
+              : 'text-gray-500 hover:text-black'
+          }`}
+        >
+          <FileText size={14} className={adminSubTab === 'eod' ? 'text-black' : 'text-gray-400'} />
+          <span>Daily EOD Reports</span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+            {(store.partnerEodReports || []).length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setAdminSubTab('gametape')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+            adminSubTab === 'gametape'
+              ? 'bg-white text-black shadow-xs font-extrabold'
+              : 'text-gray-500 hover:text-black'
+          }`}
+        >
+          <Award size={14} className={adminSubTab === 'gametape' ? 'text-black' : 'text-gray-400'} />
+          <span>Weekly Gametapes</span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+            {(store.gametapeReviews || []).length}
+          </span>
+        </button>
+      </div>
+
+      {adminSubTab === 'demos' && (
+        <AdminDemoQueueView
+          demoRequests={store.demoBookingRequests || []}
+          onUpdateDemo={store.updateDemoBookingRequest}
+        />
+      )}
+
+      {adminSubTab === 'eod' && (
+        <AdminEodReviewHub
+          reports={store.partnerEodReports || []}
+          onReviewReport={store.reviewPartnerEodReport}
+          adminName={store.currentUser?.fullName || 'Super Admin'}
+        />
+      )}
+
+      {adminSubTab === 'gametape' && (
+        <AdminGametapeHub
+          partners={store.partners}
+          gametapes={store.gametapeReviews || []}
+          onSaveGametape={store.addGametapeReview}
+          reviewerName={store.currentUser?.fullName || 'Super Admin'}
+        />
+      )}
+
+      {adminSubTab === 'directory' && (
+        <>
       {/* Filter and Search Bar */}
       <div className="p-4 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="relative flex-1">
@@ -664,37 +759,42 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
         </div>
       </div>
 
-      {/* Partner Detail Drawer Modal */}
+      {/* Partner Detail Pop-up Modal */}
       <AnimatePresence>
         {selectedPartner && (
-          <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/60 backdrop-blur-xs">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-md"
+            onClick={() => setSelectedPartner(null)}
+          >
             <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="w-full max-w-2xl h-full bg-white shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto"
+              initial={{ opacity: 0, scale: 0.96, y: 14 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 14 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full max-w-3xl max-h-[90vh] rounded-3xl shadow-[0_25px_70px_-15px_rgba(0,0,0,0.35)] border border-gray-100 flex flex-col overflow-hidden"
             >
-              <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-start justify-between border-b border-gray-100 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-black text-[#CCFF00] font-black text-lg flex items-center justify-center">
-                      {selectedPartner.name.charAt(0)}
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">{selectedPartner.name}</h2>
-                      <span className="text-xs text-gray-500">{selectedPartner.company || 'AGX Affiliate Partner'}</span>
-                    </div>
+              {/* Modal Sticky Header */}
+              <div className="p-5 sm:p-6 border-b border-gray-100 bg-white/95 backdrop-blur-md shrink-0 flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-black text-[#CCFF00] font-black text-lg flex items-center justify-center shrink-0 shadow-sm">
+                    {selectedPartner.name.charAt(0)}
                   </div>
-                  <button
-                    onClick={() => setSelectedPartner(null)}
-                    className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-900"
-                  >
-                    <X size={18} />
-                  </button>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{selectedPartner.name}</h2>
+                    <span className="text-xs text-gray-500">{selectedPartner.company || 'AGX Affiliate Partner'}</span>
+                  </div>
                 </div>
+                <button
+                  onClick={() => setSelectedPartner(null)}
+                  className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-900 cursor-pointer transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
 
+              {/* Scrollable Modal Content */}
+              <div className="overflow-y-auto flex-1 p-5 sm:p-8 space-y-6 text-xs">
                 {/* Partner Coordinates & Tier Status */}
                 {(() => {
                   const selectedPartnerVol = store.partnerReferrals
@@ -757,7 +857,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                                   {effective.nextTier ? (
                                     <>Needs <strong>₹{effective.volumeNeededForNextTier?.toLocaleString('en-IN')}</strong> more for {effective.nextTier} Tier ({effective.nextTier === 'Elite' ? '25%' : effective.nextTier === 'Pro' ? '20%' : '15%'})</>
                                   ) : (
-                                    <strong className="text-emerald-700">Top Elite Tier Qualified (+5% Bonus on total business)</strong>
+                                    <strong className="text-emerald-700">Top Elite Tier Qualified (20% Base + 5% Bonus = 25% Total)</strong>
                                   )}
                                 </>
                               )}
@@ -938,51 +1038,53 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                     </div>
                   )}
                 </div>
+
+                {/* Danger Zone: Super Admin Partner Deletion */}
+                {canDeletePartner && selectedPartner && (
+                  <div className="pt-4 mt-2 border-t border-rose-100">
+                    <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200/80 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                          <AlertTriangle size={14} className="text-rose-600" />
+                          Danger Zone: Decommission Partner
+                        </p>
+                        <p className="text-[11px] text-rose-700/80 mt-0.5">
+                          Soft-delete this partner account. Referral history & ledgers are preserved for financial audits.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setPartnerToDelete(selectedPartner)}
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                      >
+                        <Trash2 size={13} />
+                        Delete Partner
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Bottom Actions */}
-              <div className="pt-6 border-t border-gray-100 flex gap-3">
+              {/* Modal Sticky Footer */}
+              <div className="p-4 px-6 border-t border-gray-100 bg-gray-50/90 flex items-center justify-between gap-3 shrink-0">
                 <button
                   onClick={() => handleOpenPayoutModal(selectedPartner)}
-                  className="flex-1 py-3 rounded-xl bg-black text-[#CCFF00] font-bold text-xs uppercase tracking-wider hover:bg-gray-800 transition-colors"
+                  className="px-5 py-2.5 rounded-xl bg-black hover:bg-gray-800 text-[#CCFF00] font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer shadow-xs"
                 >
                   Record Commission Payout
                 </button>
                 <button
                   onClick={() => setSelectedPartner(null)}
-                  className="px-5 py-3 rounded-xl bg-gray-100 text-gray-700 font-bold text-xs hover:bg-gray-200 transition-colors"
+                  className="px-5 py-2.5 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold text-xs transition-colors cursor-pointer"
                 >
                   Close
                 </button>
               </div>
-
-              {/* Danger Zone: Super Admin Partner Deletion */}
-              {canDeletePartner && selectedPartner && (
-                <div className="pt-4 mt-2 border-t border-rose-100">
-                  <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200/80 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
-                        <AlertTriangle size={14} className="text-rose-600" />
-                        Danger Zone: Decommission Partner
-                      </p>
-                      <p className="text-[11px] text-rose-700/80 mt-0.5">
-                        Soft-delete this partner account. Referral history & ledgers are preserved for financial audits.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setPartnerToDelete(selectedPartner)}
-                      className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
-                    >
-                      <Trash2 size={13} />
-                      Delete Partner
-                    </button>
-                  </div>
-                </div>
-              )}
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+      </>
+      )}
 
       {/* Modal 1: Onboard Partner */}
       <AnimatePresence>
@@ -1065,7 +1167,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                       <option value="0.10">Dynamic Tiers (10% Starter)</option>
                       <option value="0.15">Dynamic Tiers (15% Base)</option>
                       <option value="0.20">Dynamic Tiers (20% Pro)</option>
-                      <option value="0.25">Dynamic Tiers (25% Elite)</option>
+                      <option value="0.25">Dynamic Tiers (25% Elite = 20% + 5%)</option>
                       <option value="custom">⚡ Custom Fixed % (Selective Partner)</option>
                     </select>
                   </div>
@@ -1346,7 +1448,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({
                         <option value="0.10">Starter Tier (10% standard • Up to ₹2.5L business)</option>
                         <option value="0.15">Base Tier (15% standard • ₹2.5L — ₹4.0L business)</option>
                         <option value="0.20">Pro Tier (20% standard • ₹4.0L — ₹12.0L business)</option>
-                        <option value="0.25">Elite Bonus Tier (25% top tier • &gt; ₹12.0L business)</option>
+                        <option value="0.25">Elite Bonus Tier (25% Total = 20% Base + 5% Bonus • &gt; ₹12.0L business)</option>
                       </select>
                     </div>
 

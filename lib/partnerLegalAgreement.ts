@@ -75,7 +75,7 @@ export const PARTNER_AGREEMENT_CLAUSES: LegalClause[] = [
   (a) Starter Tier (10% Share): Applies to monthly client business up to ₹2,50,000. No minimum commitment or quota.
   (b) Base Tier (15% Share): Applies to monthly client business between ₹2,50,001 and ₹4,00,000.
   (c) Pro Tier (20% Share): Applies when monthly client business exceeds ₹4,00,000 up to ₹12,00,000. The 20% rate applies retrospectively to all business generated within that monthly billing cycle.
-  (d) Elite Bonus Tier (25% Share): Applies when monthly client business exceeds ₹12,00,000. This includes a +5% Performance Bonus applied across total monthly business generated.
+  (d) Elite Bonus Tier (25% Total Share): Applies when monthly client business exceeds ₹12,00,000. Calculated as 20% Pro Tier Base plus a +5% Performance Bonus applied across total monthly business generated (20% + 5% = 25% total payout).
 
 2.3 No Minimum Quotas: The Partner acknowledges that monthly business is variable and not fixed. There are no mandatory monthly minimums, maintenance fees, or demotion penalties for inactive or low-volume months.`
   },

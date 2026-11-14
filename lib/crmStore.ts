@@ -1,6 +1,7 @@
 // AGX CRM & Business Operating System Store & Data Provider
 // Enterprise MySQL & Express REST Integration with Optimistic UI, Full CRUD, Realtime Sync, and Toast Alerts
 import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
+import { apiClient } from './apiClient';
 import { crmService } from './crmService';
 import { authService } from './authService';
 import { toast } from './toastStore';
@@ -11,7 +12,9 @@ import {
   InvoiceStatus, ExpenseCategory, AgreementStatus, CrmModuleKey, ModulePermissions, ROLE_DEFAULT_PERMISSIONS,
   ProjectIssue, IssueStatus, IssueType, IssuePriority,
   Partner, PartnerReferral, PartnerPayout, ClientDocument,
-  Quotation, QuotationItem, QuotationStatus
+  Quotation, QuotationItem, QuotationStatus,
+  PartnerEodReport, DemoBookingRequest, PartnerGametapeReview,
+  AgxProductCategory, LeadStageSop, QualificationChecklist
 } from '../types/crm';
 
 export const DEFAULT_ADMIN_USER: UserProfile = {
@@ -22,6 +25,7 @@ export const DEFAULT_ADMIN_USER: UserProfile = {
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
   department: 'Leadership',
   isActive: true,
+  passwordHash: 'agx@2026',
   permissions: ROLE_DEFAULT_PERMISSIONS['Super Admin']
 };
 
@@ -149,6 +153,9 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [];
 export const INITIAL_ISSUES: ProjectIssue[] = [];
 export const INITIAL_PARTNER_REFERRALS: PartnerReferral[] = [];
 export const INITIAL_PARTNER_PAYOUTS: PartnerPayout[] = [];
+export const INITIAL_PARTNER_EOD_REPORTS: PartnerEodReport[] = [];
+export const INITIAL_DEMO_BOOKING_REQUESTS: DemoBookingRequest[] = [];
+export const INITIAL_GAMETAPE_REVIEWS: PartnerGametapeReview[] = [];
 
 const STORAGE_PREFIX = 'agx_crm_';
 const TOMBSTONE_STORAGE_KEY = 'agx_crm_tombstones';
@@ -286,6 +293,9 @@ function useCrmStoreInternal() {
   const [partners, setPartners] = useState<Partner[]>(() => loadFromStorage('partners', INITIAL_PARTNERS));
   const [partnerReferrals, setPartnerReferrals] = useState<PartnerReferral[]>(() => loadFromStorage('partner_referrals', INITIAL_PARTNER_REFERRALS));
   const [partnerPayouts, setPartnerPayouts] = useState<PartnerPayout[]>(() => loadFromStorage('partner_payouts', INITIAL_PARTNER_PAYOUTS));
+  const [partnerEodReports, setPartnerEodReports] = useState<PartnerEodReport[]>(() => loadFromStorage('partner_eod_reports', INITIAL_PARTNER_EOD_REPORTS));
+  const [demoBookingRequests, setDemoBookingRequests] = useState<DemoBookingRequest[]>(() => loadFromStorage('demo_booking_requests', INITIAL_DEMO_BOOKING_REQUESTS));
+  const [gametapeReviews, setGametapeReviews] = useState<PartnerGametapeReview[]>(() => loadFromStorage('gametape_reviews', INITIAL_GAMETAPE_REVIEWS));
 
   // Connection & sync state
   const [isMySQLConnected, setIsMySQLConnected] = useState(true);
@@ -319,6 +329,9 @@ function useCrmStoreInternal() {
   useEffect(() => saveToStorage('partners', partners), [partners]);
   useEffect(() => saveToStorage('partner_referrals', partnerReferrals), [partnerReferrals]);
   useEffect(() => saveToStorage('partner_payouts', partnerPayouts), [partnerPayouts]);
+  useEffect(() => saveToStorage('partner_eod_reports', partnerEodReports), [partnerEodReports]);
+  useEffect(() => saveToStorage('demo_booking_requests', demoBookingRequests), [demoBookingRequests]);
+  useEffect(() => saveToStorage('gametape_reviews', gametapeReviews), [gametapeReviews]);
 
   // Synchronize authentication changes across components and storage
   useEffect(() => {
@@ -382,6 +395,7 @@ function useCrmStoreInternal() {
       if ((data as any).partners !== undefined) setPartners(prev => mergeWithLocal((data as any).partners, prev));
       if ((data as any).partnerReferrals !== undefined) setPartnerReferrals(prev => mergeWithLocal((data as any).partnerReferrals, prev));
       if ((data as any).partnerPayouts !== undefined) setPartnerPayouts(prev => mergeWithLocal((data as any).partnerPayouts, prev));
+      if ((data as any).partnerEodReports !== undefined) setPartnerEodReports(prev => mergeWithLocal((data as any).partnerEodReports, prev));
 
       if ((data as any).issues !== undefined) {
         setIssues(prev => mergeWithLocal((data as any).issues, prev));
@@ -401,6 +415,56 @@ function useCrmStoreInternal() {
           isLiveDb ? 'Synced with MySQL Database' : 'Synced with Persistent Local Storage',
           isLiveDb ? 'All CRM tables are up to date on cloud.' : 'All CRM records active in local persistent storage.'
         );
+      }
+
+      // Auto-reconcile local offline partner referrals with MySQL
+      if (isLiveDb && typeof window !== 'undefined') {
+        try {
+          const cloudReferralIds = new Set(((data as any).partnerReferrals || []).map((r: any) => r.id));
+          const localReferralsRaw = localStorage.getItem('agx_crm_partner_referrals');
+          if (localReferralsRaw) {
+            const localReferrals: PartnerReferral[] = JSON.parse(localReferralsRaw);
+            const unsyncedReferrals = localReferrals.filter(r => r.id && !cloudReferralIds.has(r.id) && !getTombstones().has(r.id));
+            if (unsyncedReferrals.length > 0) {
+              console.log(`[Auto-Sync] Uploading ${unsyncedReferrals.length} local prospect(s) to MySQL...`);
+              for (const ref of unsyncedReferrals) {
+                await apiClient.post('/crm/partner-referrals', {
+                  id: ref.id,
+                  partner_id: ref.partnerId,
+                  client_name: ref.clientName,
+                  client_email: ref.clientEmail || null,
+                  client_phone: ref.clientPhone || null,
+                  company: ref.company || null,
+                  city: ref.city || null,
+                  project_type: ref.projectType || 'AI Automation',
+                  product_category: ref.productCategory || null,
+                  budget_range: ref.budgetRange || null,
+                  sop_stage: ref.sopStage || 'Prospect Identified',
+                  problem_identified: ref.problemIdentified || null,
+                  current_process: ref.currentProcess || null,
+                  deal_value: ref.dealValue || 0,
+                  total_paid: ref.totalPaid || 0,
+                  cash_collected_amount: ref.cashCollectedAmount || ref.totalPaid || 0,
+                  pending_payment: ref.pendingPayment || 0,
+                  deal_status: ref.dealStatus || 'NEW',
+                  payment_status: ref.paymentStatus || 'Pending',
+                  commission_rate: ref.commissionRate || 0.10,
+                  commission_earned: ref.commissionEarned || 0,
+                  commission_paid: ref.commissionPaid || 0,
+                  next_action: ref.nextAction || null,
+                  next_follow_up_date: ref.nextFollowUpDate || null,
+                  follow_up_cadence_day: ref.followUpCadenceDay || 1,
+                  qualification: ref.qualification ? JSON.stringify(ref.qualification) : null,
+                  notes: ref.notes || null,
+                  created_at: ref.createdAt
+                });
+              }
+              console.log(`[Auto-Sync] All ${unsyncedReferrals.length} local prospect(s) successfully persisted into MySQL.`);
+            }
+          }
+        } catch (syncErr) {
+          console.warn('[Auto-Sync] Error reconciling local referrals with MySQL:', syncErr);
+        }
       }
 
       // Resilient auto-drain of offline leads queue
@@ -2363,6 +2427,10 @@ function useCrmStoreInternal() {
       projectType: string;
       dealValue: number;
       notes?: string;
+      city?: string;
+      productCategory?: AgxProductCategory;
+      sopStage?: LeadStageSop;
+      budgetRange?: string;
     }
   ): Promise<{ lead: Lead; referral: PartnerReferral }> => {
     const leadId = generateUUID();
@@ -2384,6 +2452,10 @@ function useCrmStoreInternal() {
       source: `Partner Referral (${partner.name} - ${partner.referralCode})`,
       priority: 'High',
       status: 'NEW',
+      sopStage: payload.sopStage || 'Prospect Identified',
+      productCategory: payload.productCategory,
+      budgetRange: payload.budgetRange,
+      location: payload.city,
       assignedTo: 'Unassigned',
       partnerId: partner.id,
       partnerName: partner.name,
@@ -2402,7 +2474,11 @@ function useCrmStoreInternal() {
       company: payload.company || payload.clientName,
       clientEmail: payload.clientEmail || undefined,
       clientPhone: payload.clientPhone || undefined,
+      city: payload.city || undefined,
       projectType: payload.projectType,
+      productCategory: payload.productCategory,
+      budgetRange: payload.budgetRange,
+      sopStage: payload.sopStage || 'Prospect Identified',
       dealValue: payload.dealValue,
       totalPaid: 0,
       pendingPayment: payload.dealValue,
@@ -2450,6 +2526,90 @@ function useCrmStoreInternal() {
     setPartnerReferrals(prev => prev.filter(r => r.id !== id));
     toast.warning('Referral Removed', 'Referral link removed.');
     crmService.deletePartnerReferral(id).catch(err => console.warn('MySQL delete referral err:', err));
+  };
+
+  const addPartnerEodReport = (report: Omit<PartnerEodReport, 'id' | 'submittedAt'>) => {
+    const newReport: PartnerEodReport = {
+      ...report,
+      id: generateUUID(),
+      submittedAt: new Date().toISOString()
+    };
+    setPartnerEodReports(prev => [newReport, ...prev]);
+    toast.success('EOD Report Submitted', 'Your daily prospecting scorecard & observations have been saved.');
+    apiClient.post('/crm/partner-eod-reports', {
+      id: newReport.id,
+      partner_id: newReport.partnerId,
+      partner_name: newReport.partnerName,
+      date: newReport.date,
+      city: newReport.city || null,
+      primary_category: newReport.primaryCategory,
+      secondary_category: newReport.secondaryCategory || null,
+      metrics: JSON.stringify(newReport.metrics),
+      observations: JSON.stringify(newReport.observations),
+      submitted_at: newReport.submittedAt,
+      reviewed_by_admin: 0
+    }).catch(err => console.warn('MySQL EOD report write error:', err));
+    return newReport;
+  };
+
+  const reviewPartnerEodReport = (id: string, adminFeedback: string, reviewedBy: string) => {
+    const now = new Date().toISOString();
+    setPartnerEodReports(prev => prev.map(r => r.id === id ? {
+      ...r,
+      reviewedByAdmin: true,
+      adminFeedback,
+      reviewedAt: now,
+      reviewedBy
+    } : r));
+    toast.success('Report Reviewed', 'Feedback shared with partner.');
+    apiClient.put(`/crm/partner-eod-reports/${id}`, {
+      reviewed_by_admin: 1,
+      admin_feedback: adminFeedback,
+      reviewed_at: now,
+      reviewed_by: reviewedBy
+    }).catch(err => console.warn('MySQL EOD review write error:', err));
+  };
+
+  const addDemoBookingRequest = (req: Omit<DemoBookingRequest, 'id' | 'createdAt' | 'status'>) => {
+    const tempId = generateUUID();
+    const newReq: DemoBookingRequest = {
+      ...req,
+      id: tempId,
+      status: 'Requested',
+      createdAt: new Date().toISOString()
+    };
+    setDemoBookingRequests(prev => [newReq, ...prev]);
+    if (req.referralId) {
+      updatePartnerReferral(req.referralId, {
+        demoRequestId: tempId,
+        sopStage: 'Demo Scheduled',
+        dealStatus: 'QUALIFIED'
+      });
+    }
+    toast.success('Demo Requested', 'AGX Technical team notified for 30-min demonstration handoff.');
+    return newReq;
+  };
+
+  const updateDemoBookingRequest = (id: string, updates: Partial<DemoBookingRequest>) => {
+    setDemoBookingRequests(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r));
+    const current = demoBookingRequests.find(r => r.id === id);
+    if (current && updates.status === 'Completed' && current.referralId) {
+      updatePartnerReferral(current.referralId, {
+        sopStage: 'Demo Completed'
+      });
+    }
+    toast.success('Demo Status Updated', 'Demo scheduling details have been updated.');
+  };
+
+  const addGametapeReview = (review: Omit<PartnerGametapeReview, 'id' | 'createdAt'>) => {
+    const newReview: PartnerGametapeReview = {
+      ...review,
+      id: generateUUID(),
+      createdAt: new Date().toISOString()
+    };
+    setGametapeReviews(prev => [newReview, ...prev]);
+    toast.success('Gametape Review Logged', 'Partner sales call evaluation and feedback saved.');
+    return newReview;
   };
 
   const uploadReferralDocument = async (
@@ -2729,6 +2889,9 @@ function useCrmStoreInternal() {
     partners,
     partnerReferrals,
     partnerPayouts: visiblePartnerPayouts,
+    partnerEodReports,
+    demoBookingRequests,
+    gametapeReviews,
     // Raw arrays for admin utilities
     allClients: clients,
     allProjects: projects,
@@ -2743,6 +2906,11 @@ function useCrmStoreInternal() {
     fetchReferralDocuments,
     recordPartnerPayout,
     updatePartnerPayout,
+    addPartnerEodReport,
+    reviewPartnerEodReport,
+    addDemoBookingRequest,
+    updateDemoBookingRequest,
+    addGametapeReview,
     isMySQLConnected,
     isLoading,
     isSyncing,

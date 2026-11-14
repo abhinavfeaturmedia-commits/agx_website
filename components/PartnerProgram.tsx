@@ -172,12 +172,15 @@ const PartnerProgram: React.FC<PartnerProgramProps> = ({
               <p className="text-xs text-white/80 leading-snug">Exceeds ₹12,00,000<br/><span className="text-white/40">(Monthly Business)</span></p>
             </div>
             <div className="mt-6 pt-4 border-t border-[#CCFF00]/20">
-              <div className="text-4xl font-normal text-[#CCFF00] tracking-tight leading-none" style={{ fontFamily: "var(--font-display)" }}>
-                25%
+              <div className="flex items-baseline gap-2">
+                <div className="text-4xl font-normal text-[#CCFF00] tracking-tight leading-none" style={{ fontFamily: "var(--font-display)" }}>
+                  25%
+                </div>
+                <span className="text-xs font-mono font-bold text-[#CCFF00]/80">(20% + 5%)</span>
               </div>
-              <span className="text-xs font-bold text-white block mt-1">Share.</span>
+              <span className="text-xs font-bold text-white block mt-1">Total Share.</span>
               <span className="text-[11px] text-[#CCFF00]/90 font-semibold block mt-1 leading-snug">
-                (+5% Performance Bonus on total monthly business).
+                20% Pro Base + 5% Performance Bonus on total monthly business.
               </span>
             </div>
           </div>
@@ -201,7 +204,7 @@ const PartnerProgram: React.FC<PartnerProgramProps> = ({
                 <div>
                   <h3 className="text-xl font-medium text-white mb-1.5">Retrospective Payout Leap</h3>
                   <p className="text-white/60 text-sm leading-relaxed">
-                    Crossing ₹4,00,000 in monthly client billing upgrades your commission to <strong className="text-white font-medium">20% across your entire volume</strong>—not just the increment. Exceeding ₹12,00,000 automatically attaches a +5% performance bonus, yielding a 25% total cut.
+                    Crossing ₹4,00,000 in monthly client billing upgrades your commission to <strong className="text-white font-medium">20% across your entire volume</strong>—not just the increment. Exceeding ₹12,00,000 automatically attaches a +5% performance bonus, yielding a 25% total cut (20% Pro Base + 5% Bonus).
                   </p>
                 </div>
               </div>
@@ -376,7 +379,7 @@ const PartnerProgram: React.FC<PartnerProgramProps> = ({
                     </p>
                   ) : (
                     <p className="text-[11px] text-[#CCFF00] font-bold leading-relaxed">
-                      ⭐ Maximum Elite Tier Unlocked! Top 25% revenue cut including the +5% Performance Bonus.
+                      ⭐ Maximum Elite Tier Unlocked! Top 25% revenue cut (20% Pro Base + 5% Performance Bonus).
                     </p>
                   )}
                 </div>

@@ -4,6 +4,10 @@ import { Plus, Minus, HelpCircle } from 'lucide-react';
 
 const faqs = [
   {
+    question: "What is AGX (AGXperience)?",
+    answer: "AGX (AGXperience) is Maharashtra's premier custom software and AI systems engineering studio headquartered in Pune, India. AGX builds bespoke Personalized WebApps (CRM, ERP, Websites), autonomous AI workflows, native Android/iOS mobile applications, and resilient Business DevOps pipelines with a 14-day delivery sprint, 100% client code ownership, and an ironclad 30-day zero-risk guarantee."
+  },
+  {
     question: "How long does it take until our first automation goes live?",
     answer: "Your first high-leverage automation is deployed and actively functioning within 7 business days of your discovery call. Full multi-system operational handoff is achieved in 14 business days. We engineer for speed and immediate payroll payback."
   },

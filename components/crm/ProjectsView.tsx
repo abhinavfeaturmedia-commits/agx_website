@@ -1074,19 +1074,25 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ store, onNavigate, i
         </div>
       )}
 
-      {/* Row 6: 360° Project Operations Drawer */}
+      {/* Row 6: 360° Project Operations Pop-up Modal */}
       <AnimatePresence>
         {currentActiveProject && (
-          <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-md"
+            onClick={() => setActiveProject(null)}
+          >
             <motion.div
-              initial={{ opacity: 0, x: 400 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 400 }}
-              className="bg-white w-full max-w-3xl h-full shadow-2xl overflow-y-auto flex flex-col p-6 sm:p-8 justify-between"
+              initial={{ opacity: 0, scale: 0.96, y: 14 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 14 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-[0_25px_70px_-15px_rgba(0,0,0,0.35)] border border-gray-100 flex flex-col overflow-hidden"
             >
-              <div>
+              {/* Modal Sticky Header & Controls */}
+              <div className="p-5 sm:p-6 pb-2 border-b border-gray-100 bg-white/95 backdrop-blur-md shrink-0">
                 {/* Header */}
-                <div className="flex items-start justify-between pb-5 border-b border-gray-100">
+                <div className="flex items-start justify-between pb-4 border-b border-gray-100">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <h2 className="text-xl font-extrabold text-gray-900">{currentActiveProject.name}</h2>
@@ -1204,10 +1210,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ store, onNavigate, i
                     </button>
                   ))}
                 </div>
+              </div>
 
-                {/* Drawer Tab Contents */}
-                <div className="py-4 text-xs">
-                  {/* Tab 1: Overview */}
+              {/* Scrollable Tab Contents */}
+              <div className="overflow-y-auto flex-1 p-5 sm:p-8 space-y-6 text-xs">
+                {/* Tab 1: Overview */}
                   {activeDrawerTab === 'overview' && (
                     <div className="space-y-5">
                       {/* Financials Summary */}
@@ -1644,19 +1651,18 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ store, onNavigate, i
                     );
                   })()}
                 </div>
-              </div>
 
-              {/* Drawer Footer */}
-              <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+              {/* Modal Sticky Footer */}
+              <div className="p-4 px-6 border-t border-gray-100 bg-gray-50/90 flex items-center justify-between shrink-0">
                 <button
                   onClick={() => setProjectToDelete(currentActiveProject)}
-                  className="text-rose-600 hover:bg-rose-50 px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
+                  className="text-rose-600 hover:bg-rose-50 px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors"
                 >
                   <Trash2 size={14} /> Delete Project
                 </button>
                 <button
                   onClick={() => setActiveProject(null)}
-                  className="px-4 py-2 bg-black text-white font-bold text-xs rounded-xl hover:bg-gray-800 cursor-pointer"
+                  className="px-5 py-2.5 bg-black hover:bg-gray-800 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors"
                 >
                   Close Hub
                 </button>

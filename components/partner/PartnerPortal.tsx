@@ -21,6 +21,16 @@ import { BorderBeam } from 'border-beam';
 import { ThinkingOrb } from 'thinking-orbs';
 import { BotAvatar } from 'bot-avatars';
 import { PartnerTermsModal } from './PartnerTermsModal';
+import { QualificationModal } from './sop/QualificationModal';
+import { DemoBookingModal } from './sop/DemoBookingModal';
+import { ManageProspectModal } from './sop/ManageProspectModal';
+import { DailyScorecardBar } from './sop/DailyScorecardBar';
+import { DailyEodReportModal } from './sop/DailyEodReportModal';
+import { SopToolkitView } from './sop/SopToolkitView';
+import { SopPipelineView } from './sop/SopPipelineView';
+import { SprintFocusModal } from './sop/SprintFocusModal';
+import { AgxProductCategory, AGX_PRODUCT_CATEGORIES, LeadStageSop, CLIENT_BUDGET_OPTIONS } from '../../types/crm';
+import { CustomSelect } from '../ui/CustomSelect';
 
 interface PartnerPortalProps {
   initialPartner?: Partner | null;
@@ -29,7 +39,7 @@ interface PartnerPortalProps {
   onLogout: () => void;
 }
 
-type PartnerTab = 'dashboard' | 'referrals' | 'payouts' | 'toolkit' | 'settings';
+type PartnerTab = 'dashboard' | 'referrals' | 'eod' | 'toolkit' | 'payouts' | 'settings';
 
 export const PartnerPortal: React.FC<PartnerPortalProps> = ({
   initialPartner,
@@ -65,6 +75,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
   const [isMobileMoreOpen, setIsMobileMoreOpen] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
 
+  // SOP Modals state
+  const [selectedReferralForManage, setSelectedReferralForManage] = useState<PartnerReferral | null>(null);
+  const [selectedReferralForQualify, setSelectedReferralForQualify] = useState<PartnerReferral | null>(null);
+  const [selectedReferralForDemo, setSelectedReferralForDemo] = useState<PartnerReferral | null>(null);
+  const [isEodModalOpen, setIsEodModalOpen] = useState(false);
+  const [isFocusModalOpen, setIsFocusModalOpen] = useState(false);
+
   // Clipboard copy state
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -78,9 +95,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newClientName, setNewClientName] = useState('');
   const [newClientCompany, setNewClientCompany] = useState('');
+  const [newClientCity, setNewClientCity] = useState('');
   const [newClientEmail, setNewClientEmail] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
-  const [newProjectType, setNewProjectType] = useState('AI Automation Blueprint');
+  const [newProjectType, setNewProjectType] = useState<string>('Pre-owned Car CRM');
+  const [newBudgetOption, setNewBudgetOption] = useState<string>('To be determined (After Call & Quotation)');
+  const [newCustomDealValue, setNewCustomDealValue] = useState<string>('');
   const [newDealValue, setNewDealValue] = useState('75000');
   const [newNotes, setNewNotes] = useState('');
   const [newReferralFiles, setNewReferralFiles] = useState<File[]>([]);
@@ -387,7 +407,23 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
       return;
     }
 
-    const val = Number(newDealValue) || 50000;
+    let val = 0;
+    if (newBudgetOption === 'Custom Specific Budget') {
+      val = Number(newCustomDealValue) || 0;
+    } else if (newBudgetOption === 'Under ₹50,000') {
+      val = 35000;
+    } else if (newBudgetOption === '₹50,000 – ₹1,00,000') {
+      val = 75000;
+    } else if (newBudgetOption === '₹1,00,000 – ₹2,50,000') {
+      val = 150000;
+    } else if (newBudgetOption === '₹2,50,000 – ₹5,00,000') {
+      val = 300000;
+    } else if (newBudgetOption === '₹5,00,000+ (Enterprise)') {
+      val = 500000;
+    } else {
+      val = 0;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -397,8 +433,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
         clientEmail: newClientEmail.trim() || undefined,
         clientPhone: newClientPhone.trim() || undefined,
         projectType: newProjectType,
+        productCategory: newProjectType as AgxProductCategory,
         dealValue: val,
-        notes: newNotes.trim() || undefined
+        budgetRange: newBudgetOption,
+        notes: newNotes.trim() || undefined,
+        city: newClientCity.trim() || undefined,
+        sopStage: 'Prospect Identified'
       });
 
       // Stream any attached files to Google Drive for this newly created referral
@@ -422,9 +462,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
 
       setNewClientName('');
       setNewClientCompany('');
+      setNewClientCity('');
       setNewClientEmail('');
       setNewClientPhone('');
       setNewNotes('');
+      setNewBudgetOption('To be determined (After Call & Quotation)');
+      setNewCustomDealValue('');
       setNewDealValue('75000');
       setNewReferralFiles([]);
     } catch (err: any) {
@@ -705,11 +748,56 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
     return true;
   });
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayReport = (store.partnerEodReports || []).find(r => r.partnerId === partner.id && r.date === todayStr);
+
+  const handleSaveQualification = (referralId: string, qualification: any) => {
+    store.updatePartnerReferral(referralId, {
+      qualification,
+      sopStage: 'Qualified',
+      dealStatus: 'QUALIFIED'
+    });
+  };
+
+  const handleRequestDemo = (req: any) => {
+    store.addDemoBookingRequest(req);
+  };
+
+  const handleUpdateStage = (referralId: string, stage: LeadStageSop) => {
+    store.updatePartnerReferral(referralId, {
+      sopStage: stage,
+      dealStatus: stage === 'Won — Advance Received' ? 'WON' : stage === 'Lost' ? 'LOST' : 'QUALIFIED'
+    });
+  };
+
+  const handleUpdateProspect = (referralId: string, updates: Partial<PartnerReferral>) => {
+    store.updatePartnerReferral(referralId, updates);
+    setSelectedReferralForManage(prev => (prev && prev.id === referralId ? { ...prev, ...updates } : prev));
+  };
+
+  const handleDeleteProspect = (referralId: string) => {
+    store.deletePartnerReferral(referralId);
+    setSelectedReferralForManage(null);
+  };
+
+  const handleSubmitEodReport = (report: any) => {
+    store.addPartnerEodReport(report);
+  };
+
+  const handleSaveFocus = (primary: AgxProductCategory, secondary: AgxProductCategory) => {
+    store.updatePartner(partner.id, {
+      primaryProductFocus: primary,
+      secondaryProductFocus: secondary
+    });
+    setPartner(prev => prev ? { ...prev, primaryProductFocus: primary, secondaryProductFocus: secondary } : prev);
+  };
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'referrals', label: 'Referred Clients', icon: Users, count: myReferrals.length },
+    { id: 'referrals', label: '14-Stage Funnel', icon: Users, count: myReferrals.length },
+    { id: 'eod', label: 'Daily EOD Reports', icon: FileText, count: todayReport ? undefined : 1 },
+    { id: 'toolkit', label: 'Growth Playbook', icon: Sparkles },
     { id: 'payouts', label: 'Payout Vault & Ledger', icon: Wallet, count: availablePendingPayout > 0 ? 1 : undefined },
-    { id: 'toolkit', label: 'Growth Toolkit', icon: Sparkles },
     { id: 'settings', label: 'Profile & Settings', icon: CreditCard },
   ];
 
@@ -1124,6 +1212,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                   </div>
                 </div>
 
+                {/* SOP 30-Day Partner Sprint & Daily Scorecard Bar */}
+                <DailyScorecardBar
+                  partner={partner}
+                  todayReport={todayReport}
+                  onOpenEodModal={() => setIsEodModalOpen(true)}
+                  onOpenFocusModal={() => setIsFocusModalOpen(true)}
+                />
+
                 {/* 4 Double-Bezel Tactile KPI Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Card 1: Introductions */}
@@ -1403,7 +1499,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                           <div className="p-3.5 rounded-xl bg-white text-gray-900 text-xs border border-emerald-400">
                             <span className="font-bold block text-emerald-700 uppercase text-[10px]">Elite Tier</span>
                             <span className="text-lg font-black font-['Outfit'] block mt-1">25%</span>
-                            <span className="text-[10px] text-gray-600 block">&gt; ₹12.0L (+5% Bonus)</span>
+                            <span className="text-[10px] text-gray-600 block">&gt; ₹12.0L (20% + 5% Bonus)</span>
                           </div>
                         </div>
                       </div>
@@ -1444,7 +1540,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                               </span>
                             ) : (
                               <span className="text-emerald-600 font-bold">
-                                Max Elite Bonus Tier Unlocked! You receive top-tier 25% (+5% Performance Bonus) on all business generated.
+                                Max Elite Bonus Tier Unlocked! You receive top-tier 25% (20% Base + 5% Performance Bonus) on all business generated.
                               </span>
                             )}
                           </h4>
@@ -1549,10 +1645,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                           <p className="text-[11px] text-emerald-900 font-medium mt-1">Exceeds ₹12,00,000<br/>(Monthly Business)</p>
                         </div>
                         <div className="mt-4 pt-3 border-t border-emerald-200">
-                          <div className="text-3xl font-black text-gray-900 tracking-tight font-['Outfit']">25%</div>
-                          <span className="text-xs font-black text-gray-900 block">Share.</span>
+                          <div className="flex items-baseline gap-1.5">
+                            <div className="text-3xl font-black text-gray-900 tracking-tight font-['Outfit']">25%</div>
+                            <span className="text-xs font-black text-emerald-700 font-mono">(20% + 5%)</span>
+                          </div>
+                          <span className="text-xs font-black text-gray-900 block mt-0.5">Total Share.</span>
                           <span className="text-[10px] text-emerald-800 font-bold mt-1 block leading-tight">
-                            (+5% Performance Bonus on total monthly business).
+                            20% Base + 5% Performance Bonus on total monthly business.
                           </span>
                         </div>
                       </div>
@@ -1702,7 +1801,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                                 {effectiveSim.isCustom ? (
                                   <span className="text-[9px] font-bold text-purple-700 block mt-1">Guaranteed Fixed Rate</span>
                                 ) : effectiveSim.tier === 'Elite' ? (
-                                  <span className="text-[9px] font-bold text-emerald-600 block mt-1">+5% Bonus Included</span>
+                                  <span className="text-[9px] font-bold text-emerald-600 block mt-1">20% Base + 5% Bonus (25% Total)</span>
                                 ) : null}
                               </div>
                             </div>
@@ -1748,424 +1847,159 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
             {/* VIEW 2: REFERRED CLIENTS & DEAL PIPELINE                */}
             {/* ======================================================== */}
             {activeTab === 'referrals' && (
-              <div className="space-y-5">
-                {/* Header row with search & filters */}
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <SopPipelineView
+                referrals={myReferrals}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onOpenSubmitModal={() => setIsSubmitModalOpen(true)}
+                onOpenQualifyModal={(ref) => setSelectedReferralForQualify(ref)}
+                onOpenDemoModal={(ref) => setSelectedReferralForDemo(ref)}
+                onManageProspect={(ref) => setSelectedReferralForManage(ref)}
+                onUpdateStage={handleUpdateStage}
+                partnerRate={effectivePartnerRateInfo.rate}
+              />
+            )}
+
+            {/* ======================================================== */}
+            {/* VIEW: DAILY EOD REPORTS & PROSPECTING LOGS               */}
+            {/* ======================================================== */}
+            {activeTab === 'eod' && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-extrabold text-xl text-gray-900 tracking-tight">Referred Clients & Deals</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Track the real-time milestone release and payments for every client you introduced.
+                    <h3 className="font-extrabold text-xl text-gray-900 tracking-tight font-['Outfit']">
+                      Daily End-of-Day (EOD) Prospecting Reports
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1 max-w-xl">
+                      Required by SOP Section 14. Submit your daily activity scorecard and qualitative observations before the end of each working day.
                     </p>
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Status Filter Tabs */}
-                    <div className="flex items-center p-1 rounded-xl bg-gray-100 text-xs font-bold">
-                      {(['ALL', 'NEW', 'WON', 'COMPLETED'] as const).map(f => (
-                        <button
-                          key={f}
-                          onClick={() => setStatusFilter(f)}
-                          className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
-                            statusFilter === f
-                              ? 'bg-white text-gray-900 shadow-xs'
-                              : 'text-gray-500 hover:text-gray-900'
-                          }`}
-                        >
-                          {f}
-                        </button>
-                      ))}
-                    </div>
-
-                    <button
-                      onClick={() => setIsSubmitModalOpen(true)}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black text-white text-xs font-bold hover:bg-gray-800 transition-colors cursor-pointer btn-press"
-                    >
-                      <Plus size={14} className="text-[#CCFF00]" />
-                      <span>Submit Intro</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setIsEodModalOpen(true)}
+                    className="px-5 py-2.5 rounded-2xl bg-black hover:bg-gray-800 text-white font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5 btn-press"
+                  >
+                    <Plus size={14} className="text-[#CCFF00]" />
+                    <span>{todayReport ? "Update Today's Report" : "Submit Today's EOD Report"}</span>
+                  </button>
                 </div>
 
-                {/* Referrals Cards Grid */}
-                {filteredReferrals.length === 0 ? (
-                  <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm flex flex-col items-center justify-center">
-                    <BotAvatar type="star" size={88} state="default" aria-label="Partner Mascot" />
-                    <h4 className="text-base font-extrabold text-gray-900 mt-4">No matching referrals found</h4>
-                    <p className="text-xs text-gray-500 mt-1 max-w-md">
-                      Introduce clients using your referral link or the submit form. When contracts close, milestones disburse into your payout vault.
-                    </p>
-                    <button
-                      onClick={() => setIsSubmitModalOpen(true)}
-                      className="mt-5 px-5 py-2.5 rounded-xl bg-[#CCFF00] text-black text-xs font-extrabold hover:bg-[#b8e600] transition-colors cursor-pointer"
-                    >
-                      + Submit Client Intro
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {filteredReferrals.map((referral) => {
-                      const percentPaid =
-                        referral.dealValue > 0
-                          ? Math.min(100, Math.round((referral.totalPaid / referral.dealValue) * 100))
-                          : 0;
-                      const isFullySettled = referral.totalPaid >= referral.dealValue && referral.dealValue > 0;
-                      const earnedCut = referral.commissionEarned || Math.round(referral.totalPaid * partnerRate);
-                      const fullPotentialCut = Math.round(referral.dealValue * partnerRate);
-
-                      const stage1Cleared = percentPaid >= 35;
-                      const stage2Cleared = percentPaid >= 65;
-                      const stage3Cleared = isFullySettled;
-
-                      const isDocsExpanded = expandedDocReferralId === referral.id;
-                      const isUploadingThis = uploadingReferralId === referral.id;
-                      const isDraggingThis = dragActiveReferralId === referral.id;
-
-                      const attachedDocs: ClientDocument[] = [
-                        ...(referral.documents || []),
-                        ...(store.documents || []).filter(
-                          d => (d.leadId && (d.leadId === referral.id || d.leadId === referral.leadId)) ||
-                               (d.clientId && d.clientId === referral.clientId) ||
-                               (d.leadName && referral.clientName && d.leadName.toLowerCase() === referral.clientName.toLowerCase())
-                        ).map(cd => ({
-                          id: cd.id,
-                          title: cd.title,
-                          docType: cd.docType,
-                          leadId: cd.leadId,
-                          clientId: cd.clientId,
-                          leadName: cd.leadName,
-                          fileUrl: cd.fileUrl,
-                          fileSize: cd.fileSize,
-                          uploadedBy: cd.uploadedBy,
-                          createdAt: cd.createdAt
-                        }))
-                      ].filter((doc, idx, arr) => arr.findIndex(x => x.id === doc.id || (x.title === doc.title && x.fileUrl === doc.fileUrl)) === idx);
-
-                      return (
-                        <div
-                          key={referral.id}
-                          className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-shadow space-y-4"
-                        >
-                          {/* Client Header */}
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
-                            <div>
-                              <div className="flex items-center gap-2.5 flex-wrap">
-                                <h4 className="text-base font-extrabold text-gray-900">{referral.clientName}</h4>
-                                {referral.company && (
-                                  <span className="text-xs text-gray-500 font-medium">@{referral.company}</span>
-                                )}
-                                <span className="px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 font-semibold text-[10px]">
-                                  {referral.projectType}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
-                                <span>Introduced {new Date(referral.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                {referral.clientPhone && <span>• {referral.clientPhone}</span>}
-                                {referral.clientEmail && <span>• {referral.clientEmail}</span>}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                referral.dealStatus === 'COMPLETED'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : referral.dealStatus === 'WON' || referral.dealStatus === 'IN PROGRESS'
-                                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
-                              }`}>
-                                Deal: {referral.dealStatus}
+                {/* Submissions List */}
+                <div className="space-y-4">
+                  {((store.partnerEodReports || []).filter(r => r.partnerId === partner.id)).length === 0 ? (
+                    <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto text-gray-400">
+                        <FileText size={20} />
+                      </div>
+                      <h4 className="font-extrabold text-sm text-gray-900">No EOD Reports Submitted Yet</h4>
+                      <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                        Submit your daily outreach metrics, decision-makers reached, and observations to establish a repeatable sales process.
+                      </p>
+                      <button
+                        onClick={() => setIsEodModalOpen(true)}
+                        className="px-4 py-2 rounded-xl bg-black text-white text-xs font-bold hover:bg-gray-800 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                      >
+                        <Plus size={13} className="text-[#CCFF00]" /> Submit First EOD Report
+                      </button>
+                    </div>
+                  ) : (
+                    ((store.partnerEodReports || []).filter(r => r.partnerId === partner.id)).map(r => (
+                      <div
+                        key={r.id}
+                        className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-xs px-2.5 py-1 rounded-xl bg-black text-white">
+                              {r.date}
+                            </span>
+                            {r.city && (
+                              <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-xl">
+                                City: {r.city}
                               </span>
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-800">
-                                {isFullySettled ? '100% Settled ✓' : `${percentPaid}% Paid`}
-                              </span>
-                            </div>
+                            )}
+                            <span className="text-xs text-gray-500">
+                              Focus: <strong className="text-gray-900">{r.primaryCategory}</strong>
+                            </span>
                           </div>
-
-                          {/* 3-Stage Milestone Visualizer */}
-                          <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-100 space-y-2.5">
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-gray-500 font-semibold">Milestone Release Progress</span>
-                              <span className="font-mono text-gray-900 font-bold text-[11px]">
-                                ₹{referral.totalPaid.toLocaleString('en-IN')} of ₹{referral.dealValue.toLocaleString('en-IN')}
+                          <div>
+                            {r.reviewedByAdmin ? (
+                              <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                ✓ Reviewed by {r.reviewedBy || 'AGX Leadership'}
                               </span>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
-                              {/* Stage 1 */}
-                              <div className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition-colors ${
-                                stage1Cleared
-                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-bold'
-                                  : 'bg-white border-gray-200 text-gray-400'
-                              }`}>
-                                <div className="flex items-center gap-1">
-                                  {stage1Cleared ? <CheckCircle2 size={12} className="text-emerald-600" /> : <Clock size={12} />}
-                                  <span>Milestone 1</span>
-                                </div>
-                                <span className="text-[9px] font-normal">Kickoff Advance (40%)</span>
-                              </div>
-
-                              {/* Stage 2 */}
-                              <div className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition-colors ${
-                                stage2Cleared
-                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-bold'
-                                  : 'bg-white border-gray-200 text-gray-400'
-                              }`}>
-                                <div className="flex items-center gap-1">
-                                  {stage2Cleared ? <CheckCircle2 size={12} className="text-emerald-600" /> : <Clock size={12} />}
-                                  <span>Milestone 2</span>
-                                </div>
-                                <span className="text-[9px] font-normal">UAT Demo (30%)</span>
-                              </div>
-
-                              {/* Stage 3 */}
-                              <div className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition-colors ${
-                                stage3Cleared
-                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-bold'
-                                  : 'bg-white border-gray-200 text-gray-400'
-                              }`}>
-                                <div className="flex items-center gap-1">
-                                  {stage3Cleared ? <CheckCircle2 size={12} className="text-emerald-600" /> : <Clock size={12} />}
-                                  <span>Milestone 3</span>
-                                </div>
-                                <span className="text-[9px] font-normal">Final Handover (30%)</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Financial Breakdown Strip */}
-                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-1">
-                            <div className="flex items-center gap-4">
-                              <div>
-                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Contract Budget</span>
-                                <span className="font-mono font-extrabold text-gray-900 text-sm">
-                                  ₹{referral.dealValue.toLocaleString('en-IN')}
-                                </span>
-                              </div>
-                              <div className="h-6 w-[1px] bg-gray-200" />
-                              <div>
-                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Your Cut ({partnerRatePercent}%)</span>
-                                <span className="font-mono font-extrabold text-emerald-600 text-sm">
-                                  ₹{fullPotentialCut.toLocaleString('en-IN')}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="text-right">
-                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Commission Released</span>
-                              <span className="font-mono font-black text-gray-900 text-sm">
-                                ₹{earnedCut.toLocaleString('en-IN')}
+                            ) : (
+                              <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                                Pending AGX Review
                               </span>
-                            </div>
-                          </div>
-
-                          {/* Client Documents & Google Drive Vault Section */}
-                          <div className="pt-3 border-t border-gray-100">
-                            <div className="flex flex-wrap items-center justify-between gap-2.5">
-                              {/* Left: Badge with folder icon, count, and accordion toggle */}
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setExpandedDocReferralId(isDocsExpanded ? null : referral.id)}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-800 text-xs font-bold transition-all cursor-pointer"
-                                >
-                                  <Folder size={13} className="text-[#0C0F17]" />
-                                  <span>Client Files & Drive</span>
-                                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                                    attachedDocs.length > 0 ? 'bg-black text-[#CCFF00]' : 'bg-gray-200 text-gray-600'
-                                  }`}>
-                                    {attachedDocs.length}
-                                  </span>
-                                  <ChevronDown size={12} className={`transition-transform text-gray-500 ${isDocsExpanded ? 'rotate-180' : ''}`} />
-                                </button>
-
-                                {referral.driveFolderUrl && (
-                                  <a
-                                    href={referral.driveFolderUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] font-bold transition-colors cursor-pointer"
-                                    title="Open dedicated Google Drive folder for this client"
-                                  >
-                                    <span>📁 Open in Drive</span>
-                                    <ExternalLink size={10} />
-                                  </a>
-                                )}
-                              </div>
-
-                              {/* Right: Quick Attach Button */}
-                              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black hover:bg-gray-800 text-white text-[11px] font-bold cursor-pointer transition-colors shadow-xs">
-                                <input
-                                  type="file"
-                                  className="hidden"
-                                  disabled={isUploadingThis}
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      handleUploadFileForReferral(referral, file);
-                                      if (!isDocsExpanded) setExpandedDocReferralId(referral.id);
-                                    }
-                                    e.target.value = '';
-                                  }}
-                                />
-                                {isUploadingThis ? (
-                                  <>
-                                    <RefreshCw size={11} className="animate-spin text-[#CCFF00]" />
-                                    <span>Uploading...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <UploadCloud size={11} className="text-[#CCFF00]" />
-                                    <span>+ Attach File</span>
-                                  </>
-                                )}
-                              </label>
-                            </div>
-
-                            {/* Expandable Vault Drawer */}
-                            <AnimatePresence>
-                              {isDocsExpanded && (
-                                <motion.div
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                  transition={{ duration: 0.2 }}
-                                  className="overflow-hidden mt-3 pt-3 border-t border-dashed border-gray-200 space-y-3"
-                                >
-                                  {/* Folder Info Strip */}
-                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-gray-50 border border-gray-100 text-xs">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                                        <Folder size={12} />
-                                      </div>
-                                      <div className="truncate">
-                                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Google Drive Destination</span>
-                                        <span className="text-gray-800 font-mono text-[11px] font-semibold truncate block">
-                                          AGX Client Vault / {referral.clientName} {referral.company ? `- ${referral.company}` : ''}
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    {referral.driveFolderUrl && (
-                                      <a
-                                        href={referral.driveFolderUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center justify-center gap-1 px-3 py-1 rounded-lg bg-white hover:bg-gray-100 border border-gray-200 text-gray-900 text-[11px] font-bold shrink-0 transition-colors cursor-pointer"
-                                      >
-                                        <span>View Drive Folder</span>
-                                        <ExternalLink size={10} />
-                                      </a>
-                                    )}
-                                  </div>
-
-                                  {/* Drag and Drop Zone */}
-                                  <div
-                                    onDragOver={(e) => { e.preventDefault(); setDragActiveReferralId(referral.id); }}
-                                    onDragLeave={(e) => { e.preventDefault(); setDragActiveReferralId(null); }}
-                                    onDrop={(e) => {
-                                      e.preventDefault();
-                                      setDragActiveReferralId(null);
-                                      const files = Array.from(e.dataTransfer.files || []);
-                                      if (files.length > 0) {
-                                        files.forEach(f => handleUploadFileForReferral(referral, f));
-                                      }
-                                    }}
-                                    className={`relative p-4 rounded-2xl border-2 border-dashed transition-all text-center flex flex-col items-center justify-center gap-1.5 ${
-                                      isDraggingThis
-                                        ? 'border-[#CCFF00] bg-black/5 scale-[0.99]'
-                                        : 'border-gray-200 hover:border-gray-400 bg-white'
-                                    }`}
-                                  >
-                                    <input
-                                      type="file"
-                                      id={`dropzone-${referral.id}`}
-                                      className="hidden"
-                                      disabled={isUploadingThis}
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) handleUploadFileForReferral(referral, file);
-                                        e.target.value = '';
-                                      }}
-                                    />
-                                    <label htmlFor={`dropzone-${referral.id}`} className="cursor-pointer flex flex-col items-center">
-                                      <div className="w-8 h-8 rounded-full bg-gray-100 hover:bg-[#CCFF00]/20 text-gray-700 hover:text-black flex items-center justify-center transition-colors mb-1">
-                                        <UploadCloud size={16} />
-                                      </div>
-                                      <span className="text-xs font-bold text-gray-900">
-                                        {isUploadingThis ? 'Streaming file to Google Drive...' : 'Drop files here, or click to browse'}
-                                      </span>
-                                      <span className="text-[10px] text-gray-400 mt-0.5">
-                                        PDF, DOCX, PNG, JPG, XLSX, ZIP up to 25MB • Stored in your Google Drive Vault
-                                      </span>
-                                    </label>
-                                  </div>
-
-                                  {/* Uploaded Documents List */}
-                                  {attachedDocs.length > 0 ? (
-                                    <div className="space-y-1.5">
-                                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block px-1">
-                                        Attached Documents ({attachedDocs.length})
-                                      </span>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        {attachedDocs.map((doc) => {
-                                          const isPdf = doc.title.toLowerCase().endsWith('.pdf');
-                                          const isImg = /\.(png|jpe?g|webp|gif|svg)$/i.test(doc.title);
-                                          const isDoc = /\.(docx?|txt|md)$/i.test(doc.title);
-                                          const isSheet = /\.(xlsx?|csv)$/i.test(doc.title);
-
-                                          return (
-                                            <div
-                                              key={doc.id}
-                                              className="p-2.5 rounded-xl bg-gray-50 hover:bg-white border border-gray-100 hover:border-gray-300 transition-all flex items-center justify-between gap-2 text-xs shadow-2xs"
-                                            >
-                                              <div className="flex items-center gap-2.5 min-w-0">
-                                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-white font-bold text-[10px] ${
-                                                  isPdf ? 'bg-rose-500' : isImg ? 'bg-violet-500' : isSheet ? 'bg-emerald-600' : isDoc ? 'bg-blue-600' : 'bg-gray-800'
-                                                }`}>
-                                                  {isPdf ? 'PDF' : isImg ? 'IMG' : isSheet ? 'XLS' : isDoc ? 'DOC' : 'FILE'}
-                                                </div>
-                                                <div className="min-w-0">
-                                                  <p className="font-bold text-gray-900 truncate text-[11px]" title={doc.title}>
-                                                    {doc.title}
-                                                  </p>
-                                                  <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                                                    <span>{doc.fileSize || 'Attached'}</span>
-                                                    <span>•</span>
-                                                    <span>{new Date(doc.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
-                                                  </div>
-                                                </div>
-                                              </div>
-
-                                              <div className="flex items-center gap-1 shrink-0">
-                                                <a
-                                                  href={doc.fileUrl}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="p-1.5 rounded-lg bg-white hover:bg-black hover:text-[#CCFF00] border border-gray-200 text-gray-700 transition-colors"
-                                                  title="Open in Google Drive"
-                                                >
-                                                  <ExternalLink size={12} />
-                                                </a>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="text-center py-2 text-gray-400 text-xs">
-                                      No documents attached yet for this referral.
-                                    </div>
-                                  )}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                            )}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+
+                        {/* Metric summary badges */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 text-center text-xs">
+                          <div className="p-2.5 rounded-2xl bg-gray-50 border border-gray-100">
+                            <span className="text-[9px] uppercase font-bold text-gray-400 block">Researched</span>
+                            <span className="font-mono font-black text-sm text-gray-900">{r.metrics.researched}</span>
+                          </div>
+                          <div className="p-2.5 rounded-2xl bg-gray-50 border border-gray-100">
+                            <span className="text-[9px] uppercase font-bold text-gray-400 block">Contacts</span>
+                            <span className="font-mono font-black text-sm text-gray-900">{r.metrics.contactAttempts}</span>
+                          </div>
+                          <div className="p-2.5 rounded-2xl bg-gray-50 border border-gray-100">
+                            <span className="text-[9px] uppercase font-bold text-gray-400 block">Convos</span>
+                            <span className="font-mono font-black text-sm text-gray-900">{r.metrics.meaningfulConversations}</span>
+                          </div>
+                          <div className="p-2.5 rounded-2xl bg-gray-50 border border-gray-100">
+                            <span className="text-[9px] uppercase font-bold text-gray-400 block">Qualified</span>
+                            <span className="font-mono font-black text-sm text-purple-700">{r.metrics.qualifiedProspects}</span>
+                          </div>
+                          <div className="p-2.5 rounded-2xl bg-gray-50 border border-gray-100">
+                            <span className="text-[9px] uppercase font-bold text-gray-400 block">Demos</span>
+                            <span className="font-mono font-black text-sm text-amber-600">{r.metrics.demosBooked}</span>
+                          </div>
+                          <div className="p-2.5 rounded-2xl bg-gray-50 border border-gray-100">
+                            <span className="text-[9px] uppercase font-bold text-gray-400 block">Cash Collected</span>
+                            <span className="font-mono font-black text-sm text-emerald-600">₹{(r.metrics.cashCollected || 0).toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+
+                        {/* Qualitative Observations */}
+                        <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-2 text-xs">
+                          {r.observations.bestIndustry && (
+                            <div>
+                              <strong className="text-gray-900">Best Responding Industry:</strong> 
+                              <span className="text-gray-700">{r.observations.bestIndustry}</span>
+                            </div>
+                          )}
+                          {r.observations.commonObjections && (
+                            <div>
+                              <strong className="text-gray-900">Common Objections:</strong> 
+                              <span className="text-gray-700">{r.observations.commonObjections}</span>
+                            </div>
+                          )}
+                          {r.observations.supportNeeded && (
+                            <div>
+                              <strong className="text-gray-900">AGX Support Needed:</strong> 
+                              <span className="text-gray-700">{r.observations.supportNeeded}</span>
+                            </div>
+                          )}
+                          <div>
+                            <strong className="text-gray-900">Tomorrow's Priority:</strong> 
+                            <span className="text-gray-700">{r.observations.tomorrowPriority}</span>
+                          </div>
+
+                          {r.adminFeedback && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 bg-white p-3 rounded-xl border border-emerald-200 text-xs">
+                              <span className="text-[10px] font-extrabold uppercase text-emerald-700 block mb-1">
+                                Feedback from AGX Leadership
+                              </span>
+                              <p className="text-gray-800">{r.adminFeedback}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
 
@@ -2333,114 +2167,10 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
             {/* VIEW 4: PARTNER GROWTH TOOLKIT                          */}
             {/* ======================================================== */}
             {activeTab === 'toolkit' && (
-              <div className="space-y-6">
-                {/* Header */}
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
-                  <h3 className="font-extrabold text-xl text-gray-900 tracking-tight">Partner Growth & Enablement Toolkit</h3>
-                  <p className="text-xs text-gray-500 mt-1 max-w-2xl">
-                    Everything you need to introduce clients with confidence: battlecards, pre-written pitch messages, and tracking assets.
-                  </p>
-                </div>
-
-                {/* 3 High-Converting Pitch Scripts */}
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                    <div>
-                      <h4 className="font-extrabold text-base text-gray-900">Ready-to-Send Outreach Scripts</h4>
-                      <p className="text-xs text-gray-400">Tested message templates customized with your tracking link.</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[
-                      {
-                        id: 'agency',
-                        title: 'For Marketing Agencies & Consultants',
-                        target: 'Upselling Existing Retainer Clients',
-                        text: `Hey [Client Name], we handle your brand/growth, but noticed a lot of manual bottlenecks in your internal operations. We've partnered with an elite engineering group (AGX) who builds custom autonomous AI workflows and support bots in under 14 days. Want me to connect you with their team for a free architecture review?`
-                      },
-                      {
-                        id: 'ops',
-                        title: 'For Operations Heads & Founders',
-                        target: 'Growing Businesses & COOs',
-                        text: `Hi [Name], saw your team has been scaling fast. Are you guys currently automating your customer support and lead qualification workflows? My partners at AGX replace repetitive manual desk work with autonomous agents backed by a 30-day performance guarantee. Check them out here: ${referralUrl}`
-                      },
-                      {
-                        id: 'quick',
-                        title: 'WhatsApp / DM Quick Ping',
-                        target: 'Informal WhatsApp / Slack Intro',
-                        text: `Hey [Name]! Quick question—have you explored deploying custom AI agents for your back-office workflows yet? AGX built out full end-to-end automations for us in 2 weeks. Here's their partner link if you want to book a 15-min discovery audit: ${referralUrl}`
-                      }
-                    ].map(pitch => (
-                      <div
-                        key={pitch.id}
-                        className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col justify-between gap-3 hover:border-gray-200 transition-colors"
-                      >
-                        <div>
-                          <span className="text-xs font-extrabold text-gray-900 block mb-1">{pitch.title}</span>
-                          <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider block mb-2">
-                            {pitch.target}
-                          </span>
-                          <p className="text-[11px] text-gray-700 leading-relaxed italic bg-white p-3 rounded-xl border border-gray-200/60 shadow-2xs">
-                            "{pitch.text}"
-                          </p>
-                        </div>
-
-                        <button
-                          onClick={() => handleCopyPitch(pitch.id, pitch.text)}
-                          className="w-full py-2 rounded-xl bg-black text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:bg-gray-800 btn-press"
-                        >
-                          {copiedPitchId === pitch.id ? (
-                            <>
-                              <Check size={12} className="text-[#CCFF00]" />
-                              <span className="text-[#CCFF00]">Copied Script!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy size={12} />
-                              <span>Copy Script</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* AGX Core Solutions Cheat-Sheet */}
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
-                  <h4 className="font-extrabold text-base text-gray-900">What AGX Builds: Services & Budgets Cheat-Sheet</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase text-gray-400">Blueprint</span>
-                      <h5 className="font-extrabold text-gray-900 text-sm">AI Operations Audit</h5>
-                      <p className="text-gray-500 text-[11px]">Comprehensive workflow architecture diagnostic for operational bottlenecks.</p>
-                      <div className="pt-2 font-mono font-bold text-gray-900 text-xs">₹50,000+</div>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase text-gray-400">Autonomous</span>
-                      <h5 className="font-extrabold text-gray-900 text-sm">Custom AI Support Agent</h5>
-                      <p className="text-gray-500 text-[11px]">Human-like customer support, sales lead qualification, and WhatsApp bots.</p>
-                      <div className="pt-2 font-mono font-bold text-gray-900 text-xs">₹1,50,000+</div>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase text-gray-400">Pipelines</span>
-                      <h5 className="font-extrabold text-gray-900 text-sm">Workflow Automation</h5>
-                      <p className="text-gray-500 text-[11px]">Connecting CRM, invoicing, payment gateways, and backend database syncs.</p>
-                      <div className="pt-2 font-mono font-bold text-gray-900 text-xs">₹75,000+</div>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase text-gray-400">Enterprise</span>
-                      <h5 className="font-extrabold text-gray-900 text-sm">Custom Business OS</h5>
-                      <p className="text-gray-500 text-[11px]">Full end-to-end bespoke operating system with custom portals and role-based access.</p>
-                      <div className="pt-2 font-mono font-bold text-gray-900 text-xs">₹2,50,000+</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <SopToolkitView
+                partner={partner}
+                referralUrl={referralUrl}
+              />
             )}
 
             {/* ======================================================== */}
@@ -2839,26 +2569,26 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Company Name</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Company / Business Name *</label>
                     <input
                       type="text"
                       value={newClientCompany}
                       onChange={(e) => setNewClientCompany(e.target.value)}
-                      placeholder="e.g. Nexus Media"
-                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
+                      placeholder="e.g. Apex Motors / Skyline Tours"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-hidden focus:border-black font-medium"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Email</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">City / Location</label>
                     <input
-                      type="email"
-                      value={newClientEmail}
-                      onChange={(e) => setNewClientEmail(e.target.value)}
-                      placeholder="john@nexus.com"
-                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
+                      type="text"
+                      value={newClientCity}
+                      onChange={(e) => setNewClientCity(e.target.value)}
+                      placeholder="e.g. Bhopal, Indore, Pune"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-hidden focus:border-black font-medium"
                     />
                   </div>
                   <div>
@@ -2868,42 +2598,67 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                       value={newClientPhone}
                       onChange={(e) => setNewClientPhone(e.target.value)}
                       placeholder="+91 98765 43210"
-                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-hidden focus:border-black font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Email (Optional)</label>
+                    <input
+                      type="email"
+                      value={newClientEmail}
+                      onChange={(e) => setNewClientEmail(e.target.value)}
+                      placeholder="owner@business.com"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-hidden focus:border-black font-medium"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Target Service</label>
-                    <select
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Relevant AGX Product *</label>
+                    <CustomSelect
                       value={newProjectType}
-                      onChange={(e) => setNewProjectType(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-medium cursor-pointer"
-                    >
-                      <option value="AI Automation Blueprint">AI Automation Blueprint (₹50k+)</option>
-                      <option value="Custom Autonomous AI Agent">Custom Autonomous AI Agent (₹1.5L+)</option>
-                      <option value="Workflow & Operations Automation">Workflow Automation (₹75k+)</option>
-                      <option value="Custom Internal Business OS">Custom Internal Business OS (₹2.5L+)</option>
-                    </select>
+                      onChange={(val) => setNewProjectType(val)}
+                      options={AGX_PRODUCT_CATEGORIES.map(p => ({
+                        value: p.id,
+                        label: p.name,
+                        description: p.tagline
+                      }))}
+                    />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Estimated Budget (₹)</label>
-                    <input
-                      type="number"
-                      value={newDealValue}
-                      onChange={(e) => setNewDealValue(e.target.value)}
-                      placeholder="75000"
-                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-none focus:border-black font-mono font-bold"
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Client Budget Expectation *</label>
+                    <CustomSelect
+                      value={newBudgetOption}
+                      onChange={(val) => setNewBudgetOption(val)}
+                      options={CLIENT_BUDGET_OPTIONS.map(opt => ({
+                        value: opt,
+                        label: opt
+                      }))}
                     />
                   </div>
                 </div>
 
-                {/* Real-time Estimated Cut Preview */}
+                {newBudgetOption === 'Custom Specific Budget' && (
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Specific Estimated Amount (₹)</label>
+                    <input
+                      type="number"
+                      value={newCustomDealValue}
+                      onChange={(e) => setNewCustomDealValue(e.target.value)}
+                      placeholder="e.g. 75000"
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white focus:outline-hidden focus:border-black font-mono font-bold"
+                    />
+                  </div>
+                )}
+
+                {/* Real-time Commission Policy Preview */}
                 <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between text-xs">
-                  <span className="text-emerald-800 font-semibold">Projected Commission ({partnerRatePercent}%):</span>
-                  <span className="text-base font-black text-emerald-700 font-mono">
-                    ₹{Math.round((Number(newDealValue) || 0) * partnerRate).toLocaleString('en-IN')}
+                  <span className="text-emerald-800 font-semibold">Partner Commission ({partnerRatePercent}%):</span>
+                  <span className="text-xs font-black text-emerald-700 font-mono">
+                    {newBudgetOption === 'Custom Specific Budget' && newCustomDealValue
+                      ? `~₹${Math.round((Number(newCustomDealValue) || 0) * partnerRate).toLocaleString('en-IN')} (${partnerRatePercent}%)`
+                      : `${partnerRatePercent}% on finalized quotation/invoice`}
                   </span>
                 </div>
 
@@ -3173,6 +2928,56 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
         alreadyAccepted={Boolean(partner.termsAccepted)}
         onAccept={handleAcceptTerms}
         onClose={() => setIsTermsModalOpen(false)}
+      />
+
+      {/* ======================================================== */}
+      {/* SOP MODALS: PROSPECT MGMT, QUALIFICATION, DEMO, EOD & FOCUS */}
+      {/* ======================================================== */}
+      {selectedReferralForManage && (
+        <ManageProspectModal
+          referral={myReferrals.find(r => r.id === selectedReferralForManage.id) || selectedReferralForManage}
+          isOpen={Boolean(selectedReferralForManage)}
+          onClose={() => setSelectedReferralForManage(null)}
+          onUpdate={handleUpdateProspect}
+          onDelete={handleDeleteProspect}
+          onOpenQualifyModal={(ref) => setSelectedReferralForQualify(ref)}
+          onOpenDemoModal={(ref) => setSelectedReferralForDemo(ref)}
+          partnerRate={effectivePartnerRateInfo.rate}
+        />
+      )}
+
+      {selectedReferralForQualify && (
+        <QualificationModal
+          referral={selectedReferralForQualify}
+          isOpen={Boolean(selectedReferralForQualify)}
+          onClose={() => setSelectedReferralForQualify(null)}
+          onSave={handleSaveQualification}
+        />
+      )}
+
+      {selectedReferralForDemo && (
+        <DemoBookingModal
+          referral={selectedReferralForDemo}
+          partnerName={partner.name}
+          isOpen={Boolean(selectedReferralForDemo)}
+          onClose={() => setSelectedReferralForDemo(null)}
+          onRequestDemo={handleRequestDemo}
+        />
+      )}
+
+      <DailyEodReportModal
+        partner={partner}
+        existingReport={todayReport}
+        isOpen={isEodModalOpen}
+        onClose={() => setIsEodModalOpen(false)}
+        onSubmitReport={handleSubmitEodReport}
+      />
+
+      <SprintFocusModal
+        partner={partner}
+        isOpen={isFocusModalOpen}
+        onClose={() => setIsFocusModalOpen(false)}
+        onSaveFocus={handleSaveFocus}
       />
 
     </div>

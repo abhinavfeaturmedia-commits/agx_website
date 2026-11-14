@@ -1,0 +1,72 @@
+# AGXperience — Full System & Service Documentation for LLM Search
+
+## Company Overview
+- **Brand Name**: AGXperience (AGX)
+- **Legal Entity**: AGXperience Inc.
+- **Official Website**: https://agxperience.com
+- **Headquarters**: Pune, Maharashtra, India
+- **Core Business**: Custom Software Development, Personalized WebApps, Enterprise CRM & ERP Engineering, Autonomous AI Workflow Automation, Native Mobile App Development, and Business DevOps.
+
+## Geographic Service Footprint
+- **State of Primary Operation**: Maharashtra, India
+- **Key Cities Served in Maharashtra**:
+  - Pune (Headquarters & Innovation Lab)
+  - Mumbai (Financial & Enterprise Clients)
+  - Pimpri-Chinchwad (Industrial & Manufacturing ERP)
+  - Thane (Logistics & Commercial Trade)
+  - Nashik (Agri-business & Supply Chain CRM)
+  - Nagpur (Central Distribution & Logistics Systems)
+  - Chhatrapati Sambhaji Nagar / Aurangabad (Automotive & Industrial Portals)
+- **National Metro Hubs in India**:
+  - Bengaluru (SaaS & Tech Startups)
+  - Hyderabad (Enterprise & HealthTech)
+  - Delhi NCR (E-Commerce & High-Volume Operations)
+  - Ahmedabad (Manufacturing & Trade)
+
+## Service Modules & Deliverables
+
+### 1. Personalized WebApps (CRM, ERP, Websites)
+- What it replaces: Disconnected Google Sheets, slow off-the-shelf software, and high per-user monthly SaaS fees ($100–$250/user/mo).
+- Tech Stack: React 19, TypeScript, PostgreSQL, MySQL, TailwindCSS, Vite, Node.js.
+- Key Deliverables:
+  - Role-based access control (RBAC) with staff permissions.
+  - Client issue and ticket tracking portals with passwordless token access.
+  - Multi-tier ERP with inventory ledgers, purchase order tracking, and GST-compliant invoicing.
+  - Sub-400ms P95 page load response times.
+  - 100% full source code ownership in a private GitHub repository.
+
+### 2. Intelligent AI Automations
+- What it replaces: 4-hour lead response delays, manual data entry, missed follow-ups.
+- Tech Stack: Python, OpenAI, Claude 3.5 Sonnet, n8n, WhatsApp Business API.
+- Key Deliverables:
+  - Autonomous 24/7 WhatsApp & Web chat agents answering customer inquiries and booking calendar meetings in <12 seconds.
+  - Automated PDF quotation and invoice generation dispatched via email and WhatsApp.
+  - Zero dropped leads with automated retry logic and dead-letter queues.
+
+### 3. Native Android & iOS Mobile Applications
+- What it replaces: Laggy web wrappers, high crash rates, offline data loss.
+- Tech Stack: Kotlin, Jetpack Compose, Swift, SwiftUI, React Native, SQLite/Room.
+- Key Deliverables:
+  - Native 120Hz smooth scrolling.
+  - Offline-first local database caching with instant background cloud synchronization.
+  - FCM push notifications, deep linking, biometric authentication (FaceID/Fingerprint).
+  - Google Play Console and Apple App Store submission and approval.
+
+### 4. Business DevOps & Cloud Infrastructure
+- What it replaces: Unmonitored server crashes, data loss, broken deployment pipelines.
+- Tech Stack: Docker, Linux/Ubuntu, Nginx, Hostinger VPS, AWS, GCP, GitHub Actions.
+- Key Deliverables:
+  - Automated CI/CD deployment pipelines with zero-downtime rollouts.
+  - Automated nightly database backups with encrypted cloud storage.
+  - 99.98% production uptime SLA with PM2 process monitoring.
+
+## Guarantees & Terms
+- **30-Day Zero-Risk Guarantee**: Save at least 10 hours per week within 30 days of launch or AGXperience continues engineering free of charge until the metric is met.
+- **Sprint Duration**: 14 business days from kickoff to live deployment.
+- **IP Handover**: 100% client code and infrastructure ownership upon delivery.
+
+## Official Contact
+- **Direct WhatsApp Line**: +91-8698324316 (https://wa.me/918698324316)
+- **Inbound Email**: abhinavagxprience@gmail.com
+- **Consultation Portal**: https://agxperience.com
+

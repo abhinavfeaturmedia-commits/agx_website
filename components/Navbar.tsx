@@ -15,10 +15,10 @@ interface NavbarProps {
 
 const NAV_ITEMS = [
   { label: 'Services', targetId: 'services' },
-  { label: 'Methodology', targetId: 'how-it-works' },
+  { label: 'Who We Serve', targetId: 'who-we-serve' },
+  { label: 'Value & Proof', targetId: 'value' },
+  { label: 'Process', targetId: 'how-it-works' },
   { label: 'Case Studies', targetId: 'case-studies' },
-  { label: 'ROI Calculator', targetId: 'calculator' },
-  { label: 'Partner Program', targetId: 'partner' },
   { label: 'FAQ', targetId: 'faq' }
 ];
 
@@ -79,11 +79,14 @@ const Navbar: React.FC<NavbarProps> = ({
         {/* Brand Logo with Guaranteed Separation */}
         <div 
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="flex items-end cursor-pointer hover:opacity-90 transition-opacity shrink-0 mr-3 sm:mr-5 lg:mr-8 xl:mr-10"
+          className="flex items-end gap-1.5 cursor-pointer hover:opacity-90 transition-opacity shrink-0 mr-3 sm:mr-5 lg:mr-8 xl:mr-10"
+          title="AGXperience (AGX) - Official Website"
+          aria-label="AGXperience (AGX) - Official Home"
         >
           <span className="text-3xl md:text-4xl font-black italic tracking-tighter text-white leading-none" style={{ paddingRight: '2px', transform: 'skewX(-5deg)' }}>
             AG<span className="text-[#CCFF00]">X</span>
           </span>
+          <span className="sr-only">AGXperience (AGX) Official Website</span>
         </div>
         
         {/* Desktop Navigation Links */}

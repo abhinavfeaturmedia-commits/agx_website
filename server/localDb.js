@@ -184,6 +184,7 @@ const INITIAL_SEED_DATA = {
   ],
   partner_referrals: [],
   partner_payouts: [],
+  partner_eod_reports: [],
   project_issues: [],
   calendar_events: [],
   notifications: [],
@@ -242,6 +243,7 @@ function normalizeTable(tableName) {
   const map = {
     'partner-referrals': 'partner_referrals',
     'partner-payouts': 'partner_payouts',
+    'partner-eod-reports': 'partner_eod_reports',
     'audit-logs': 'audit_logs',
     'lead-activities': 'lead_activities',
     'credentials': 'credentials_vault',

@@ -1016,19 +1016,24 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
         </div>
       )}
 
-      {/* Row 5: 360° Client Dossier Drawer */}
+      {/* Row 5: 360° Client Dossier Pop-up Modal */}
       <AnimatePresence>
         {currentClient && currentClientFin && (
-          <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-md"
+            onClick={() => setSelectedClient(null)}
+          >
             <motion.div
-              initial={{ opacity: 0, x: 400 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 400 }}
-              className="bg-white w-full max-w-3xl h-full shadow-2xl overflow-y-auto flex flex-col p-6 sm:p-8 justify-between"
+              initial={{ opacity: 0, scale: 0.96, y: 14 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 14 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-[0_25px_70px_-15px_rgba(0,0,0,0.35)] border border-gray-100 flex flex-col overflow-hidden"
             >
-              <div>
-                {/* Drawer Header */}
-                <div className="flex items-start justify-between pb-6 border-b border-gray-100">
+              {/* Modal Sticky Header & Navigation */}
+              <div className="p-5 sm:p-6 pb-2 border-b border-gray-100 bg-white/95 backdrop-blur-md shrink-0">
+                <div className="flex items-start justify-between pb-4 border-b border-gray-100">
                   <div className="flex items-center gap-4">
                     <div className={`w-14 h-14 rounded-2xl bg-gradient-to-tr ${getMonogramGradient(currentClient.company)} text-white font-extrabold flex items-center justify-center text-lg shadow-md`}>
                       {currentClient.company.substring(0, 2).toUpperCase()}
@@ -1170,10 +1175,11 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                     );
                   })}
                 </div>
+              </div>
 
-                {/* Tab Contents */}
-                <div className="py-4 text-xs">
-                  {/* Super-Tab 1: Overview & Health */}
+              {/* Scrollable Tab Contents */}
+              <div className="overflow-y-auto flex-1 p-5 sm:p-8 space-y-6 text-xs">
+                {/* Super-Tab 1: Overview & Health */}
                   {active360Tab === 'Overview & Health' && (
                     <div className="space-y-6">
                       {/* Client Vitality & Risk Matrix Card */}
@@ -1833,19 +1839,18 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ store, onNavigate, ini
                     </div>
                   )}
                 </div>
-              </div>
 
-              {/* Drawer Footer */}
-              <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+              {/* Modal Sticky Footer */}
+              <div className="p-4 px-6 border-t border-gray-100 bg-gray-50/90 flex items-center justify-between shrink-0">
                 <button
                   onClick={() => setClientToDelete(currentClient)}
-                  className="text-rose-600 hover:bg-rose-50 px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
+                  className="text-rose-600 hover:bg-rose-50 px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors"
                 >
                   <Trash2 size={14} /> Delete Account
                 </button>
                 <button
                   onClick={() => setSelectedClient(null)}
-                  className="px-4 py-2 bg-black text-white font-bold text-xs rounded-xl hover:bg-gray-800 cursor-pointer"
+                  className="px-5 py-2.5 bg-black hover:bg-gray-800 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors"
                 >
                   Close Dossier
                 </button>

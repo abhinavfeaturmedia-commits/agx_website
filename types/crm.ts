@@ -227,6 +227,12 @@ export interface Lead {
   assignedTo: string;
   priority: Priority;
   status: LeadStatus;
+  sopStage?: LeadStageSop;
+  productCategory?: AgxProductCategory;
+  budgetRange?: string;
+  qualification?: QualificationChecklist;
+  problemIdentified?: string;
+  currentProcess?: string;
   nextFollowUp?: string;
   lastContacted?: string;
   notes?: string;
@@ -656,6 +662,9 @@ export interface Partner {
   termsAccepted?: boolean;
   termsAcceptedAt?: string;
   termsVersion?: string;
+  primaryProductFocus?: AgxProductCategory;
+  secondaryProductFocus?: AgxProductCategory;
+  sprintGoal?: string;
   isCustomRate?: boolean; // When true, this partner has a fixed percentage override set by Super Admin
   customCommissionRate?: number; // e.g. 0.30 for 30%, 0.18 for 18%
   customRateReason?: string; // e.g. "VIP Agency Agreement", "Strategic Enterprise Partner"
@@ -663,6 +672,224 @@ export interface Partner {
   customRateSetBy?: string; // Admin who configured it (e.g. "Abhinav (Super Admin)")
   createdAt: string;
   updatedAt?: string;
+}
+
+export type AgxProductCategory =
+  | 'Pre-owned Car CRM'
+  | 'Car Rental CRM / GaadiDesk'
+  | 'Recruitment & HR CRM'
+  | 'Travel CRM'
+  | 'Manufacturing / Project CRM';
+
+export interface AgxProductMetadata {
+  id: AgxProductCategory;
+  name: string;
+  tagline: string;
+  targetAudience: string;
+  problemsToInvestigate: string;
+  priceAnchor: string;
+  badgeColor: string;
+}
+
+export const CLIENT_BUDGET_OPTIONS = [
+  'To be determined (After Call & Quotation)',
+  'Under ₹50,000',
+  '₹50,000 – ₹1,00,000',
+  '₹1,00,000 – ₹2,50,000',
+  '₹2,50,000 – ₹5,00,000',
+  '₹5,00,000+ (Enterprise)',
+  'Custom Specific Budget'
+] as const;
+
+export type ClientBudgetOption = typeof CLIENT_BUDGET_OPTIONS[number];
+
+export const AGX_PRODUCT_CATEGORIES: AgxProductMetadata[] = [
+  {
+    id: 'Pre-owned Car CRM',
+    name: 'Pre-owned Car CRM',
+    tagline: 'Vehicle inventory, leads, follow-ups & dealership sales tracking',
+    targetAudience: 'Used-car dealers, multi-branch dealerships, vehicle resellers',
+    problemsToInvestigate: 'Vehicle inventory tracking, enquiry loss on WhatsApp, missed follow-ups, customer purchase records',
+    priceAnchor: 'Custom by Scope & Features',
+    badgeColor: 'bg-amber-500/10 text-amber-600 border-amber-200'
+  },
+  {
+    id: 'Car Rental CRM / GaadiDesk',
+    name: 'Car Rental CRM / GaadiDesk',
+    tagline: 'Fleet availability, booking schedules, trips & driver management',
+    targetAudience: 'Car rental operators, self-drive fleet owners, travel & tour fleet companies',
+    problemsToInvestigate: 'Vehicle availability calendar, double-bookings, trip records, customer advances & driver coordination',
+    priceAnchor: 'Custom by Scope & Features',
+    badgeColor: 'bg-blue-500/10 text-blue-600 border-blue-200'
+  },
+  {
+    id: 'Recruitment & HR CRM',
+    name: 'Recruitment & HR CRM',
+    tagline: 'Candidate records, client requirements, deployment & staffing operations',
+    targetAudience: 'Recruitment agencies, manpower suppliers, staffing firms, security agencies',
+    problemsToInvestigate: 'Scattered candidate resumes, client requisition tracking, employee deployment & commission billing',
+    priceAnchor: 'Custom by Scope & Features',
+    badgeColor: 'bg-emerald-500/10 text-emerald-600 border-emerald-200'
+  },
+  {
+    id: 'Travel CRM',
+    name: 'Travel CRM',
+    tagline: 'Tour enquiries, itinerary building, supplier quotations & booking workflows',
+    targetAudience: 'Travel agencies, tour operators, holiday package planners, visa consultants',
+    problemsToInvestigate: 'Slow quotation generation, itinerary creation delays, lost WhatsApp leads, booking vouchers',
+    priceAnchor: 'Custom by Scope & Features',
+    badgeColor: 'bg-purple-500/10 text-purple-600 border-purple-200'
+  },
+  {
+    id: 'Manufacturing / Project CRM',
+    name: 'Manufacturing / Project CRM',
+    tagline: 'Projects, task allocation, team milestones, operational reporting & job cards',
+    targetAudience: 'Industrial manufacturers, fabrication units, commercial contractors, project engineering firms',
+    problemsToInvestigate: 'Project timeline slippage, raw material/job tracking, team accountability, daily production reports',
+    priceAnchor: 'Custom by Scope & Features',
+    badgeColor: 'bg-rose-500/10 text-rose-600 border-rose-200'
+  }
+];
+
+export type LeadStageSop =
+  | 'Prospect Identified'
+  | 'Prospect Researched'
+  | 'First Contact Attempted'
+  | 'Conversation Established'
+  | 'Problem Identified'
+  | 'Qualified'
+  | 'Demo Scheduled'
+  | 'Demo Completed'
+  | 'Proposal Requested'
+  | 'Proposal Sent'
+  | 'Negotiation / Decision Pending'
+  | 'Won — Advance Received'
+  | 'Lost'
+  | 'Nurture / Future Opportunity';
+
+export interface LeadStageSopMetadata {
+  stage: LeadStageSop;
+  stepNumber: number;
+  category: 'prospecting' | 'qualification' | 'demo' | 'closing' | 'outcome';
+  description: string;
+  color: string;
+}
+
+export const LEAD_STAGES_SOP: LeadStageSopMetadata[] = [
+  { stage: 'Prospect Identified', stepNumber: 1, category: 'prospecting', description: 'Found via Maps, IndiaMART, Justdial, LinkedIn or visits', color: 'bg-gray-100 text-gray-700 border-gray-300' },
+  { stage: 'Prospect Researched', stepNumber: 2, category: 'prospecting', description: 'Understood business model & specific reason to reach out', color: 'bg-slate-100 text-slate-700 border-slate-300' },
+  { stage: 'First Contact Attempted', stepNumber: 3, category: 'prospecting', description: 'Call or WhatsApp outreach sent to business phone', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  { stage: 'Conversation Established', stepNumber: 4, category: 'prospecting', description: 'Spoke with someone at the business, discovering process', color: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { stage: 'Problem Identified', stepNumber: 5, category: 'qualification', description: 'Identified concrete operational pain (Excel/WhatsApp chaos)', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  { stage: 'Qualified', stepNumber: 6, category: 'qualification', description: 'Verified target fit, decision-maker, readiness & timeline', color: 'bg-violet-50 text-violet-700 border-violet-200' },
+  { stage: 'Demo Scheduled', stepNumber: 7, category: 'demo', description: 'Confirmed date & time with AGX technical demo team', color: 'bg-yellow-50 text-yellow-800 border-yellow-300' },
+  { stage: 'Demo Completed', stepNumber: 8, category: 'demo', description: '30-minute AGX technical demonstration successfully conducted', color: 'bg-amber-50 text-amber-800 border-amber-300' },
+  { stage: 'Proposal Requested', stepNumber: 9, category: 'closing', description: 'Client confirmed interest & requested formal quotation/scope', color: 'bg-orange-50 text-orange-800 border-orange-300' },
+  { stage: 'Proposal Sent', stepNumber: 10, category: 'closing', description: 'AGX prepared and delivered formal scope and pricing proposal', color: 'bg-teal-50 text-teal-800 border-teal-300' },
+  { stage: 'Negotiation / Decision Pending', stepNumber: 11, category: 'closing', description: 'Awaiting contract sign-off and advance payment schedule', color: 'bg-cyan-50 text-cyan-800 border-cyan-300' },
+  { stage: 'Won — Advance Received', stepNumber: 12, category: 'outcome', description: 'Agreement signed & customer advance verified in AGX account', color: 'bg-emerald-50 text-emerald-800 border-emerald-300' },
+  { stage: 'Lost', stepNumber: 13, category: 'outcome', description: 'Deal closed as lost with documented reason', color: 'bg-red-50 text-red-800 border-red-300' },
+  { stage: 'Nurture / Future Opportunity', stepNumber: 14, category: 'outcome', description: 'Timing postponed; set follow-up date for next quarter', color: 'bg-purple-50 text-purple-800 border-purple-300' },
+];
+
+export interface QualificationChecklist {
+  targetCategoryFit: boolean;
+  identifiedProblem: string;
+  currentProcess: 'Excel' | 'WhatsApp' | 'Manual Registers' | 'Existing Software' | 'Other';
+  decisionMakerConfirmed: boolean;
+  decisionMakerNameRole?: string;
+  willingnessToEvaluate: boolean;
+  realisticTimeline: string;
+  customizationFeasibilityApproved: boolean;
+  notes?: string;
+  isQualified: boolean;
+  qualifiedAt?: string;
+}
+
+export interface DemoBookingRequest {
+  id: string;
+  partnerId: string;
+  partnerName: string;
+  referralId: string;
+  clientName: string;
+  company: string;
+  phone?: string;
+  city?: string;
+  product: AgxProductCategory;
+  currentProcess: string;
+  identifiedProblem: string;
+  attendees: string;
+  slotPreference1: string;
+  slotPreference2?: string;
+  confirmedSlot?: string;
+  meetingLink?: string;
+  assignedTechLead?: string;
+  status: 'Requested' | 'Confirmed' | 'Completed' | 'Rescheduled' | 'Cancelled';
+  demoNotes?: string;
+  nextStep?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PartnerEodMetrics {
+  researched: number;
+  contactAttempts: number;
+  meaningfulConversations: number;
+  decisionMakersReached: number;
+  qualifiedProspects: number;
+  demosBooked: number;
+  demosCompleted: number;
+  proposalsRequested: number;
+  followUpsCompleted: number;
+  dealsWon: number;
+  cashCollected: number;
+}
+
+export interface PartnerEodObservations {
+  bestIndustry: string;
+  commonObjections: string;
+  supportNeeded: string;
+  blockers: string;
+  tomorrowPriority: string;
+}
+
+export interface PartnerEodReport {
+  id: string;
+  partnerId: string;
+  partnerName: string;
+  date: string;
+  city?: string;
+  primaryCategory: AgxProductCategory;
+  secondaryCategory?: AgxProductCategory;
+  metrics: PartnerEodMetrics;
+  observations: PartnerEodObservations;
+  submittedAt: string;
+  reviewedByAdmin?: boolean;
+  adminFeedback?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
+export interface PartnerGametapeReview {
+  id: string;
+  partnerId: string;
+  partnerName: string;
+  prospectBusiness: string;
+  callDate: string;
+  reviewerName: string;
+  scores: {
+    researchedBusiness: number;
+    reachedDecisionMaker: number;
+    relevantQuestions: number;
+    listeningVsInterrupting: number;
+    identifiedRealProblem: number;
+    productClarity: number;
+    definiteNextStep: number;
+    crmHygiene: number;
+  };
+  overallNotes: string;
+  oneImprovementFocus: string;
+  createdAt: string;
 }
 
 export interface PartnerReferral {
@@ -676,7 +903,11 @@ export interface PartnerReferral {
   clientEmail?: string;
   clientPhone?: string;
   company?: string;
+  city?: string;
   projectType: string;
+  productCategory?: AgxProductCategory;
+  budgetRange?: string;
+  sopStage?: LeadStageSop;
   dealValue: number;
   totalPaid: number;
   pendingPayment: number;
@@ -688,6 +919,15 @@ export interface PartnerReferral {
   driveFolderId?: string;
   driveFolderUrl?: string;
   documents?: ClientDocument[];
+  qualification?: QualificationChecklist;
+  demoRequestId?: string;
+  demoScheduledAt?: string;
+  problemIdentified?: string;
+  currentProcess?: string;
+  cashCollectedAmount?: number;
+  nextAction?: string;
+  nextFollowUpDate?: string;
+  followUpCadenceDay?: number;
   notes?: string;
   createdAt: string;
   updatedAt?: string;
@@ -758,9 +998,9 @@ export const calculatePartnerTier = (
       volumeNeededForNextTier: 0,
       progressPercent: 100,
       tierColor: '#CCFF00', // AGX Luminous Lime
-      badgeLabel: 'Elite Bonus Tier (25%)',
+      badgeLabel: 'Elite Bonus Tier (25% = 20% + 5%)',
       ruleDescription: 'Exceeds ₹12,00,000 monthly business generated',
-      bonusNote: '(+5% Performance Bonus on total monthly business closed).'
+      bonusNote: '20% Pro Base + 5% Performance Bonus on total monthly business (25% Total).'
     };
   }
 

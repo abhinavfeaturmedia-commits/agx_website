@@ -41,6 +41,23 @@ const PIPELINE_COLUMNS: {
 
 const STAGE_ORDER: LeadStatus[] = ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL SENT', 'NEGOTIATION', 'WON'];
 
+const STATUS_COLORS: Record<LeadStatus, string> = {
+  'NEW': 'bg-blue-50 text-blue-700 border-blue-200',
+  'CONTACTED': 'bg-purple-50 text-purple-700 border-purple-200',
+  'QUALIFIED': 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  'PROPOSAL SENT': 'bg-amber-50 text-amber-700 border-amber-200',
+  'NEGOTIATION': 'bg-orange-50 text-orange-700 border-orange-200',
+  'WON': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'LOST': 'bg-gray-100 text-gray-700 border-gray-200'
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  'Urgent': 'bg-red-50 text-red-700 border-red-200',
+  'High': 'bg-amber-50 text-amber-700 border-amber-200',
+  'Medium': 'bg-blue-50 text-blue-700 border-blue-200',
+  'Low': 'bg-gray-50 text-gray-600 border-gray-200'
+};
+
 // Helper to format ISO dates / timestamps into clean human-readable date & time
 const formatFollowUpDate = (dateStr?: string): string => {
   if (!dateStr) return '';
@@ -1450,43 +1467,56 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
         </div>
       )}
 
-      {/* Row 5: 360° Lead Details Drawer */}
+      {/* Row 5: 360° Lead Details Pop-up Modal */}
       {currentActiveLead && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/60 backdrop-blur-xs">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-md"
+          onClick={() => setActiveLeadForDetails(null)}
+        >
           <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className="bg-white w-full max-w-xl h-full shadow-2xl border-l border-gray-100 flex flex-col justify-between overflow-y-auto"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+            className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-[0_25px_70px_-15px_rgba(0,0,0,0.35)] border border-gray-100 flex flex-col overflow-hidden"
           >
-            <div>
-              <div className="p-6 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur-md z-10">
+            <div className="flex flex-col flex-1 min-h-0">
+              <div className="p-5 sm:p-6 border-b border-gray-100 bg-white/95 backdrop-blur-md shrink-0">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${getMonogramGradient(currentActiveLead.company || currentActiveLead.name)} text-white font-black text-base flex items-center justify-center shadow-sm`}>
+                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${getMonogramGradient(currentActiveLead.company || currentActiveLead.name)} text-white font-black text-base flex items-center justify-center shadow-sm shrink-0`}>
                       {(currentActiveLead.company || currentActiveLead.name).slice(0, 2).toUpperCase()}
                     </div>
                     <div>
-                      <h3 className="font-extrabold text-xl text-gray-900">{currentActiveLead.company || currentActiveLead.name}</h3>
-                      <p className="text-xs text-gray-500">Contact: {currentActiveLead.name} {currentActiveLead.location ? `• ${currentActiveLead.location}` : ''}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-extrabold text-lg sm:text-xl text-gray-900">{currentActiveLead.company || currentActiveLead.name}</h3>
+                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${STATUS_COLORS[currentActiveLead.status] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                          {currentActiveLead.status}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${PRIORITY_COLORS[currentActiveLead.priority] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                          {currentActiveLead.priority} Priority
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">Contact: {currentActiveLead.name} {currentActiveLead.location ? `• ${currentActiveLead.location}` : ''}</p>
                     </div>
                   </div>
 
                   <button
                     onClick={() => setActiveLeadForDetails(null)}
-                    className="p-2 text-gray-400 hover:text-black rounded-xl hover:bg-gray-100 cursor-pointer"
+                    className="p-2 text-gray-400 hover:text-black rounded-xl hover:bg-gray-100 cursor-pointer transition-colors"
                   >
                     <X size={20} />
                   </button>
                 </div>
 
                 {/* Stage Progression Stepper */}
-                <div className="mt-5 pt-4 border-t border-gray-100">
+                <div className="mt-4 pt-3 border-t border-gray-100">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Pipeline Stage Progression</span>
                     <span className="text-xs font-extrabold text-indigo-600">{currentActiveLead.status}</span>
                   </div>
-                  <div className="grid grid-cols-6 gap-1">
+                  <div className="grid grid-cols-6 gap-1.5">
                     {STAGE_ORDER.map((stage, idx) => {
                       const currentIdx = STAGE_ORDER.indexOf(currentActiveLead.status);
                       const isComplete = currentIdx >= idx;
@@ -1535,7 +1565,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
                 </div>
               </div>
 
-              <div className="p-6 space-y-6 text-xs">
+              <div className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-6 text-xs">
                 {/* Closed Lost Banner */}
                 {currentActiveLead.status === 'LOST' && (
                   <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-900 shadow-xs flex items-center justify-between gap-3">
@@ -2070,20 +2100,34 @@ export const LeadsView: React.FC<LeadsViewProps> = ({ store, onNavigate, initial
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-2">
+            <div className="p-4 px-6 border-t border-gray-100 bg-gray-50/90 flex items-center justify-between gap-3 shrink-0">
               <button
                 onClick={() => setLeadToDelete(currentActiveLead)}
-                className="px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
+                className="px-3.5 py-2 text-rose-600 hover:bg-rose-50 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <Trash2 size={13} /> Delete Lead
               </button>
 
-              <button
-                onClick={() => setEditingLead(currentActiveLead)}
-                className="px-4 py-2 bg-black hover:bg-gray-800 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
-              >
-                Edit Complete Profile
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveLeadForDetails(null)}
+                  className="px-4 py-2 border border-gray-200 bg-white hover:bg-gray-100 text-gray-700 font-bold text-xs rounded-xl cursor-pointer transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const lead = currentActiveLead;
+                    setActiveLeadForDetails(null);
+                    setEditingLead(lead);
+                  }}
+                  className="px-4 py-2 bg-black hover:bg-gray-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-colors"
+                >
+                  Edit Complete Profile
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>

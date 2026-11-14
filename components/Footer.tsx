@@ -127,9 +127,10 @@ const Footer: React.FC<FooterProps> = ({
           <div className="text-[10px] font-mono uppercase text-[#CCFF00] tracking-[0.2em]">Navigation</div>
           <a href="#" className="text-sm font-medium text-white/60 hover:text-white transition-colors">Back to Top ↑</a>
           <a href="#services" className="text-sm font-medium text-white/60 hover:text-white transition-colors">Services</a>
-          <a href="#how-it-works" className="text-sm font-medium text-white/60 hover:text-white transition-colors">How It Works</a>
+          <a href="#who-we-serve" className="text-sm font-medium text-white/60 hover:text-white transition-colors">Who We Serve</a>
+          <a href="#value" className="text-sm font-medium text-white/60 hover:text-white transition-colors">Value Delivered</a>
+          <a href="#how-it-works" className="text-sm font-medium text-white/60 hover:text-white transition-colors">Methodology</a>
           <a href="#case-studies" className="text-sm font-medium text-white/60 hover:text-white transition-colors">Case Studies</a>
-          <a href="#calculator" className="text-sm font-medium text-white/60 hover:text-white transition-colors">ROI Calculator</a>
           <a href="#faq" className="text-sm font-medium text-white/60 hover:text-white transition-colors">FAQ</a>
         </motion.div>
 
@@ -225,6 +226,44 @@ const Footer: React.FC<FooterProps> = ({
             <Mail className="w-4 h-4" /> abhinavagxprience@gmail.com
           </a>
         </motion.div>
+      </div>
+
+      {/* Regional & National Coverage Footprint for Local SEO */}
+      <div className="w-full max-w-7xl pt-8 border-t border-white/5 flex flex-col gap-2.5 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-2 text-white/60">
+          <span className="text-[#CCFF00] font-semibold uppercase tracking-wider text-[11px]">Maharashtra Regional Hubs:</span>
+          <span className="text-white font-medium">Pune (HQ)</span>
+          <span className="text-white/30">•</span>
+          <span className="text-white font-medium">Mumbai</span>
+          <span className="text-white/30">•</span>
+          <span className="text-white/80">Pimpri-Chinchwad</span>
+          <span className="text-white/30">•</span>
+          <span className="text-white/80">Thane</span>
+          <span className="text-white/30">•</span>
+          <span className="text-white/80">Nashik</span>
+          <span className="text-white/30">•</span>
+          <span className="text-white/80">Nagpur</span>
+          <span className="text-white/30">•</span>
+          <span className="text-white/80">Chhatrapati Sambhaji Nagar</span>
+          <span className="text-white/30">•</span>
+          <span className="text-[#CCFF00]/80">Across Maharashtra</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-white/45 text-[11px]">
+          <span className="text-white/60 uppercase tracking-wider">National Tech Delivery:</span>
+          <span>Bengaluru</span>
+          <span className="text-white/20">•</span>
+          <span>Hyderabad</span>
+          <span className="text-white/20">•</span>
+          <span>Delhi NCR</span>
+          <span className="text-white/20">•</span>
+          <span>Ahmedabad</span>
+          <span className="text-white/20">•</span>
+          <span>Chennai</span>
+          <span className="text-white/20">•</span>
+          <span>Kolkata</span>
+          <span className="text-white/20">|</span>
+          <span className="text-[#CCFF00]/80">14-Day Remote Sprints Worldwide</span>
+        </div>
       </div>
 
       {/* Copyright Line */}

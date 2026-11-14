@@ -6,7 +6,7 @@ import {
   CredentialVaultItem, CalendarEvent, NotificationItem, AuditLog, Priority,
   UserProfile, UserRole, ExpenseCategory, AgreementStatus, InvoiceStatus,
   ProjectIssue, IssueStatus, IssueType, IssuePriority,
-  Partner, PartnerReferral, PartnerPayout,
+  Partner, PartnerReferral, PartnerPayout, PartnerEodReport,
   Quotation, QuotationItem, QuotationStatus
 } from '../types/crm';
 
@@ -384,7 +384,22 @@ export interface DbPartnerReferral {
   client_email: string | null;
   client_phone: string | null;
   company: string | null;
+  city?: string | null;
   project_type: string;
+  product_category?: string | null;
+  budget_range?: string | null;
+  sop_stage?: string | null;
+  problem_identified?: string | null;
+  current_process?: string | null;
+  cash_collected_amount?: number;
+  next_action?: string | null;
+  next_follow_up_date?: string | null;
+  follow_up_cadence_day?: number;
+  decision_maker_confirmed?: boolean | number;
+  qualification?: any;
+  demo_request_id?: string | null;
+  demo_scheduled_at?: string | null;
+  utr_submissions?: any;
   deal_value: number;
   total_paid: number;
   pending_payment: number;
@@ -886,6 +901,14 @@ export function mapPartnerFromDb(row: DbPartner): Partner {
 
 export function mapPartnerReferralFromDb(row: DbPartnerReferral, partners: Partner[] = []): PartnerReferral {
   const partner = partners.find(p => p.id === row.partner_id);
+
+  let qualification = undefined;
+  if (row.qualification) {
+    try {
+      qualification = typeof row.qualification === 'string' ? JSON.parse(row.qualification) : row.qualification;
+    } catch {}
+  }
+
   return {
     id: row.id,
     partnerId: row.partner_id,
@@ -897,7 +920,18 @@ export function mapPartnerReferralFromDb(row: DbPartnerReferral, partners: Partn
     clientEmail: row.client_email || undefined,
     clientPhone: row.client_phone || undefined,
     company: row.company || undefined,
+    city: row.city || undefined,
     projectType: row.project_type || 'AI Automation',
+    productCategory: (row.product_category as any) || undefined,
+    budgetRange: row.budget_range || undefined,
+    sopStage: (row.sop_stage as any) || undefined,
+    problemIdentified: row.problem_identified || undefined,
+    currentProcess: row.current_process || undefined,
+    cashCollectedAmount: Number(row.cash_collected_amount) || 0,
+    nextAction: row.next_action || undefined,
+    nextFollowUpDate: row.next_follow_up_date ? String(row.next_follow_up_date).split('T')[0] : undefined,
+    followUpCadenceDay: row.follow_up_cadence_day ? Number(row.follow_up_cadence_day) : 1,
+    qualification,
     dealValue: Number(row.deal_value) || 0,
     totalPaid: Number(row.total_paid) || 0,
     pendingPayment: Number(row.pending_payment) || 0,
@@ -909,6 +943,34 @@ export function mapPartnerReferralFromDb(row: DbPartnerReferral, partners: Partn
     notes: row.notes || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+export function mapPartnerEodReportFromDb(row: any): PartnerEodReport {
+  let metrics = row.metrics;
+  if (typeof metrics === 'string') {
+    try { metrics = JSON.parse(metrics); } catch { metrics = {}; }
+  }
+  let observations = row.observations;
+  if (typeof observations === 'string') {
+    try { observations = JSON.parse(observations); } catch { observations = {}; }
+  }
+
+  return {
+    id: row.id,
+    partnerId: row.partner_id,
+    partnerName: row.partner_name,
+    date: row.date,
+    city: row.city || undefined,
+    primaryCategory: row.primary_category,
+    secondaryCategory: row.secondary_category || undefined,
+    metrics: metrics || { targetCallsMade: 0, decisionMakersReached: 0, problemsIdentified: 0, demosScheduled: 0, paymentsCollected: 0, followUpsCompleted: 0 },
+    observations: observations || { objectionEncountered: '', whatWentWell: '', whereHelpNeeded: '', tomorrowPriority: '' },
+    submittedAt: row.submitted_at || row.created_at,
+    reviewedByAdmin: Boolean(row.reviewed_by_admin),
+    adminFeedback: row.admin_feedback || undefined,
+    reviewedAt: row.reviewed_at || undefined,
+    reviewedBy: row.reviewed_by || undefined
   };
 }
 
@@ -1000,6 +1062,7 @@ export const crmService = {
     const partners = (d.partners || []).filter((r: any) => !r.deleted_at).map(mapPartnerFromDb);
     const partnerReferrals = (d.partnerReferrals || []).filter((r: any) => !r.deleted_at).map((r: any) => mapPartnerReferralFromDb(r, partners));
     const partnerPayouts = (d.partnerPayouts || []).filter((r: any) => !r.deleted_at).map((p: any) => mapPartnerPayoutFromDb(p, partners));
+    const partnerEodReports = (d.partnerEodReports || []).filter((r: any) => !r.deleted_at).map(mapPartnerEodReportFromDb);
     const quotations = (d.quotations || []).filter((r: any) => !r.deleted_at).map((q: any) => mapQuotationFromDb(q, leads, clients, projects));
     const issues = (d.issues || []).filter((r: any) => !r.deleted_at).map(mapIssueFromDb);
 
@@ -1024,7 +1087,8 @@ export const crmService = {
       issues,
       partners,
       partnerReferrals,
-      partnerPayouts
+      partnerPayouts,
+      partnerEodReports
     };
   },
 
@@ -1959,15 +2023,26 @@ export const crmService = {
       client_email: referral.clientEmail || null,
       client_phone: referral.clientPhone || null,
       company: referral.company || null,
+      city: referral.city || null,
       project_type: referral.projectType || 'AI Automation',
+      product_category: referral.productCategory || null,
+      budget_range: referral.budgetRange || null,
+      sop_stage: referral.sopStage || 'Prospect Identified',
+      problem_identified: referral.problemIdentified || null,
+      current_process: referral.currentProcess || null,
       deal_value: referral.dealValue || 0,
       total_paid: referral.totalPaid || 0,
+      cash_collected_amount: referral.cashCollectedAmount || referral.totalPaid || 0,
       pending_payment: referral.pendingPayment || 0,
       deal_status: referral.dealStatus || 'NEW',
       payment_status: referral.paymentStatus || 'Pending',
       commission_rate: referral.commissionRate || 0.10,
       commission_earned: referral.commissionEarned || 0,
       commission_paid: referral.commissionPaid || 0,
+      next_action: referral.nextAction || null,
+      next_follow_up_date: referral.nextFollowUpDate || null,
+      follow_up_cadence_day: referral.followUpCadenceDay || 1,
+      qualification: referral.qualification ? JSON.stringify(referral.qualification) : null,
       notes: referral.notes || null
     };
     if (referral.id) insertPayload.id = referral.id;
@@ -1985,14 +2060,26 @@ export const crmService = {
     if (updates.clientEmail !== undefined) payload.client_email = updates.clientEmail;
     if (updates.clientPhone !== undefined) payload.client_phone = updates.clientPhone;
     if (updates.company !== undefined) payload.company = updates.company;
+    if (updates.city !== undefined) payload.city = updates.city;
+    if (updates.projectType !== undefined) payload.project_type = updates.projectType;
+    if (updates.productCategory !== undefined) payload.product_category = updates.productCategory;
+    if (updates.budgetRange !== undefined) payload.budget_range = updates.budgetRange;
+    if (updates.sopStage !== undefined) payload.sop_stage = updates.sopStage;
+    if (updates.problemIdentified !== undefined) payload.problem_identified = updates.problemIdentified;
+    if (updates.currentProcess !== undefined) payload.current_process = updates.currentProcess;
     if (updates.dealValue !== undefined) payload.deal_value = updates.dealValue;
     if (updates.totalPaid !== undefined) payload.total_paid = updates.totalPaid;
+    if (updates.cashCollectedAmount !== undefined) payload.cash_collected_amount = updates.cashCollectedAmount;
     if (updates.pendingPayment !== undefined) payload.pending_payment = updates.pendingPayment;
     if (updates.dealStatus !== undefined) payload.deal_status = updates.dealStatus;
     if (updates.paymentStatus !== undefined) payload.payment_status = updates.paymentStatus;
     if (updates.commissionRate !== undefined) payload.commission_rate = updates.commissionRate;
     if (updates.commissionEarned !== undefined) payload.commission_earned = updates.commissionEarned;
     if (updates.commissionPaid !== undefined) payload.commission_paid = updates.commissionPaid;
+    if (updates.nextAction !== undefined) payload.next_action = updates.nextAction;
+    if (updates.nextFollowUpDate !== undefined) payload.next_follow_up_date = updates.nextFollowUpDate;
+    if (updates.followUpCadenceDay !== undefined) payload.follow_up_cadence_day = updates.followUpCadenceDay;
+    if (updates.qualification !== undefined) payload.qualification = updates.qualification ? JSON.stringify(updates.qualification) : null;
     if (updates.notes !== undefined) payload.notes = updates.notes;
 
     const res = await apiClient.put(`/crm/partner_referrals/${id}`, payload);

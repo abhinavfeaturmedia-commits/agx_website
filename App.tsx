@@ -3,19 +3,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import Marquee from './components/Marquee';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
-import Stats from './components/Stats';
 import Services from './components/Services';
-import TechStack from './components/TechStack';
+import { WhoWeServe } from './components/WhoWeServe';
+import { ValueDelivered } from './components/ValueDelivered';
 import HowItWorks from './components/HowItWorks';
-import OnboardingTimeline from './components/OnboardingTimeline';
-import CostCalculator from './components/CostCalculator';
-import TaskEliminator from './components/TaskEliminator';
-import Comparison from './components/Comparison';
 import SuccessStories from './components/SuccessStories';
-import PartnerProgram from './components/PartnerProgram';
 import FAQ from './components/FAQ';
 import Footer from './components/Footer';
-import { GrandSlamStack } from './components/GrandSlamStack';
 import { ConsultationModal } from './components/ConsultationModal';
 import { ErrorBoundary } from './components/crm/ErrorBoundary';
 import { ToastNotification } from './components/crm/ToastNotification';
@@ -406,56 +400,26 @@ const App: React.FC = () => {
           >
             <Hero onGetStartedClick={() => handleOpenConsultation('Full Operations Diagnostic')} />
             <Marquee />
-            <Stats />
             <Services 
               onSelectService={(serviceName) => 
                 handleOpenConsultation(serviceName, `Interested in custom architecture proposal for ${serviceName}`)
               } 
             />
-            <TechStack />
+            <WhoWeServe 
+              onAuditClick={() => 
+                handleOpenConsultation('Operations Diagnostic (Who We Serve)', 'Inbound request to check operational fit for business')
+              } 
+            />
+            <ValueDelivered 
+              onClaimAudit={() => 
+                handleOpenConsultation('30-Day Risk Guarantee Audit', 'Claiming operations diagnostic under 30-day zero-risk guarantee')
+              } 
+            />
             <HowItWorks />
-            <OnboardingTimeline />
             <SuccessStories 
               onOpenConsultation={(service, notes) => 
                 handleOpenConsultation(service, notes)
               } 
-            />
-            <Comparison 
-              onUpgradeClick={() => 
-                handleOpenConsultation(
-                  'Operations Upgrade & Migration',
-                  'Initiated from Comparison section: Transitioning operations from manual headcount to autonomous agent architecture'
-                )
-              } 
-            />
-            <CostCalculator 
-              onAuditClick={(hours, loss) => 
-                handleOpenConsultation(
-                  'Financial Leak & Time Audit', 
-                  `Calculated weekly administrative waste: ${hours} hours/week (~$${loss.toLocaleString()}/month burn rate)`
-                )
-              } 
-            />
-            <TaskEliminator 
-              onAuditClick={() => 
-                handleOpenConsultation(
-                  'Task Elimination Audit', 
-                  'Requested custom blueprint to eliminate repetitive operational bottlenecks'
-                )
-              } 
-            />
-            <GrandSlamStack 
-              onClaimOffer={() => 
-                handleOpenConsultation(
-                  'Grand Slam Offer Deployment Package', 
-                  'Claiming custom implementation package including full $9,800 free bonus stack and 30-day zero-risk guarantee'
-                )
-              } 
-            />
-            <PartnerProgram 
-              onBecomePartnerClick={() => navigateToPartnerAuth('register')}
-              onPartnerLoginClick={() => navigateToPartnerAuth('login')}
-              isPartnerLoggedIn={Boolean(authService.getCurrentPartner())}
             />
             <FAQ />
           </motion.main>

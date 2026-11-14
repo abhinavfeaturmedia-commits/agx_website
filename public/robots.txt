@@ -1,4 +1,30 @@
+# robots.txt for AGXperience (https://agxperience.com)
+# Full search engine and AI Generative Engine Optimization (GEO) directives
+
 User-agent: *
 Allow: /
+Disallow: /admin/
+Disallow: /partner/portal/
 
+# AI Search Crawlers (ChatGPT, Perplexity, Claude, Google Gemini)
+User-agent: GPTBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# Canonical Sitemaps & LLM Context
 Sitemap: https://agxperience.com/sitemap.xml
+# Machine-readable LLM summary available at /llms.txt
