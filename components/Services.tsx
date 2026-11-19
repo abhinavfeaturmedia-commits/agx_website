@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { NativeModal } from './ui/NativeModal';
 import { 
   ArrowRight, 
   Bot, 
@@ -303,38 +304,43 @@ const Services: React.FC<ServicesProps> = ({ onSelectService }) => {
           ))}
         </motion.div>
 
-        {/* Interactive Detail Modal / Drawer */}
-        <AnimatePresence>
+        {/* Interactive Detail Modal / Drawer with Native Top-Layer Dialog */}
+        <NativeModal
+          isOpen={Boolean(activeModalService)}
+          onClose={() => setActiveModalService(null)}
+          titleId="service-modal-title"
+        >
           {activeModalService && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="relative w-full max-w-2xl bg-[#0B0E14] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl overflow-hidden text-left"
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-[#0B0E14] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl overflow-hidden text-left"
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setActiveModalService(null)}
+                aria-label="Close service details"
+                className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors cursor-pointer"
               >
-                {/* Close Button */}
-                <button
-                  onClick={() => setActiveModalService(null)}
-                  className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
+                <X size={18} />
+              </button>
 
-                {/* Modal Header */}
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#CCFF00]/10 border border-[#CCFF00]/20 flex items-center justify-center text-[#CCFF00]">
-                    {activeModalService.icon}
-                  </div>
-                  <div>
-                    <span className="text-xs font-mono text-[#CCFF00] tracking-wider uppercase block">
-                      {activeModalService.id} · {activeModalService.category}
-                    </span>
-                    <h3 className="text-2xl font-bold text-white font-['Outfit']">
-                      {activeModalService.title}
-                    </h3>
-                  </div>
+              {/* Modal Header */}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-[#CCFF00]/10 border border-[#CCFF00]/20 flex items-center justify-center text-[#CCFF00]">
+                  {activeModalService.icon}
                 </div>
+                <div>
+                  <span className="text-xs font-mono text-[#CCFF00] tracking-wider uppercase block">
+                    {activeModalService.id} · {activeModalService.category}
+                  </span>
+                  <h3 id="service-modal-title" className="text-2xl font-bold text-white font-['Outfit']">
+                    {activeModalService.title}
+                  </h3>
+                </div>
+              </div>
 
                 <div className="my-4 p-3 rounded-xl bg-rose-500/[0.08] border border-rose-500/20 text-rose-300 text-xs font-mono flex items-start gap-2.5 leading-relaxed">
                   <Zap size={14} className="text-rose-400 shrink-0 mt-0.5" />
@@ -390,9 +396,8 @@ const Services: React.FC<ServicesProps> = ({ onSelectService }) => {
                   </div>
                 </div>
               </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+            )}
+          </NativeModal>
 
       </div>
     </section>

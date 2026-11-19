@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Mail, MapPin, Building, ShieldCheck, FileText, X } from 'lucide-react';
+import { NativeModal } from './ui/NativeModal';
 
 interface FooterProps {
   onAdminLoginClick?: () => void;
@@ -83,13 +84,18 @@ const Footer: React.FC<FooterProps> = ({
         >
           <input 
             type="email" 
+            id="footer-email"
+            name="email"
+            autoComplete="email"
+            spellCheck={false}
+            enterKeyHint="send"
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
               if (emailError) setEmailError('');
             }}
             placeholder="ENTER YOUR WORK EMAIL" 
-            aria-label="Email Address"
+            aria-label="Work Email Address"
             className="flex-grow bg-transparent p-5 font-mono text-xs sm:text-sm outline-none text-white placeholder:text-white/30 border-b md:border-b-0 md:border-r border-white/10"
           />
           <button 
@@ -292,65 +298,63 @@ const Footer: React.FC<FooterProps> = ({
         </div>
       </motion.div>
 
-      {/* Simple Legal Modal */}
-      <AnimatePresence>
+      {/* Simple Legal Modal with Native Top-Layer Dialog */}
+      <NativeModal
+        isOpen={Boolean(legalModal)}
+        onClose={() => setLegalModal(null)}
+        titleId="footer-legal-modal-title"
+      >
         {legalModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setLegalModal(null)}
-              className="fixed inset-0 bg-black/80 backdrop-blur-md"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-lg bg-[#0d1117] border border-white/20 rounded-2xl p-6 md:p-8 z-10 text-white max-h-[80vh] overflow-y-auto"
-            >
-              <div className="flex justify-between items-center pb-4 border-b border-white/10 mb-4">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-[#CCFF00]" />
-                  <h3 className="text-lg font-bold uppercase tracking-wider font-mono">
-                    {legalModal === 'privacy' ? 'Privacy Policy' : 'Terms of Service'}
-                  </h3>
-                </div>
-                <button 
-                  onClick={() => setLegalModal(null)}
-                  className="p-1.5 text-white/40 hover:text-white rounded-lg hover:bg-white/10"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-lg bg-[#0d1117] border border-white/20 rounded-2xl p-6 md:p-8 text-white max-h-[80vh] overflow-y-auto"
+          >
+            <div className="flex justify-between items-center pb-4 border-b border-white/10 mb-4">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-[#CCFF00]" />
+                <h3 id="footer-legal-modal-title" className="text-lg font-bold uppercase tracking-wider font-mono">
+                  {legalModal === 'privacy' ? 'Privacy Policy' : 'Terms of Service'}
+                </h3>
               </div>
-              <div className="text-xs text-white/70 space-y-4 font-light leading-relaxed">
-                {legalModal === 'privacy' ? (
-                  <>
-                    <p>At AGXperience Inc., we treat your proprietary business data and automation blueprints with institutional-grade confidentiality.</p>
-                    <p><strong>1. Data Ownership:</strong> All custom code, agent workflows, vectors, and credentials built for your company are 100% owned by your organization upon deployment.</p>
-                    <p><strong>2. Zero Model Training:</strong> We enforce zero-retention and zero-training policies across our LLM integrations (OpenAI, Anthropic Claude, Perplexity). Your business data is never used to train public models.</p>
-                    <p><strong>3. Encryption:</strong> All webhook endpoints and API keys are stored with AES-256 encryption within isolated database credentials vaults.</p>
-                  </>
-                ) : (
-                  <>
-                    <p><strong>1. Scope of Engagement:</strong> AGXperience provides customized software, API orchestrations, and autonomous AI agents as agreed upon in writing.</p>
-                    <p><strong>2. 30-Day Performance Guarantee:</strong> If our automated deployment fails to save your team at least 10 hours per week within 30 days of production launch, we continue optimizing at zero additional fee until that target is achieved.</p>
-                    <p><strong>3. Intellectual Property:</strong> Client retains full ownership of deliverables upon final milestone payment settlement.</p>
-                  </>
-                )}
-              </div>
-              <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
-                <button
-                  onClick={() => setLegalModal(null)}
-                  className="px-5 py-2 bg-white/10 hover:bg-white/20 text-xs font-mono uppercase rounded-lg text-white"
-                >
-                  Close
-                </button>
-              </div>
-            </motion.div>
-          </div>
+              <button 
+                type="button"
+                onClick={() => setLegalModal(null)}
+                aria-label="Close legal policy dialog"
+                className="p-1.5 text-white/40 hover:text-white rounded-lg hover:bg-white/10 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="text-xs text-white/70 space-y-4 font-light leading-relaxed">
+              {legalModal === 'privacy' ? (
+                <>
+                  <p>At AGXperience Inc., we treat your proprietary business data and automation blueprints with institutional-grade confidentiality.</p>
+                  <p><strong>1. Data Ownership:</strong> All custom code, agent workflows, vectors, and credentials built for your company are 100% owned by your organization upon deployment.</p>
+                  <p><strong>2. Zero Model Training:</strong> We enforce zero-retention and zero-training policies across our LLM integrations (OpenAI, Anthropic Claude, Perplexity). Your business data is never used to train public models.</p>
+                  <p><strong>3. Encryption:</strong> All webhook endpoints and API keys are stored with AES-256 encryption within isolated database credentials vaults.</p>
+                </>
+              ) : (
+                <>
+                  <p><strong>1. Scope of Engagement:</strong> AGXperience provides customized software, API orchestrations, and autonomous AI agents as agreed upon in writing.</p>
+                  <p><strong>2. 30-Day Performance Guarantee:</strong> If our automated deployment fails to save your team at least 10 hours per week within 30 days of production launch, we continue optimizing at zero additional fee until that target is achieved.</p>
+                  <p><strong>3. Intellectual Property:</strong> Client retains full ownership of deliverables upon final milestone payment settlement.</p>
+                </>
+              )}
+            </div>
+            <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setLegalModal(null)}
+                className="px-5 py-2 bg-white/10 hover:bg-white/20 text-xs font-mono uppercase rounded-lg text-white cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
         )}
-      </AnimatePresence>
+      </NativeModal>
     </footer>
   );
 };

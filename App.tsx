@@ -1,21 +1,13 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import Marquee from './components/Marquee';
-import Navbar from './components/Navbar';
-import Hero from './components/Hero';
-import Services from './components/Services';
-import { WhoWeServe } from './components/WhoWeServe';
-import { ValueDelivered } from './components/ValueDelivered';
-import HowItWorks from './components/HowItWorks';
-import SuccessStories from './components/SuccessStories';
-import FAQ from './components/FAQ';
-import Footer from './components/Footer';
+import PetalyxHome from './components/PetalyxHome';
 import { ConsultationModal } from './components/ConsultationModal';
 import { ErrorBoundary } from './components/crm/ErrorBoundary';
 import { ToastNotification } from './components/crm/ToastNotification';
 import { UserRole, Partner } from './types/crm';
 import { authService } from './lib/authService';
 import { CrmStoreProvider } from './lib/crmStore';
+import { AgxPetalyxBrand, CherryBlossomBackdrop } from './components/ui/CherryBlossomBackdrop';
 
 // Dynamic Code-Splitting: Lazy-load heavy CRM & Portal modules on demand
 const AdminLogin = lazy(() => import('./components/crm/AdminLogin').then(m => ({ default: m.AdminLogin })));
@@ -33,17 +25,17 @@ interface ConsultationInitialData {
 }
 
 const PortalLoadingSpinner: React.FC<{ label?: string }> = ({ label = 'Loading Secure Workspace...' }) => (
-  <div className="min-h-screen w-full bg-[#07090E] text-white flex flex-col items-center justify-center p-6">
-    <div className="flex items-center gap-3 mb-4">
-      <div className="w-10 h-10 rounded-xl bg-[#CCFF00] text-black font-black italic flex items-center justify-center text-xl shadow-[0_0_20px_rgba(204,255,0,0.3)] animate-pulse">
-        A
+  <div className="petalyx-theme min-h-screen w-full relative bg-[#e9eee0] text-[#121410] flex flex-col items-center justify-center p-6 overflow-hidden">
+    <CherryBlossomBackdrop petalCount={8} variant="day" showGlassSquares={false} />
+    <div className="relative z-10 rounded-[28px] p-2 petalyx-card-frost max-w-xs w-full text-center">
+      <div className="rounded-[22px] p-7 bg-white/92 backdrop-blur-md border border-white/80 flex flex-col items-center">
+        <div className="mb-4">
+          <AgxPetalyxBrand compact />
+        </div>
+        <div className="w-6 h-6 border-2 border-[var(--olive)] border-t-transparent rounded-full animate-spin mb-3" />
+        <span className="text-xs font-medium text-[#121410]/70 tracking-wide">{label}</span>
       </div>
-      <span className="text-2xl font-black italic tracking-tighter text-white font-['Outfit']">
-        AG<span className="text-[#CCFF00]">X</span>
-      </span>
     </div>
-    <div className="w-6 h-6 border-2 border-[#CCFF00] border-t-transparent rounded-full animate-spin mb-3" />
-    <span className="text-xs font-mono text-white/60 tracking-wider uppercase">{label}</span>
   </div>
 );
 
@@ -274,7 +266,8 @@ const App: React.FC = () => {
               initialMode="login"
               onLoginSuccess={(p) => navigateToPartnerPortal(p)}
               onBackToWebsite={navigateToWebsite}
-              onNavigateToStaffLogin={navigateToLogin}
+              onNavigateToStaffLogin={() => navigateToLogin()}
+              onNavigateToPortal={() => navigateToPortal()}
             />
           </Suspense>
         </ErrorBoundary>
@@ -308,7 +301,8 @@ const App: React.FC = () => {
             initialMode={partnerAuthMode}
             onLoginSuccess={(p) => navigateToPartnerPortal(p)}
             onBackToWebsite={navigateToWebsite}
-            onNavigateToStaffLogin={navigateToLogin}
+            onNavigateToStaffLogin={() => navigateToLogin()}
+            onNavigateToPortal={() => navigateToPortal()}
           />
         </Suspense>
       </ErrorBoundary>
@@ -320,9 +314,11 @@ const App: React.FC = () => {
     return (
       <ErrorBoundary fallbackRoute={navigateToWebsite}>
         <Suspense fallback={<PortalLoadingSpinner label="Authenticating Project Ticket Portal..." />}>
-          <ClientIssuePortal 
-            onBackToWebsite={navigateToWebsite} 
-            tokenOverride={activePortalToken} 
+          <ClientIssuePortal
+            onBackToWebsite={navigateToWebsite}
+            onNavigateToStaffLogin={() => navigateToLogin()}
+            onNavigateToPartnerPortal={() => navigateToPartnerPortal()}
+            tokenOverride={activePortalToken}
           />
         </Suspense>
       </ErrorBoundary>
@@ -376,78 +372,28 @@ const App: React.FC = () => {
   }
 
   // Otherwise, render Public Agency Website
+  // Recreated Petalyx Home Landing Page
   return (
-    <div className={isDark ? 'dark' : ''}>
-      <div className="min-h-screen flex flex-col overflow-x-hidden bg-transparent text-white transition-colors duration-300">
-        <Navbar
-          isDark={isDark}
-          toggleTheme={toggleTheme}
-          onAdminLoginClick={() => navigateToLogin()}
-          onClientPortalClick={() => navigateToPortal()}
-          onPartnerPortalClick={() => navigateToPartnerPortal()}
-          onConsultationClick={() => handleOpenConsultation()}
-          isStaffLoggedIn={Boolean(authService.getStaffSession())}
-          isPartnerLoggedIn={Boolean(authService.getCurrentPartner())}
-        />
-        <AnimatePresence mode="wait">
-          <motion.main 
-            key={isDark ? 'dark' : 'light'}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            className="flex-grow"
-          >
-            <Hero onGetStartedClick={() => handleOpenConsultation('Full Operations Diagnostic')} />
-            <Marquee />
-            <Services 
-              onSelectService={(serviceName) => 
-                handleOpenConsultation(serviceName, `Interested in custom architecture proposal for ${serviceName}`)
-              } 
-            />
-            <WhoWeServe 
-              onAuditClick={() => 
-                handleOpenConsultation('Operations Diagnostic (Who We Serve)', 'Inbound request to check operational fit for business')
-              } 
-            />
-            <ValueDelivered 
-              onClaimAudit={() => 
-                handleOpenConsultation('30-Day Risk Guarantee Audit', 'Claiming operations diagnostic under 30-day zero-risk guarantee')
-              } 
-            />
-            <HowItWorks />
-            <SuccessStories 
-              onOpenConsultation={(service, notes) => 
-                handleOpenConsultation(service, notes)
-              } 
-            />
-            <FAQ />
-          </motion.main>
-        </AnimatePresence>
-        <Footer 
-          onAdminLoginClick={() => navigateToLogin()} 
-          onClientPortalClick={() => navigateToPortal()}
-          onPartnerPortalClick={() => navigateToPartnerPortal()}
-          onBecomePartnerClick={() => navigateToPartnerAuth('register')}
-          isStaffLoggedIn={Boolean(authService.getStaffSession())}
-          isPartnerLoggedIn={Boolean(authService.getCurrentPartner())}
-          onProcessAuditClick={(email) => 
-            handleOpenConsultation('Process Audit (Footer Inbound)', 'Inbound process audit request via footer input', email)
-          } 
-        />
+    <div className="petalyx-theme min-h-screen bg-[#e9eee0]">
+      <PetalyxHome
+        onNavigateToLogin={() => navigateToLogin()}
+        onNavigateToPortal={() => navigateToPortal()}
+        onNavigateToPartnerPortal={() => navigateToPartnerPortal()}
+        onOpenConsultation={(service, notes) => handleOpenConsultation(service, notes)}
+        isStaffLoggedIn={Boolean(authService.getStaffSession())}
+      />
 
-        {/* Inbound Lead Capture / Strategy Call Modal */}
-        <ConsultationModal
-          isOpen={isConsultationOpen}
-          onClose={() => setIsConsultationOpen(false)}
-          initialService={consultationData.service}
-          initialNotes={consultationData.notes}
-          initialEmail={consultationData.email}
-        />
-      </div>
+      {/* Inbound Lead Capture / Strategy Call Modal */}
+      <ConsultationModal
+        isOpen={isConsultationOpen}
+        onClose={() => setIsConsultationOpen(false)}
+        initialService={consultationData.service}
+        initialNotes={consultationData.notes}
+        initialEmail={consultationData.email}
+      />
     </div>
-    );
-  };
+  );
+};
 
   return (
     <CrmStoreProvider>

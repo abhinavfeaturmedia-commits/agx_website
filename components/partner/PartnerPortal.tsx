@@ -2419,10 +2419,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                   <form onSubmit={handleUpdatePassword} className="space-y-4">
                     {hasExistingPassword && (
                       <div>
-                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Current Password *</label>
+                        <label htmlFor="portal-current-password" className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Current Password *</label>
                         <input
+                          id="portal-current-password"
+                          name="current-password"
                           type="password"
                           required
+                          autoComplete="current-password"
+                          enterKeyHint="next"
                           value={currentPassword}
                           onChange={(e) => setCurrentPassword(e.target.value)}
                           className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white"
@@ -2432,10 +2436,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">New Password *</label>
+                        <label htmlFor="portal-new-password" className="text-[11px] font-bold uppercase text-gray-500 block mb-1">New Password *</label>
                         <input
+                          id="portal-new-password"
+                          name="new-password"
                           type="password"
                           required
+                          autoComplete="new-password"
+                          enterKeyHint="next"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
                           placeholder="Min 8 characters"
@@ -2450,10 +2458,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({
                       </div>
 
                       <div>
-                        <label className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Confirm Password *</label>
+                        <label htmlFor="portal-confirm-password" className="text-[11px] font-bold uppercase text-gray-500 block mb-1">Confirm Password *</label>
                         <input
+                          id="portal-confirm-password"
+                          name="confirm-password"
                           type="password"
                           required
+                          autoComplete="new-password"
+                          enterKeyHint="done"
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-xs focus:bg-white"

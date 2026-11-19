@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Sparkles, Send, CheckCircle2, MessageSquare, Phone, Mail, Building, ArrowRight, Shield, Clock, ArrowLeft, Zap, Calendar } from 'lucide-react';
 import { crmService } from '../lib/crmService';
 import { toast } from '../lib/toastStore';
+import { NativeModal } from './ui/NativeModal';
 
 interface ConsultationModalProps {
   isOpen: boolean;
@@ -55,8 +56,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       setIsSuccess(false);
     }
   }, [isOpen, initialService, initialNotes, initialEmail]);
-
-  if (!isOpen) return null;
 
   const handleNext = () => {
     setStep(prev => Math.min(3, prev + 1) as any);
@@ -202,7 +201,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+    <NativeModal
+      isOpen={isOpen}
+      onClose={handleReset}
+      titleId="consultation-modal-title"
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -216,7 +219,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <span className="text-xl font-black italic tracking-tighter text-white font-['Outfit']">
                 AG<span className="text-[#CCFF00]">X</span>
               </span>
-              <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 font-bold uppercase tracking-wider">
+              <span id="consultation-modal-title" className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 font-bold uppercase tracking-wider">
                 14-Day Diagnostic Blueprint
               </span>
             </div>
@@ -232,7 +235,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             )}
 
             <button
+              type="button"
               onClick={handleReset}
+              aria-label="Close consultation modal"
               className="p-1.5 text-white/50 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
             >
               <X size={17} />
@@ -430,12 +435,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[10px] font-mono font-bold text-white/60 uppercase tracking-wider mb-1">
+                      <label htmlFor="consultation-name" className="block text-[10px] font-mono font-bold text-white/60 uppercase tracking-wider mb-1">
                         Full Name *
                       </label>
                       <input
+                        id="consultation-name"
+                        name="name"
                         type="text"
                         required
+                        autoComplete="name"
+                        enterKeyHint="next"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Marcus Chen"
@@ -444,11 +453,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono font-bold text-white/60 uppercase tracking-wider mb-1">
+                      <label htmlFor="consultation-company" className="block text-[10px] font-mono font-bold text-white/60 uppercase tracking-wider mb-1">
                         Company Name
                       </label>
                       <input
+                        id="consultation-company"
+                        name="organization"
                         type="text"
+                        autoComplete="organization"
+                        enterKeyHint="next"
                         value={company}
                         onChange={(e) => setCompany(e.target.value)}
                         placeholder="Omnilog Freight"
@@ -459,12 +472,17 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[10px] font-mono font-bold text-white/60 uppercase tracking-wider mb-1">
+                      <label htmlFor="consultation-email" className="block text-[10px] font-mono font-bold text-white/60 uppercase tracking-wider mb-1">
                         Work Email *
                       </label>
                       <input
+                        id="consultation-email"
+                        name="email"
                         type="email"
                         required
+                        autoComplete="email"
+                        spellCheck={false}
+                        enterKeyHint="next"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="marcus@omnilog.io"
@@ -473,11 +491,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono font-bold text-white/60 uppercase tracking-wider mb-1">
+                      <label htmlFor="consultation-phone" className="block text-[10px] font-mono font-bold text-white/60 uppercase tracking-wider mb-1">
                         Phone / WhatsApp
                       </label>
                       <input
+                        id="consultation-phone"
+                        name="tel"
                         type="tel"
+                        autoComplete="tel"
+                        inputMode="tel"
+                        enterKeyHint="done"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="+1 (555) 019-2834"
@@ -547,6 +570,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           )}
         </div>
       </motion.div>
-    </div>
+    </NativeModal>
   );
 };

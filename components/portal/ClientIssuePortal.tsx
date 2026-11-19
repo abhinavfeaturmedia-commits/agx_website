@@ -12,8 +12,17 @@ import {
   IssueType, IssuePriority, IssueStatus, DocumentItem
 } from '../../types/crm';
 
+import {
+  AuthGatewayHeader,
+  CherryBlossomBackdrop,
+  AgxPetalyxBrand,
+  GatewayType,
+} from '../ui/CherryBlossomBackdrop';
+
 interface ClientIssuePortalProps {
   onBackToWebsite?: () => void;
+  onNavigateToStaffLogin?: () => void;
+  onNavigateToPartnerPortal?: () => void;
   tokenOverride?: string;
 }
 
@@ -26,7 +35,12 @@ export const sanitizePortalToken = (val: unknown): string => {
   return trimmed;
 };
 
-export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWebsite, tokenOverride }) => {
+export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({
+  onBackToWebsite,
+  onNavigateToStaffLogin,
+  onNavigateToPartnerPortal,
+  tokenOverride,
+}) => {
   // Active token with multi-source fallback (tokenOverride -> query param -> hash -> localStorage)
   const [token, setToken] = useState<string>(() => {
     const overrideClean = sanitizePortalToken(tokenOverride);
@@ -374,96 +388,140 @@ export const ClientIssuePortal: React.FC<ClientIssuePortalProps> = ({ onBackToWe
     });
   }, [portalData, trackerSearch, trackerFilter]);
 
-  // Loading State
+  const handleGatewaySwitch = (target: GatewayType) => {
+    if (target === 'staff' && onNavigateToStaffLogin) {
+      onNavigateToStaffLogin();
+    } else if (target === 'partner' && onNavigateToPartnerPortal) {
+      onNavigateToPartnerPortal();
+    }
+  };
+
+  // Loading State (Petalyx Cherry Blossom Theme)
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#070709] text-white flex flex-col items-center justify-center p-6">
-        <div className="w-12 h-12 rounded-2xl bg-[#CCFF00]/10 border border-[#CCFF00]/20 flex items-center justify-center text-[#CCFF00] animate-spin mb-4">
-          <RefreshCw size={24} />
+      <div className="petalyx-theme min-h-screen w-full relative bg-[#e9eee0] text-[#121410] flex flex-col items-center justify-center p-6 overflow-hidden">
+        <CherryBlossomBackdrop petalCount={10} variant="day" showGlassSquares={false} />
+        <div className="relative z-10 rounded-[28px] p-2 petalyx-card-frost max-w-sm w-full text-center">
+          <div className="rounded-[22px] p-8 bg-white/92 backdrop-blur-md border border-white/80 flex flex-col items-center">
+            <div className="mb-4">
+              <AgxPetalyxBrand compact />
+            </div>
+            <div className="w-10 h-10 rounded-2xl bg-[var(--pill)] text-[var(--olive)] flex items-center justify-center mb-4 border border-[var(--lime)]/45">
+              <RefreshCw size={20} className="animate-spin" aria-hidden="true" />
+            </div>
+            <h1 className="text-lg font-medium tracking-[-0.02em] text-[#121410]">
+              Authenticating Client Workspace
+            </h1>
+            <p className="text-xs text-[#121410]/65 mt-1.5">
+              Verifying encrypted access token with AGX Cloud...
+            </p>
+          </div>
         </div>
-        <h3 className="text-lg font-bold font-['Outfit']">Authenticating Client Workspace</h3>
-        <p className="text-xs text-white/50 mt-1">Verifying encrypted access token with AGX Cloud...</p>
       </div>
     );
   }
 
-  // Gate Screen: Invalid or Missing Token
+  // Gate Screen: Invalid or Missing Token (Petalyx Cherry Blossom Theme)
   if (!portalData) {
     return (
-      <div className="min-h-screen bg-[#070709] text-white flex flex-col justify-between p-6 antialiased font-sans selection:bg-[#CCFF00] selection:text-black">
-        {/* Top Header */}
-        <div className="max-w-4xl w-full mx-auto flex items-center justify-between py-2">
-          <button
-            onClick={onBackToWebsite || (() => { window.location.href = '/'; })}
-            className="flex items-center gap-2 text-xs font-semibold text-white/60 hover:text-white transition-colors px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
-          >
-            <ArrowLeft size={14} /> Back to AGX Website
-          </button>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-black italic tracking-tighter text-white font-['Outfit']">
-              AG<span className="text-[#CCFF00]">X</span>
-            </span>
-            <span className="text-[10px] font-mono uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 font-bold">
-              Client Portal
-            </span>
-          </div>
-        </div>
+      <div className="petalyx-theme min-h-screen w-full relative flex flex-col justify-between overflow-x-hidden overflow-y-auto bg-[#e9eee0] text-[#121410] selection:bg-[#b4cd52] selection:text-[#121410]">
+        <CherryBlossomBackdrop petalCount={14} variant="day" showGlassSquares />
+
+        <AuthGatewayHeader
+          activeGateway="client"
+          badgeLabel="Client Portal"
+          onBackToWebsite={onBackToWebsite || (() => { window.location.href = '/'; })}
+          onSwitchGateway={
+            onNavigateToStaffLogin || onNavigateToPartnerPortal ? handleGatewaySwitch : undefined
+          }
+        />
 
         {/* Token Form Card */}
-        <div className="max-w-md w-full mx-auto my-auto p-8 rounded-3xl bg-[#0D1017] border border-white/10 shadow-2xl text-center space-y-5">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
-            <KeyRound size={24} />
-          </div>
-          <div>
-            <h2 className="text-xl font-black uppercase text-white tracking-tight font-['Outfit']">
-              Client Project Portal
-            </h2>
-            <p className="text-xs text-white/50 mt-1">
-              Enter your secure project access token to inspect live milestones, submit QA tickets, and view invoices.
-            </p>
-          </div>
-
-          <form onSubmit={handleTokenSubmit} className="space-y-3.5 text-left">
-            <div>
-              <label className="block text-[11px] font-bold text-white/70 uppercase tracking-wider mb-1.5">
-                Secret Project Token
-              </label>
-              <div className="relative flex items-center">
-                <KeyRound size={15} className="absolute left-3.5 text-white/40" />
-                <input
-                  type="text"
-                  value={tokenInputValue}
-                  onChange={(e) => { setTokenInputValue(e.target.value); setTokenModalError(null); }}
-                  placeholder="e.g., prj_live_7x8f9..."
-                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-[#CCFF00] transition-all font-mono"
-                  autoFocus
-                />
+        <main className="relative z-10 w-full max-w-[460px] mx-auto px-4 sm:px-6 py-6 my-auto shrink-0">
+          <div className="rounded-[28px] p-2 petalyx-card-frost">
+            <div className="rounded-[22px] p-6 sm:p-8 bg-white/92 backdrop-blur-md border border-white/80 text-center space-y-5">
+              <div className="w-12 h-12 rounded-2xl bg-[var(--pill)] text-[var(--olive)] flex items-center justify-center mx-auto border border-[var(--lime)]/45">
+                <KeyRound size={22} aria-hidden="true" />
               </div>
-              {(tokenModalError || fetchError) && (
-                <p className="text-[11px] text-rose-400 mt-2 font-mono flex items-center gap-1.5">
-                  <AlertCircle size={13} className="shrink-0" />
-                  <span>{tokenModalError || fetchError}</span>
+
+              <div>
+                <span className="petalyx-pill mb-2">Encrypted Client Access</span>
+                <h1 id="portal-gate-heading" className="text-2xl font-normal tracking-[-0.03em] text-[#121410]">
+                  Client Project Portal
+                </h1>
+                <p className="text-xs text-[#121410]/65 mt-1.5 leading-relaxed">
+                  Enter your confidential project access token to inspect live milestones, submit QA tickets, and view
+                  invoices.
                 </p>
-              )}
+              </div>
+
+              <form
+                onSubmit={handleTokenSubmit}
+                method="post"
+                aria-labelledby="portal-gate-heading"
+                noValidate
+                className="space-y-4 text-left"
+              >
+                <div>
+                  <label
+                    htmlFor="portal-access-token"
+                    className="block text-[11px] font-semibold text-[#121410]/80 uppercase tracking-wide mb-1.5"
+                  >
+                    Secret Project Token
+                  </label>
+                  <div className="relative flex items-center">
+                    <KeyRound
+                      size={15}
+                      aria-hidden="true"
+                      className="absolute left-3.5 text-[#121410]/45 pointer-events-none"
+                    />
+                    <input
+                      id="portal-access-token"
+                      name="token"
+                      type="text"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      enterKeyHint="go"
+                      required
+                      value={tokenInputValue}
+                      onChange={(e) => {
+                        setTokenInputValue(e.target.value);
+                        setTokenModalError(null);
+                      }}
+                      placeholder="e.g., prj_live_7x8f9..."
+                      className="petalyx-input pl-10 pr-4 py-2.5 font-mono"
+                    />
+                  </div>
+                  {(tokenModalError || fetchError) && (
+                    <p
+                      role="alert"
+                      aria-live="assertive"
+                      className="text-xs text-rose-800 bg-rose-50 border border-rose-200 p-2.5 rounded-xl mt-2.5 flex items-start gap-2 leading-relaxed"
+                    >
+                      <AlertCircle size={14} className="shrink-0 mt-0.5" aria-hidden="true" />
+                      <span>{tokenModalError || fetchError}</span>
+                    </p>
+                  )}
+                </div>
+
+                <button type="submit" className="petalyx-btn w-full h-11 text-xs font-semibold gap-2">
+                  <span>Access Client Workspace</span>
+                  <ArrowRight size={14} aria-hidden="true" />
+                </button>
+              </form>
+
+              <p className="text-[11px] text-[#121410]/55 pt-3 border-t border-[var(--line)] leading-relaxed">
+                Token not found? Contact your AGX delivery lead or email{' '}
+                <span className="text-[#121410] font-mono">support@agxperience.com</span>
+              </p>
             </div>
+          </div>
+        </main>
 
-            <button
-              type="submit"
-              className="w-full py-3 px-4 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer btn-press"
-            >
-              <span>Access Client Workspace</span>
-              <ArrowRight size={13} />
-            </button>
-          </form>
-
-          <p className="text-[11px] text-white/40 pt-2 border-t border-white/5">
-            Token not found? Inquire with your AGX delivery lead or email <span className="text-white/70 font-mono">support@agxperience.com</span>
-          </p>
-        </div>
-
-        <div className="w-full text-center py-4 text-[11px] text-white/30 font-mono">
-          © {new Date().getFullYear()} AGXPERIENCE INC. • CLIENT REPOSITORY & OPERATIONS
-        </div>
+        <footer className="relative z-10 w-full text-center py-5 shrink-0 text-[11px] text-[#121410]/50">
+          © {new Date().getFullYear()} AGXperience Inc. (AGX) • Client Repository &amp; Operations
+        </footer>
       </div>
     );
   }
